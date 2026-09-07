@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đang chuyển hướng...</title>
+    
+    <!-- 1. PHƯƠNG ÁN DỰ PHÒNG: Tự động chuyển trang sau 1 giây cho trình duyệt không hỗ trợ JavaScript -->
+    <meta http-equiv="refresh" content="1; url=https://script.google.com/macros/s/AKfycbwxaScwkDn7g2Y9PaS9f2X9fdr4ZxLcndlw7j5QGttJZzfAyhzRKQyyloFh0smclXqw/exec">
+    
+    <!-- ĐỊNH DẠNG GIAO DIỆN CHUYÊN NGHIỆP (CSS) -->
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        /* Tạo hiệu ứng vòng xoay tải trang (Spinner) */
+        .loader {
+            border: 4px solid #e9ecef;
+            border-top: 4px solid #27ae60; /* Màu xanh lá chuyên nghiệp */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        h1 { font-size: 20px; font-weight: 500; margin-bottom: 10px; color: #2c3e50; }
+        p { font-size: 14px; color: #6c757d; }
+        a { color: #27ae60; text-decoration: none; font-weight: bold; }
+        a:hover { text-decoration: underline; }
+    </style>
+
+    <!-- 2. PHƯƠNG ÁN CHÍNH: Chuyển hướng bằng JavaScript -->
+    <script>
+        // Khai báo link đích
+        var targetUrl = "https://script.google.com/macros/s/AKfycbwxaScwkDn7g2Y9PaS9f2X9fdr4ZxLcndlw7j5QGttJZzfAyhzRKQyyloFh0smclXqw/exec";
+        
+        // Dùng replace() để không lưu trang này vào lịch sử lùi (Back) của trình duyệt
+        window.onload = function() {
+            setTimeout(function() {
+                window.location.replace(targetUrl);
+            }, 300); // Độ trễ 300 mili-giây để hiển thị vòng xoay mượt mà hơn
+        };
+    </script>
+</head>
+<body>
+
+    <!-- Giao diện hiển thị cho người dùng -->
+    <div class="loader"></div>
+    <h1>Đang chuyển hướng...</h1>
+    
+    <!-- 3. Phương án thủ công cho người dùng -->
+    <p>Nếu hệ thống không tự động chuyển hướng, vui lòng <a href="https://script.google.com/macros/s/AKfycbwxaScwkDn7g2Y9PaS9f2X9fdr4ZxLcndlw7j5QGttJZzfAyhzRKQyyloFh0smclXqw/exec">bấm vào đây</a>.</p>
+
+</body>
+</html>
