@@ -306,7 +306,7 @@
       var provinceCode = document.getElementById('selectProvince').value;
       var provinceName = provinceCode === 'TNN' ? 'Tỉnh Thái Nguyên' : 'Tỉnh Quản Lý';
 
-      showLoading("Đang đọc file Excel thô...");
+      showLoading("Đang đọc và lọc trùng dữ liệu Excel thô...");
 
       var reader = new FileReader();
       reader.onload = async function(e) {
@@ -400,6 +400,7 @@
               else if (tLower.includes('cột') || tLower.includes('cot')) loaiHt = "Cot";
               else if (tLower.includes('bể') || tLower.includes('be')) loaiHt = "Be";
 
+              // Đảm bảo không trùng lặp ten_diem trong Map
               allPointsMap.set(tenVal, { tinh_id: tinhId, ten_diem: tenVal, loai: loaiHt, lat: latVal, long: lngVal });
 
               var rawTuyen = row[iTuyen];
@@ -416,11 +417,11 @@
 
           if (allPointsMap.size === 0) {
             hideLoading();
-            showAlert("Không tìm thấy dữ liệu tọa độ hợp lệ trong file Excel. Vui lòng kiểm tra lại cấu trúc file!");
+            showAlert("Không tìm thấy dữ liệu tọa độ hợp lệ trong file Excel!");
             return;
           }
 
-          showLoading("Đang nạp danh mục điểm hạ tầng vào CSDL...");
+          showLoading("Đang nạp danh mục điểm hạ tầng...");
           var pointsArray = Array.from(allPointsMap.values());
           for (var i = 0; i < pointsArray.length; i += 500) {
             var chunk = pointsArray.slice(i, i + 500);
@@ -432,7 +433,7 @@
           var pointMap = new Map();
           if (dbPointsRes.data) dbPointsRes.data.forEach(function(p) { pointMap.set(p.ten_diem, p.id); });
 
-          showLoading("Đang nạp danh mục tuyến cáp vào CSDL...");
+          showLoading("Đang nạp danh mục tuyến cáp...");
           var routesArray = Array.from(routeNamesSet).map(function(r) { return { tinh_id: tinhId, ma_tuyen: r, ten_tuyen: 'Tuyến ' + r }; });
           for (var i = 0; i < routesArray.length; i += 500) {
             var chunk = routesArray.slice(i, i + 500);
@@ -444,15 +445,26 @@
           var routeMap = new Map();
           if (dbRoutesRes.data) dbRoutesRes.data.forEach(function(rt) { routeMap.set(rt.ma_tuyen, rt.id); });
 
-          showLoading("Đang liên kết chi tiết tuyến cáp...");
-          var chiTietArray = [];
+          showLoading("Đang liên kết chi tiết tuyến (Lọc trùng tự động)...");
+          
+          // Lọc bỏ các bản ghi chi tiết bị trùng lặp (tuyen_id, diem_id) trong cùng batch
+          var chiTietMap = new Map();
           rawRoutePoints.forEach(function(rp) {
             var rId = routeMap.get(rp.tuyen), pId = pointMap.get(rp.ten_diem);
             if (rId && pId) {
-              chiTietArray.push({ tuyen_id: rId, diem_id: pId, stt: rp.stt, ly_trinh: rp.ly_trinh, du_tru: rp.du_tru, do_cach: rp.do_cach });
+              var uniqueKey = rId + "_" + pId;
+              chiTietMap.set(uniqueKey, {
+                tuyen_id: rId,
+                diem_id: pId,
+                stt: rp.stt,
+                ly_trinh: rp.ly_trinh,
+                du_tru: rp.du_tru,
+                do_cach: rp.do_cach
+              });
             }
           });
 
+          var chiTietArray = Array.from(chiTietMap.values());
           for (var i = 0; i < chiTietArray.length; i += 500) {
             var chunk = chiTietArray.slice(i, i + 500);
             var res = await supabaseClient.from('chi_tiet').upsert(chunk, { onConflict: 'tuyen_id,diem_id' });
