@@ -459,13 +459,28 @@
 
             for (var col = 0; col < h.length; col++) {
               var head = String(h[col] || '');
-              if (head.includes('tên') || head.includes('ten')) { if (iTen === -1) iTen = col; }
-              else if (head === 'lat' || head.includes('vĩ') || head.includes('vi_do')) iLat = col;
-              else if (head === 'long' || head.includes('lng') || head.includes('kinh') || head.includes('kinh_do')) iLong = col;
+              if (head.includes('tên') || head.includes('ten') || head.includes('điểm') || head.includes('mã')) { if (iTen === -1) iTen = col; }
+              else if (head === 'lat' || head.includes('vĩ') || head.includes('vi_do') || head.includes('latitude') || head === 'y' || head.includes('toạ độ y') || head.includes('toa do y')) iLat = col;
+              else if (head === 'long' || head.includes('lng') || head.includes('kinh') || head.includes('kinh_do') || head.includes('longitude') || head === 'x' || head.includes('toạ độ x') || head.includes('toa do x')) iLong = col;
               else if (head.includes('hướng') || head.includes('huong')) iHuong = col;
-              else if (head.includes('tuyen') || head.includes('tuyến') || head.includes('thu_muc') || head.includes('nhom')) iTuyen = col;
+              else if (head.includes('tuyen') || head.includes('tuyến') || head.includes('thu_muc') || head.includes('nhom') || head.includes('mã tuyến')) iTuyen = col;
               else if (head.includes('lytrinh') || head.includes('lý trình') || head.includes('ly_trinh')) iLyTrinh = col;
               else if (head.includes('du_tru') || head.includes('dự trữ')) iDuTru = col;
+            }
+
+            // Cơ chế quét tự động thông minh nếu không khớp tiêu đề cột
+            if (iLat === -1 || iLong === -1) {
+              for (var r = 1; r < Math.min(rows.length, 10); r++) {
+                var rowSample = rows[r];
+                if (!rowSample) continue;
+                for (var c = 0; c < rowSample.length; c++) {
+                  var val = parseFloat(rowSample[c]);
+                  if (!isNaN(val)) {
+                    if (val >= 8 && val <= 24 && iLat === -1) iLat = c;
+                    else if (val >= 102 && val <= 110 && iLong === -1) iLong = c;
+                  }
+                }
+              }
             }
 
             if (iTen === -1) iTen = 0;
@@ -475,9 +490,8 @@
             for (var r = 1; r < rows.length; r++) {
               var row = rows[r];
               if (!row) continue;
-              var tenVal = (iTen !== -1 && row[iTen] !== undefined && row[iTen] !== null) ? String(row[iTen]).trim() : "";
-              if (!tenVal) continue;
-
+              var tenVal = (iTen !== -1 && row[iTen] !== undefined && row[iTen] !== null) ? String(row[iTen]).trim() : ("Điểm " + r);
+              
               var lat = parseFloat(row[iLat]);
               var lng = parseFloat(row[iLong]);
               if (isNaN(lat) || isNaN(lng)) continue;
@@ -486,7 +500,6 @@
               var huong = (iHuong !== -1 && row[iHuong] !== undefined && row[iHuong] !== null) ? String(row[iHuong]).trim() : '';
               huong = huong.replace(/bên\s+trái/gi, 'Trái').replace(/bên\s+phải/gi, 'Phải');
 
-              // Lấy tên tuyến, nếu cột tuyến không có thì mặc định lấy tên Sheet
               var tuyenCapRaw = (iTuyen !== -1 && row[iTuyen] !== undefined && row[iTuyen] !== null && String(row[iTuyen]).trim() !== '') ? String(row[iTuyen]).trim() : sheetName;
               var lyTrinh = (iLyTrinh !== -1 && row[iLyTrinh] !== undefined && row[iLyTrinh] !== null) ? String(row[iLyTrinh]).trim() : '';
               var duTru = (iDuTru !== -1 && row[iDuTru] !== undefined && row[iDuTru] !== null && !isNaN(row[iDuTru])) ? parseFloat(row[iDuTru]) : 0;
@@ -501,7 +514,7 @@
                 rawPart = rawPart.trim();
                 if (!rawPart) return;
 
-                var tenTuyen = "", stt = 0;
+                var tenTuyen = "", stt = globalRowCounter;
                 var matchFull = rawPart.match(/^(Bể cáp|Bể|Cột|Mốc|Moc|Be|Cot)\s+(.+?)\s*-\s*([\d\.]+)/i);
                 if (matchFull) {
                   tenTuyen = matchFull[2].trim();
@@ -513,7 +526,6 @@
                     stt = parseFloat(matchInherit[2]);
                   } else {
                     tenTuyen = rawPart;
-                    stt = 0;
                   }
                 }
 
@@ -536,12 +548,11 @@
           var sheetNames = workbook.SheetNames || [];
           sheetNames.forEach(function(sName) {
             var sLower = String(sName || '').toLowerCase();
-            if (sLower.includes('be') || sLower.includes('moc') || sLower.includes('mốc') || sLower.includes('bể') || sLower.includes('cot') || sLower.includes('cột')) {
-              parseSheetData(sName, sLower.includes('cot') || sLower.includes('cột') ? "Cột" : "Bể");
-            } else {
-              // Quét các sheet khác làm dữ liệu chung nếu có tọa độ
-              parseSheetData(sName, "Bể");
+            if (sLower.includes('mang_xong') || sLower.includes('mang xong') || sLower.includes('mx')) {
+              // Xử lý riêng sheet măng xông ở bước sau
+              return;
             }
+            parseSheetData(sName, sLower.includes('cot') || sLower.includes('cột') ? "Cột" : "Bể");
           });
 
           var mxSheetName = sheetNames.find(function(s) { 
@@ -562,13 +573,27 @@
                 var hStr = String(hText || '');
                 if (hStr.includes('mã mx') || hStr.includes('tên') || hStr === 'ten') mId = k;
                 else if (hStr === 'lat' || hStr.includes('vĩ')) mLat = k;
-                else if (hStr === 'lng' || hStr === 'long' || hStr.includes('kinh')) mLng = k;
+                else if (hStr === 'lng' || hStr.includes('long' ) || hStr.includes('kinh')) mLng = k;
                 else if (hStr.includes('huong')) mHuong = k;
                 else if (hStr.includes('tuyen') || hStr.includes('tuyến')) mTuyen = k;
                 else if (hStr.includes('ly_trinh') || hStr.includes('lytrinh')) mLyTrinh = k;
                 else if (hStr.includes('du_tru') || hStr.includes('dự trữ')) mDuTru = k;
                 else if (hStr.includes('do_cach_tnn') || hStr.includes('đo cách tnn')) mDoCach = k;
               });
+
+              if (mLat === -1 || mLng === -1) {
+                for (var r = 1; r < Math.min(mxRows.length, 5); r++) {
+                  var rSamp = mxRows[r];
+                  if (!rSamp) continue;
+                  for (var c = 0; c < rSamp.length; c++) {
+                    var val = parseFloat(rSamp[c]);
+                    if (!isNaN(val)) {
+                      if (val >= 8 && val <= 24 && mLat === -1) mLat = c;
+                      else if (val >= 102 && val <= 110 && mLng === -1) mLng = c;
+                    }
+                  }
+                }
+              }
 
               if (mLat !== -1 && mLng !== -1) {
                 for (var j = 1; j < mxRows.length; j++) {
@@ -842,7 +867,7 @@
 
       var pts = getPointsCuaTuyenHienTai();
       if (pts.length < 2) {
-        showAlert("Tuyến '" + sel + "' hiện chỉ có " + pts.length + " điểm tọa độ. Cần ít nhất 2 điểm để vẽ tuyến cáp!");
+        showAlert("Tuyến '" + sel + "' hiện chỉ có " + pts.length + " điểm tọa độ hợp lệ. Cần ít nhất 2 điểm để vẽ tuyến cáp!");
         return;
       }
 
