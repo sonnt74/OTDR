@@ -306,7 +306,7 @@
       var provinceCode = document.getElementById('selectProvince').value;
       var provinceName = provinceCode === 'TNN' ? 'Tỉnh Thái Nguyên' : 'Tỉnh Quản Lý';
 
-      showLoading("Đang đọc toàn bộ dữ liệu từ file Excel thô...");
+      showLoading("Đang đọc và lọc trùng dữ liệu Excel thô...");
 
       var reader = new FileReader();
       reader.onload = async function(e) {
@@ -324,7 +324,7 @@
           if (provRes.error) throw provRes.error;
           var tinhId = provRes.data[0].id;
 
-          var allPointsMap = new Map();
+          var allPointsMap = new Map(); // Dùng ten_diem làm key để khử trùng lặp 100% trong batch
           var routeNamesSet = new Set();
           var rawRoutePoints = [];
           var globalRowCounter = 0;
@@ -406,9 +406,8 @@
               else if (tLower.includes('cột') || tLower.includes('cot')) loaiHt = "Cot";
               else if (tLower.includes('bể') || tLower.includes('be')) loaiHt = "Be";
 
-              // Khóa định danh duy nhất kết hợp tọa độ và tên điểm
-              var pointUniqueKey = latVal.toFixed(6) + "_" + lngVal.toFixed(6) + "_" + tenVal;
-              allPointsMap.set(pointUniqueKey, { tinh_id: tinhId, ten_diem: tenVal, loai: loaiHt, lat: latVal, long: lngVal });
+              // Dùng trực tiếp tenVal làm key để triệt tiêu hoàn toàn lỗi trùng lặp ON CONFLICT
+              allPointsMap.set(tenVal, { tinh_id: tinhId, ten_diem: tenVal, loai: loaiHt, lat: latVal, long: lngVal });
 
               var rawTuyen = row[iTuyen];
               var tuyenVal = (rawTuyen !== undefined && rawTuyen !== null && String(rawTuyen).trim() !== '') ? String(rawTuyen).trim().substring(0, 250) : sheetName;
@@ -419,7 +418,6 @@
                 routeNamesSet.add(tItem);
                 rawRoutePoints.push({ 
                   tuyen: tItem, 
-                  pointKey: pointUniqueKey, 
                   ten_diem: tenVal, 
                   stt: globalRowCounter, 
                   ly_trinh: lyTrinhVal, 
@@ -444,12 +442,11 @@
             if (res.error) throw res.error;
           }
 
-          var dbPointsRes = await supabaseClient.from('diem').select('id, ten_diem, lat, long').eq('tinh_id', tinhId);
+          var dbPointsRes = await supabaseClient.from('diem').select('id, ten_diem').eq('tinh_id', tinhId);
           var pointMap = new Map();
           if (dbPointsRes.data) {
             dbPointsRes.data.forEach(function(p) {
-              var k = Number(p.lat).toFixed(6) + "_" + Number(p.long).toFixed(6) + "_" + p.ten_diem;
-              pointMap.set(k, p.id);
+              pointMap.set(p.ten_diem, p.id);
             });
           }
 
@@ -469,7 +466,7 @@
           var chiTietMap = new Map();
           rawRoutePoints.forEach(function(rp) {
             var rId = routeMap.get(rp.tuyen);
-            var pId = pointMap.get(rp.pointKey);
+            var pId = pointMap.get(rp.ten_diem);
             if (rId && pId) {
               var uniqueKey = rId + "_" + pId;
               chiTietMap.set(uniqueKey, {
