@@ -12,6 +12,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
   
+  <!-- SheetJS để đọc/ghi file Excel trực tiếp trên trình duyệt -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Supabase JS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -269,6 +271,13 @@
           <button class="btn-chuanhoa" onclick="taiDuLieuTuSupabase(true)">🔄 TẢI LẠI DỮ LIỆU SUPABASE</button>
         </div>
         <div class="form-group">
+          <button class="btn-chuanhoa" style="background:#198754;" onclick="document.getElementById('excelFileImportInput').click()">📥 IMPORT EXCEL VÀO SUPABASE</button>
+          <input type="file" id="excelFileImportInput" accept=".xlsx, .xls" style="display:none;" onchange="importExcelToSupabaseFromWeb(event)">
+        </div>
+        <div class="form-group">
+          <button class="btn-chuanhoa" style="background:#ffc107; color:#000;" onclick="exportSupabaseToExcelWeb()">📤 EXCEL DỮ LIỆU TỪ SUPABASE</button>
+        </div>
+        <div class="form-group">
           <button class="btn-clear" onclick="xoaTuyenThuCong()">🗑️ LÀM SẠCH BẢN ĐỒ</button>
         </div>
       </div>
@@ -290,7 +299,7 @@
   <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 
   <script>
-    // Cấu hình kết nối Supabase của anh (Hãy thay URL và Anon Key thực tế của dự án Supabase)
+    // Cấu hình kết nối Supabase
     const SUPABASE_URL = 'https://YOUR_SUPABASE_PROJECT_ID.supabase.co';
     const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
     var supabaseClient = null;
@@ -460,7 +469,6 @@
       statusBadge.innerHTML = "<span>⏳</span> Đang truy vấn cơ sở dữ liệu Supabase...";
 
       try {
-        // Truy vấn dữ liệu từ bảng route_points kết hợp routes và infrastructure_points
         let { data, error } = await supabaseClient
           .from('route_points')
           .select(`
@@ -512,6 +520,220 @@
         hideLoading();
         showAlert("Lỗi kết nối Supabase: " + err.message, "Lỗi cơ sở dữ liệu");
         statusBadge.innerHTML = "<span>❌</span> Lỗi kết nối Supabase.";
+      }
+    }
+
+    // ==========================================
+    // CHỨC NĂNG IMPORT EXCEL LÊN SUPABASE (WEB)
+    // ==========================================
+    async function importExcelToSupabaseFromWeb(event) {
+      var file = event.target.files[0];
+      if (!file) return;
+
+      var provinceCode = document.getElementById('selectProvince').value;
+      var provinceName = provinceCode === 'TNN' ? 'Tỉnh Thái Nguyên' : 'Tỉnh Quản Lý';
+
+      showLoading("Đang đọc tệp Excel và đồng bộ lên Supabase...");
+
+      var reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          var data = new Uint8Array(e.target.result);
+          var workbook = XLSX.read(data, { type: 'array' });
+
+          // 1. Upsert tỉnh vào bảng provinces
+          var provRes = await supabaseClient.from('provinces').upsert({
+            code: provinceCode,
+            name: provinceName,
+            settings: { default_zoom: 13, center: [21.5942, 105.8481] }
+          }, { onConflict: 'code' }).select();
+
+          if (provRes.error) throw provRes.error;
+          var provinceId = provRes.data[0].id;
+
+          var globalRowCounter = 0;
+
+          for (var sIdx = 0; sIdx < workbook.SheetNames.length; sIdx++) {
+            var sheetName = workbook.SheetNames[sIdx];
+            var sheet = workbook.Sheets[sheetName];
+            var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            if (!rows || rows.length < 2) continue;
+
+            var headerRow = rows[0] || [];
+            var h = headerRow.map(function(item) { return item ? String(item).trim().toLowerCase() : ''; });
+
+            var iTen = -1, iLat = -1, iLong = -1, iTuyen = -1, iLyTrinh = -1, iDuTru = -1, iDoCach = -1;
+
+            h.forEach(function(head, colIdx) {
+              if (head.includes('tên') || head.includes('ten') || head.includes('mã') || head.includes('diem')) { if (iTen === -1) iTen = colIdx; }
+              else if (head === 'lat' || head.includes('vĩ') || head.includes('vi_do')) iLat = colIdx;
+              else if (head === 'long' || head.includes('lng') || head.includes('kinh') || head.includes('kinh_do')) iLong = colIdx;
+              else if (head.includes('tuyen') || head.includes('tuyến') || head.includes('thu_muc') || head.includes('nhom')) iTuyen = colIdx;
+              else if (head.includes('lytrinh') || head.includes('lý trình') || head.includes('ly_trinh')) iLyTrinh = colIdx;
+              else if (head.includes('du_tru') || head.includes('dự trữ')) iDuTru = colIdx;
+              else if (head.includes('do_cach') || head.includes('đo cách')) iDoCach = colIdx;
+            });
+
+            if (iTen === -1) iTen = 0;
+            if (iLat === -1) iLat = 1;
+            if (iLong === -1) iLong = 2;
+
+            var isMx = sheetName.toLowerCase().includes('mang_xong') || sheetName.toLowerCase().includes('mx');
+            var defaultType = isMx ? "Măng xông" : (sheetName.toLowerCase().includes('cot') ? "Cột" : "Bể");
+
+            for (var r = 1; r < rows.length; r++) {
+              var row = rows[r];
+              if (!row) continue;
+              var tenVal = (iTen !== -1 && row[iTen] !== undefined && row[iTen] !== null) ? String(row[iTen]).trim() : ("Điểm " + r);
+              if (!tenVal) continue;
+
+              var latVal = parseFloat(row[iLat]);
+              var lngVal = parseFloat(row[iLong]);
+              if (isNaN(latVal) || isNaN(lngVal) || latVal === 0 || lngVal === 0) continue;
+
+              globalRowCounter++;
+              var lyTrinhVal = (iLyTrinh !== -1 && row[iLyTrinh] !== undefined) ? String(row[iLyTrinh]).trim() : null;
+              var duTruVal = (iDuTru !== -1 && row[iDuTru] !== undefined && !isNaN(row[iDuTru])) ? parseFloat(row[iDuTru]) : 0;
+              var doCachVal = (iDoCach !== -1 && row[iDoCach] !== undefined) ? String(row[iDoCach]).trim() : null;
+
+              var loaiHt = defaultType;
+              var tLower = tenVal.toLowerCase();
+              if (tLower.includes('mốc') || tLower.includes('moc')) loaiHt = "Mốc";
+              else if (tLower.includes('mx') || tLower.includes('măng xông')) loaiHt = "Măng xông";
+
+              // 1. Upsert điểm vào infrastructure_points
+              var ptUpsert = await supabaseClient.from('infrastructure_points').upsert({
+                province_id: provinceId,
+                point_name: tenVal,
+                point_type: loaiHt,
+                lat: latVal,
+                lng: lngVal
+              }, { onConflict: 'province_id,point_name' }).select();
+
+              if (ptUpsert.error) continue;
+              var pointId = ptUpsert.data[0].id;
+
+              // 2. Lấy danh sách tuyến
+              var tuyenRaw = (iTuyen !== -1 && row[iTuyen] !== undefined && row[iTuyen] !== null && String(row[iTuyen]).trim() !== '') ? String(row[iTuyen]).trim() : sheetName;
+              var tuyenList = tuyenRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+              if (tuyenList.length === 0) tuyenList = [sheetName];
+
+              for (var t = 0; t < tuyenList.length; t++) {
+                var tItem = tuyenList[t];
+
+                // Kiểm tra / Tạo tuyến trong routes
+                var routeSelect = await supabaseClient.from('routes').select('id').eq('province_id', provinceId).eq('route_code', tItem);
+                var routeId;
+                if (!routeSelect.data || routeSelect.data.length === 0) {
+                  var newRoute = await supabaseClient.from('routes').insert({
+                    province_id: provinceId,
+                    route_code: tItem,
+                    route_name: 'Tuyến ' + tItem
+                  }).select();
+                  routeId = newRoute.data[0].id;
+                } else {
+                  routeId = routeSelect.data[0].id;
+                }
+
+                // 3. Liên kết vào route_points
+                await supabaseClient.from('route_points').upsert({
+                  route_id: routeId,
+                  point_id: pointId,
+                  stt: globalRowCounter,
+                  ly_trinh: lyTrinhVal,
+                  du_tru: duTruVal,
+                  do_cach_tnn: doCachVal
+                }, { onConflict: 'route_id,point_id' });
+              }
+            }
+          }
+
+          hideLoading();
+          localStorage.removeItem('gis_data_cache_' + provinceCode);
+          showAlert("Đã import thành công dữ liệu từ file Excel lên Supabase!");
+          taiDuLieuTuSupabase(true);
+
+        } catch (err) {
+          hideLoading();
+          showAlert("Lỗi khi import file Excel: " + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      event.target.value = ''; // Reset input file
+    }
+
+    // ==========================================
+    // CHỨC NĂNG EXPORT DỮ LIỆU TỪ SUPABASE RA EXCEL (WEB)
+    // ==========================================
+    async function exportSupabaseToExcelWeb() {
+      var provinceCode = document.getElementById('selectProvince').value;
+      showLoading("Đang trích xuất dữ liệu từ Supabase...");
+
+      try {
+        var provRes = await supabaseClient.from('provinces').select('id').eq('code', provinceCode).single();
+        if (provRes.error) throw provRes.error;
+        var provinceId = provRes.data.id;
+
+        var { data, error } = await supabaseClient
+          .from('route_points')
+          .select(`
+            stt,
+            ly_trinh,
+            du_tru,
+            do_cach_tnn,
+            routes!inner(route_code, province_id),
+            infrastructure_points!inner(point_name, point_type, lat, lng)
+          `)
+          .eq('routes.province_id', provinceId);
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          hideLoading();
+          showAlert("Không có dữ liệu để xuất file.");
+          return;
+        }
+
+        var flatData = data.map(function(item) {
+          return {
+            "STT": item.stt,
+            "Tên điểm": item.infrastructure_points.point_name,
+            "Loại": item.infrastructure_points.point_type,
+            "Lat": item.infrastructure_points.lat,
+            "Long": item.infrastructure_points.lng,
+            "Tuyến": item.routes.route_code,
+            "Lý trình": item.ly_trinh || "",
+            "Dự trữ (m)": item.du_tru || 0,
+            "Đo cách TNN": item.do_cach_tnn || ""
+          };
+        });
+
+        var wb = XLSX.utils.book_new();
+
+        // Gom nhóm theo Tuyến để tạo các sheet riêng biệt
+        var groups = {};
+        flatData.forEach(function(row) {
+          var t = row["Tuyến"];
+          if (!groups[t]) groups[t] = [];
+          groups[t].push(row);
+        });
+
+        Object.keys(groups).forEach(function(tKey) {
+          var ws = XLSX.utils.json_to_sheet(groups[tKey]);
+          var sheetName = tKey.substring(0, 30);
+          XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        });
+
+        // Sheet tổng hợp toàn bộ
+        var wsAll = XLSX.utils.json_to_sheet(flatData);
+        XLSX.utils.book_append_sheet(wb, wsAll, "Tong_Hop");
+
+        hideLoading();
+        XLSX.writeFile(wb, "Tuyen_Cap_Quang_" + provinceCode + "_Export.xlsx");
+        showAlert("Đã xuất tệp Excel thành công!");
+
+      } catch (err) {
+        hideLoading();
+        showAlert("Lỗi khi xuất dữ liệu: " + err.message);
       }
     }
 
