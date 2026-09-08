@@ -449,14 +449,16 @@
             var sheet = workbook.Sheets[sheetName];
             if (!sheet) return;
             var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-            if (rows.length < 2) return;
+            if (!rows || rows.length < 2) return;
 
-            // An toàn hóa giá trị tiêu đề cột để tránh lỗi undefined.includes()
-            var h = rows[0].map(function(item) { return item !== undefined && item !== null ? item.toString().trim().toLowerCase() : ''; });
+            var headerRow = rows[0] || [];
+            var h = headerRow.map(function(item) { 
+              return (item !== undefined && item !== null) ? String(item).trim().toLowerCase() : ''; 
+            });
             var iTen = -1, iLat = -1, iLong = -1, iHuong = -1, iTuyen = -1, iLyTrinh = -1, iDuTru = -1;
 
             for (var col = 0; col < h.length; col++) {
-              var head = h[col];
+              var head = String(h[col] || '');
               if (head.includes('tên') || head.includes('ten')) { if (iTen === -1) iTen = col; }
               else if (head === 'lat' || head.includes('vĩ')) iLat = col;
               else if (head === 'long' || head.includes('lng') || head.includes('kinh')) iLong = col;
@@ -472,7 +474,8 @@
 
             for (var r = 1; r < rows.length; r++) {
               var row = rows[r];
-              var tenVal = (iTen !== -1 && row[iTen] !== undefined && row[iTen] !== null) ? row[iTen].toString().trim() : "";
+              if (!row) continue;
+              var tenVal = (iTen !== -1 && row[iTen] !== undefined && row[iTen] !== null) ? String(row[iTen]).trim() : "";
               if (!tenVal) continue;
 
               var lat = parseFloat(row[iLat]);
@@ -480,12 +483,12 @@
               if (isNaN(lat) || isNaN(lng)) continue;
 
               globalRowCounter++;
-              var huong = (iHuong !== -1 && row[iHuong]) ? row[iHuong].toString().trim() : '';
+              var huong = (iHuong !== -1 && row[iHuong] !== undefined && row[iHuong] !== null) ? String(row[iHuong]).trim() : '';
               huong = huong.replace(/bên\s+trái/gi, 'Trái').replace(/bên\s+phải/gi, 'Phải');
 
-              var tuyenCapRaw = (iTuyen !== -1 && row[iTuyen] !== undefined && row[iTuyen] !== null) ? row[iTuyen].toString().trim() : 'Tuyến Chung';
+              var tuyenCapRaw = (iTuyen !== -1 && row[iTuyen] !== undefined && row[iTuyen] !== null) ? String(row[iTuyen]).trim() : 'Tuyến Chung';
               if (tuyenCapRaw === '') tuyenCapRaw = 'Tuyến Chung';
-              var lyTrinh = (iLyTrinh !== -1 && row[iLyTrinh] !== undefined && row[iLyTrinh] !== null) ? row[iLyTrinh].toString().trim() : '';
+              var lyTrinh = (iLyTrinh !== -1 && row[iLyTrinh] !== undefined && row[iLyTrinh] !== null) ? String(row[iLyTrinh]).trim() : '';
               var duTru = (iDuTru !== -1 && row[iDuTru] !== undefined && row[iDuTru] !== null && !isNaN(row[iDuTru])) ? parseFloat(row[iDuTru]) : 0;
 
               var loaiHT = defaultType;
@@ -530,9 +533,9 @@
             }
           }
 
-          var sheetNames = workbook.SheetNames;
+          var sheetNames = workbook.SheetNames || [];
           sheetNames.forEach(function(sName) {
-            var sLower = sName.toLowerCase();
+            var sLower = String(sName || '').toLowerCase();
             if (sLower.includes('be') || sLower.includes('moc') || sLower.includes('mốc') || sLower.includes('bể')) {
               parseSheetData(sName, "Bể");
             } else if (sLower.includes('cot') || sLower.includes('cột')) {
@@ -540,42 +543,49 @@
             }
           });
 
-          var mxSheetName = sheetNames.find(function(s) { return s.toLowerCase().includes('mang_xong') || s.toLowerCase().includes('mang xong'); });
+          var mxSheetName = sheetNames.find(function(s) { 
+            var sLow = String(s || '').toLowerCase();
+            return sLow.includes('mang_xong') || sLow.includes('mang xong'); 
+          });
           if (mxSheetName) {
             var mxSheet = workbook.Sheets[mxSheetName];
             var mxRows = XLSX.utils.sheet_to_json(mxSheet, { header: 1 });
-            if (mxRows.length > 1) {
-              // An toàn hóa giá trị tiêu đề sheet măng xông
-              var mxH = mxRows[0].map(function(item) { return item !== undefined && item !== null ? item.toString().trim().toLowerCase() : ''; });
+            if (mxRows && mxRows.length > 1) {
+              var mxHeaderRow = mxRows[0] || [];
+              var mxH = mxHeaderRow.map(function(item) { 
+                return (item !== undefined && item !== null) ? String(item).trim().toLowerCase() : ''; 
+              });
               var mId = -1, mLat = -1, mLng = -1, mHuong = -1, mTuyen = -1, mLyTrinh = -1, mDuTru = -1, mDoCach = -1;
 
               mxH.forEach(function(hText, k) {
-                if (hText.includes('mã mx') || hText.includes('tên') || hText === 'ten') mId = k;
-                else if (hText === 'lat' || hText.includes('vĩ')) mLat = k;
-                else if (hText === 'lng' || hText === 'long' || hText.includes('kinh')) mLng = k;
-                else if (hText.includes('huong')) mHuong = k;
-                else if (hText.includes('tuyen') || hText.includes('tuyến')) mTuyen = k;
-                else if (hText.includes('ly_trinh') || hText.includes('lytrinh')) mLyTrinh = k;
-                else if (hText.includes('du_tru') || hText.includes('dự trữ')) mDuTru = k;
-                else if (hText.includes('do_cach_tnn') || hText.includes('đo cách tnn')) mDoCach = k;
+                var hStr = String(hText || '');
+                if (hStr.includes('mã mx') || hStr.includes('tên') || hStr === 'ten') mId = k;
+                else if (hStr === 'lat' || hStr.includes('vĩ')) mLat = k;
+                else if (hStr === 'lng' || hStr === 'long' || hStr.includes('kinh')) mLng = k;
+                else if (hStr.includes('huong')) mHuong = k;
+                else if (hStr.includes('tuyen') || hStr.includes('tuyến')) mTuyen = k;
+                else if (hStr.includes('ly_trinh') || hStr.includes('lytrinh')) mLyTrinh = k;
+                else if (hStr.includes('du_tru') || hStr.includes('dự trữ')) mDuTru = k;
+                else if (hStr.includes('do_cach_tnn') || hStr.includes('đo cách tnn')) mDoCach = k;
               });
 
               if (mLat !== -1 && mLng !== -1) {
                 for (var j = 1; j < mxRows.length; j++) {
                   var mRow = mxRows[j];
+                  if (!mRow) continue;
                   var mxLat = parseFloat(mRow[mLat]);
                   var mxLng = parseFloat(mRow[mLng]);
                   if (isNaN(mxLat) || isNaN(mxLng)) continue;
 
-                  var mxTen = (mId !== -1 && mRow[mId]) ? mRow[mId].toString().trim() : ("MX " + j);
-                  var tuyenCapRaw = (mTuyen !== -1 && mRow[mTuyen]) ? mRow[mTuyen].toString().trim() : 'Tất cả';
+                  var mxTen = (mId !== -1 && mRow[mId] !== undefined && mRow[mId] !== null) ? String(mRow[mId]).trim() : ("MX " + j);
+                  var tuyenCapRaw = (mTuyen !== -1 && mRow[mTuyen] !== undefined && mRow[mTuyen] !== null) ? String(mRow[mTuyen]).trim() : 'Tất cả';
                   var tuyenList = tuyenCapRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
                   if (tuyenList.length === 0) tuyenList = ['Tất cả'];
 
-                  var mxHuongVal = (mHuong !== -1 && mRow[mHuong]) ? mRow[mHuong].toString().trim() : '';
-                  var mxLyTrinhVal = (mLyTrinh !== -1 && mRow[mLyTrinh]) ? mRow[mLyTrinh].toString().trim() : '';
-                  var mxDuTruVal = (mDuTru !== -1 && !isNaN(mRow[mDuTru])) ? parseFloat(mRow[mDuTru]) : 0;
-                  var mxDoCachVal = (mDoCach !== -1 && mRow[mDoCach]) ? mRow[mDoCach].toString().trim() : '';
+                  var mxHuongVal = (mHuong !== -1 && mRow[mHuong] !== undefined && mRow[mHuong] !== null) ? String(mRow[mHuong]).trim() : '';
+                  var mxLyTrinhVal = (mLyTrinh !== -1 && mRow[mLyTrinh] !== undefined && mRow[mLyTrinh] !== null) ? String(mRow[mLyTrinh]).trim() : '';
+                  var mxDuTruVal = (mDuTru !== -1 && mRow[mDuTru] !== undefined && mRow[mDuTru] !== null && !isNaN(mRow[mDuTru])) ? parseFloat(mRow[mDuTru]) : 0;
+                  var mxDoCachVal = (mDoCach !== -1 && mRow[mDoCach] !== undefined && mRow[mDoCach] !== null) ? String(mRow[mDoCach]).trim() : '';
 
                   var mxItem = {
                     ten: mxTen,
@@ -1019,7 +1029,7 @@
       if (!pathPts || pathPts.length < 2) return 0;
       var minDst = Infinity, bestDist = 0, currentDist = 0;
       for (var i = 0; i < pathPts.length - 1; i++) {
-        var p1 = pathpts[i] || pathPts[i], p2 = pathPts[i+1];
+        var p1 = pathPts[i], p2 = pathPts[i+1];
         var segLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
         if (segLen === 0) continue;
         var dx = p2.lng - p1.lng, dy = p2.lat - p1.lat;
