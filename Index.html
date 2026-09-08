@@ -298,7 +298,7 @@
       var file = event.target.files[0];
       if (!file) return;
 
-      showLoading("Đang đọc toàn bộ tệp Excel (đảm bảo không sót dòng)...");
+      showLoading("Đang đọc trọn vẹn tệp Excel vào cơ sở dữ liệu...");
 
       var reader = new FileReader();
       reader.onload = async function(e) {
@@ -310,9 +310,8 @@
           var tinhMap = new Map();
           var routeMap = new Map();
           var phanDoanMap = new Map();
-          var pointsMap = new Map();
-          var rawDetails = [];
-          var totalParsedRows = 0;
+          var rawPoints = [];
+          var totalRead = 0;
 
           // Duyệt qua tất cả các Sheet trong file Excel
           for (var sIdx = 0; sIdx < workbook.SheetNames.length; sIdx++) {
@@ -323,7 +322,6 @@
             var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
             if (!rows || rows.length < 2) continue;
 
-            // Nhận diện tiêu đề cột linh hoạt
             var headerRow = rows[0] || [];
             var h = headerRow.map(function(item) { return item ? String(item).trim().toLowerCase() : ''; });
 
@@ -339,7 +337,7 @@
             var iDuTru = h.findIndex(function(x) { return x.includes('du_tru') || x.includes('dự trữ'); });
             var iDoCach = h.findIndex(function(x) { return x.includes('do_cach') || x.includes('đo cách'); });
 
-            // Vị trí cột mặc định chuẩn theo file mẫu nếu không tìm thấy tiêu đề
+            // Cột dự phòng mặc định nếu không khớp tiêu đề
             if (iStt === -1) iStt = 0;
             if (iDai === -1) iDai = 1;
             if (iTinh === -1) iTinh = 2;
@@ -350,24 +348,20 @@
             if (iLong === -1) iLong = 8;
             if (iLyTrinh === -1) iLyTrinh = 9;
 
-            // Đọc từng dòng từ hàng thứ 2 trở đi
             for (var r = 1; r < rows.length; r++) {
               var row = rows[r];
               if (!row || !Array.isArray(row)) continue;
 
-              // Lấy tên điểm (nếu ô trống thì tự tạo tên tạm để không bị bỏ sót dòng tọa độ)
               var tenVal = row[iTen] !== undefined && row[iTen] !== null && String(row[iTen]).trim() !== '' 
                            ? String(row[iTen]).trim() 
                            : ("Diem_" + sIdx + "_" + r);
 
               var latVal = parseFloat(row[iLat]);
               var lngVal = parseFloat(row[iLong]);
-              
-              // Nếu dòng không có tọa độ hợp lệ thì mới bỏ qua
               if (isNaN(latVal) || isNaN(lngVal) || latVal === 0 || lngVal === 0) continue;
 
-              totalParsedRows++;
-              var sttVal = iStt !== -1 && !isNaN(row[iStt]) ? parseFloat(row[iStt]) : totalParsedRows;
+              totalRead++;
+              var sttVal = iStt !== -1 && !isNaN(row[iStt]) ? parseFloat(row[iStt]) : totalRead;
               var daiVal = iDai !== -1 && row[iDai] ? String(row[iDai]).trim() : "VT_NET1";
               var tinhVal = iTinh !== -1 && row[iTinh] ? String(row[iTinh]).trim() : "TNN";
               var tuyenVal = iTuyen !== -1 && row[iTuyen] ? String(row[iTuyen]).trim() : sheetName;
@@ -383,29 +377,29 @@
               routeMap.set(tuyenVal, { ma_tuyen: tuyenVal, tinh_ma: tinhVal });
               phanDoanMap.set(tuyenVal + "_" + phanDoanVal, { tuyen_ma: tuyenVal, dai_ma: daiVal, ten_phan_doan: phanDoanVal });
 
-              pointsMap.set(tenVal, { tinh_ma: tinhVal, ten_diem: tenVal, loai: tenVal.toLowerCase().includes('mx') ? 'Mang xong' : 'Be', lat: latVal, long: lngVal });
-
-              rawDetails.push({ 
-                tuyen: tuyenVal, 
-                ten_diem: tenVal, 
-                phan_doan: phanDoanVal, 
-                stt: sttVal, 
-                ly_trinh: lyTrinhVal, 
-                du_tru: duTruVal, 
-                do_cach: doCachVal 
+              rawPoints.push({
+                tuyen_ma: tuyenVal,
+                phan_doan_key: tuyenVal + "_" + phanDoanVal,
+                tinh_ma: tinhVal,
+                ten_diem: tenVal,
+                loai: tenVal.toLowerCase().includes('mx') ? 'Mang xong' : 'Be',
+                lat: latVal,
+                long: lngVal,
+                stt: sttVal,
+                ly_trinh: lyTrinhVal,
+                du_tru: duTruVal,
+                do_cach: doCachVal
               });
             }
           }
 
-          if (rawDetails.length === 0) {
+          if (rawPoints.length === 0) {
             hideLoading();
-            showAlert("Không tìm thấy tọa độ hợp lệ nào trong tệp Excel!");
+            showAlert("Không đọc được dòng dữ liệu tọa độ nào!");
             return;
           }
 
-          showLoading("Đang nạp " + rawDetails.length + " bản ghi lên Supabase...");
-
-          // 1. Đồng bộ Đài VT
+          showLoading("Đang đẩy Đài VT & Tỉnh lên Supabase...");
           for (var [k, v] of daiMap) {
             var resDai = await supabaseClient.from('dai_vt').upsert(v, { onConflict: 'ma_dai' });
             if (resDai.error) throw resDai.error;
@@ -414,7 +408,6 @@
           var daiIdMap = new Map();
           (dbDai.data || []).forEach(function(d) { daiIdMap.set(d.ma_dai, d.id); });
 
-          // 2. Đồng bộ Tỉnh
           for (var [k, v] of tinhMap) {
             var dId = daiIdMap.get(v.dai_ma);
             var resTinh = await supabaseClient.from('tinh').upsert({ ma_tinh: v.ma_tinh, ten_tinh: v.ten_tinh, dai_vt_id: dId }, { onConflict: 'ma_tinh' });
@@ -424,19 +417,7 @@
           var tinhIdMap = new Map();
           (dbTinh.data || []).forEach(function(t) { tinhIdMap.set(t.ma_tinh, t.id); });
 
-          // 3. Đồng bộ Điểm hạ tầng (chia mẻ 500 bản ghi)
-          var pointsArr = Array.from(pointsMap.values()).map(function(p) {
-            return { tinh_id: tinhIdMap.get(p.tinh_ma), ten_diem: p.ten_diem, loai: p.loai, lat: p.lat, long: p.long };
-          });
-          for (var i = 0; i < pointsArr.length; i += 500) {
-            var resP = await supabaseClient.from('diem_ha_tang').upsert(pointsArr.slice(i, i+500), { onConflict: 'tinh_id,ten_diem' });
-            if (resP.error) throw resP.error;
-          }
-          var dbPoints = await supabaseClient.from('diem_ha_tang').select('id, ten_diem, tinh_id');
-          var pointIdMap = new Map();
-          (dbPoints.data || []).forEach(function(p) { pointIdMap.set(p.ten_diem, p.id); });
-
-          // 4. Đồng bộ Tuyến cáp
+          showLoading("Đang đồng bộ Tuyến cáp...");
           var routesArr = Array.from(routeMap.values()).map(function(r) {
             return { tinh_id: tinhIdMap.get(r.tinh_ma), ma_tuyen: r.ma_tuyen, ten_tuyen: "Tuyến " + r.ma_tuyen };
           });
@@ -448,7 +429,7 @@
           var routeIdMap = new Map();
           (dbRoutes.data || []).forEach(function(rt) { routeIdMap.set(rt.ma_tuyen, rt.id); });
 
-          // 5. Đồng bộ Phân đoạn
+          showLoading("Đang đồng bộ Phân đoạn...");
           for (var [k, v] of phanDoanMap) {
             var rId = routeIdMap.get(v.tuyen_ma);
             var dId = daiIdMap.get(v.dai_ma);
@@ -461,34 +442,33 @@
           var phanDoanIdMap = new Map();
           (dbPhanDoan.data || []).forEach(function(pd) { phanDoanIdMap.set(pd.tuyen_id + "_" + pd.ten_phan_doan, pd.id); });
 
-          // 6. Liên kết chi tiết tuyến (chia mẻ 500 bản ghi)
-          showLoading("Đang nạp chi tiết tuyến (" + rawDetails.length + " bản ghi)...");
-          var detailMap = new Map();
-          rawDetails.forEach(function(item) {
-            var rId = routeIdMap.get(item.tuyen);
-            var pId = pointIdMap.get(item.ten_diem);
-            var pdId = phanDoanIdMap.get(rId + "_" + item.phan_doan);
-            if (rId && pId) {
-              detailMap.set(rId + "_" + pId, {
-                tuyen_id: rId,
-                diem_id: pId,
-                phan_doan_id: pdId || null,
-                stt: item.stt,
-                ly_trinh: item.ly_trinh,
-                du_tru: item.du_tru,
-                do_cach: item.do_cach
-              });
-            }
-          });
+          showLoading("Đang nạp " + rawPoints.length + " điểm hạ tầng theo từng tuyến...");
+          var pointsToInsert = rawPoints.map(function(p) {
+            var rId = routeIdMap.get(p.tuyen_ma);
+            var pdId = phanDoanIdMap.get(p.phan_doan_key);
+            return {
+              tuyen_id: rId,
+              phan_doan_id: pdId || null,
+              ten_diem: p.ten_diem,
+              loai: p.loai,
+              lat: p.lat,
+              long: p.long,
+              stt: p.stt,
+              ly_trinh: p.ly_trinh,
+              du_tru: p.du_tru,
+              do_cach: p.do_cach
+            };
+          }).filter(function(p) { return p.tuyen_id !== undefined; });
 
-          var detailsArr = Array.from(detailMap.values());
-          for (var i = 0; i < detailsArr.length; i += 500) {
-            var resDT = await supabaseClient.from('tuyen_chi_tiet').upsert(detailsArr.slice(i, i+500), { onConflict: 'tuyen_id,diem_id' });
-            if (resDT.error) throw resDT.error;
+          // Chia mẻ 500 dòng để upsert lên Supabase
+          for (var i = 0; i < pointsToInsert.length; i += 500) {
+            var batch = pointsToInsert.slice(i, i + 500);
+            var resP = await supabaseClient.from('diem_ha_tang').upsert(batch, { onConflict: 'tuyen_id,ten_diem' });
+            if (resP.error) throw resP.error;
           }
 
           hideLoading();
-          showAlert("Import thành công " + detailsArr.length + " / " + totalParsedRows + " bản ghi vào CSDL!");
+          showAlert("Import thành công trọn vẹn " + pointsToInsert.length + " bản ghi vào CSDL!");
           taiDuLieuTuSupabase(true);
 
         } catch (err) {
