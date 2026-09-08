@@ -4,7 +4,7 @@
   <base target="_top">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hệ Thống GIS & Định Vị Cố OTDR - TNN NET1</title>
+  <title>Hệ Thống GIS & Định Vị Cố OTDR - Supabase Integration</title>
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -12,8 +12,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
   
-  <!-- SheetJS để đọc file Excel trực tiếp trên trình duyệt -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     html, body, #map {
@@ -122,8 +122,6 @@
     .btn-chuanhoa { background-color: #6610f2; color: white; border: none; font-weight: bold; padding: 10px; border-radius: 4px; width: 100%; margin-top: 4px; cursor: pointer; }
     .btn-clear { background-color: #dc3545; color: white; border: none; font-weight: bold; padding: 10px; border-radius: 4px; width: 100%; margin-top: 4px; cursor: pointer; }
 
-    button:disabled, select:disabled, input:disabled { opacity: 0.65; cursor: not-allowed !important; }
-
     .checkbox-group {
       display: flex;
       align-items: center;
@@ -194,19 +192,26 @@
 
   <div id="loading-overlay">
     <div class="spinner"></div>
-    <div id="loading-overlay-text">Hệ thống đang tải dữ liệu...</div>
+    <div id="loading-overlay-text">Đang kết nối Supabase...</div>
   </div>
 
   <div id="map"></div>
 
   <div id="control-panel">
     <div class="panel-header" onclick="toggleControlPanel()">
-      <span>📊 HỆ THỐNG GIS & ĐỊNH VỊ CỐ OTDR</span>
+      <span>📊 HỆ THỐNG GIS & ĐỊNH VỊ OTDR (SUPABASE)</span>
       <span id="panelToggleIcon" style="margin-left: auto; font-size: 12px;">▲ Thu gọn</span>
     </div>
 
     <div class="panel-body-content" id="panelBodyContent">
-      <div id="statusBadge" class="status-badge"><span>🔄</span> Khởi tạo dữ liệu...</div>
+      <div id="statusBadge" class="status-badge"><span>🔄</span> Đang khởi tạo kết nối cơ sở dữ liệu...</div>
+
+      <div class="form-group">
+        <label>Chọn Tỉnh / Khu vực quản lý:</label>
+        <select id="selectProvince" onchange="onProvinceChange()">
+          <option value="TNN">Tỉnh Thái Nguyên (TNN)</option>
+        </select>
+      </div>
 
       <div class="form-group">
         <label>1. Chọn mã tuyến cáp (Bắt buộc):</label>
@@ -261,7 +266,7 @@
           </select>
         </div>
         <div class="form-group" style="margin-top: 15px;">
-          <button class="btn-chuanhoa" onclick="taiLaiDuLieu(true)">🔄 TẢI LẠI DỮ LIỆU EXCEL</button>
+          <button class="btn-chuanhoa" onclick="taiDuLieuTuSupabase(true)">🔄 TẢI LẠI DỮ LIỆU SUPABASE</button>
         </div>
         <div class="form-group">
           <button class="btn-clear" onclick="xoaTuyenThuCong()">🗑️ LÀM SẠCH BẢN ĐỒ</button>
@@ -285,6 +290,11 @@
   <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 
   <script>
+    // Cấu hình kết nối Supabase của anh (Hãy thay URL và Anon Key thực tế của dự án Supabase)
+    const SUPABASE_URL = 'https://YOUR_SUPABASE_PROJECT_ID.supabase.co';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    var supabaseClient = null;
+
     var map;
     var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
     var mxLayer = L.layerGroup();
@@ -389,7 +399,13 @@
         }
       });
 
-      taiLaiDuLieu(false);
+      // Khởi tạo Supabase và tải dữ liệu
+      try {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        taiDuLieuTuSupabase(false);
+      } catch (err) {
+        showAlert("Lỗi khởi tạo Supabase Client: " + err.message);
+      }
     };
 
     function clearMeasure() {
@@ -418,230 +434,85 @@
       return { meters: null, suffix: "" };
     }
 
-    function taiLaiDuLieu(forceRefresh = false) {
+    function onProvinceChange() {
+      taiDuLieuTuSupabase(false);
+    }
+
+    async function taiDuLieuTuSupabase(forceRefresh = false) {
       var statusBadge = document.getElementById('statusBadge');
+      var provinceCode = document.getElementById('selectProvince').value;
+
       if (!forceRefresh) {
-        var cached = localStorage.getItem('tnn_gis_data_cache');
+        var cached = localStorage.getItem('gis_data_cache_' + provinceCode);
         if (cached) {
           try {
             globalDataPoints = JSON.parse(cached);
-            capNhatDanhSachTuyen(globalDataPoints);
-            statusBadge.innerHTML = "<span>⚡</span> Đã tải dữ liệu từ bộ nhớ thiết bị (" + globalDataPoints.length + " điểm).";
-            return;
-          } catch(e) { localStorage.removeItem('tnn_gis_data_cache'); }
+            if (globalDataPoints && globalDataPoints.length > 0) {
+              capNhatDanhSachTuyen(globalDataPoints);
+              statusBadge.innerHTML = "<span>⚡</span> Đã tải dữ liệu bộ nhớ (" + globalDataPoints.length + " điểm - Tỉnh " + provinceCode + ").";
+              return;
+            }
+          } catch(e) { localStorage.removeItem('gis_data_cache_' + provinceCode); }
         }
       }
 
-      showLoading("Đang tải và xử lý file Excel...");
-      statusBadge.innerHTML = "<span>⏳</span> Đang đọc tệp Excel trên trình duyệt...";
+      showLoading("Đang tải dữ liệu từ Supabase...");
+      statusBadge.innerHTML = "<span>⏳</span> Đang truy vấn cơ sở dữ liệu Supabase...";
 
-      fetch('Tuyen_cap_quang_TNN_Net1.xlsx')
-        .then(function(response) {
-          if (!response.ok) throw new Error("Không tìm thấy tệp Tuyen_cap_quang_TNN_Net1.xlsx trên Netlify. Hãy kiểm tra tên tệp trong thư mục.");
-          return response.arrayBuffer();
-        })
-        .then(function(buffer) {
-          var workbook = XLSX.read(buffer, { type: 'array' });
-          var allEntries = [];
-          var globalRowCounter = 0;
+      try {
+        // Truy vấn dữ liệu từ bảng route_points kết hợp routes và infrastructure_points
+        let { data, error } = await supabaseClient
+          .from('route_points')
+          .select(`
+            stt,
+            ly_trinh,
+            du_tru,
+            do_cach_tnn,
+            routes(route_code, province_id, provinces(code)),
+            infrastructure_points(point_name, point_type, lat, lng)
+          `)
+          .eq('routes.provinces.code', provinceCode);
 
-          function parseSheetData(sheetName, defaultType) {
-            var sheet = workbook.Sheets[sheetName];
-            if (!sheet) return;
-            var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-            if (!rows || rows.length < 2) return;
+        if (error) throw error;
 
-            var headerRow = rows[0] || [];
-            var h = headerRow.map(function(item) { 
-              return (item !== undefined && item !== null) ? String(item).trim().toLowerCase() : ''; 
-            });
-            var iTen = -1, iLat = -1, iLong = -1, iHuong = -1, iTuyen = -1, iLyTrinh = -1, iDuTru = -1;
-
-            for (var col = 0; col < h.length; col++) {
-              var head = String(h[col] || '');
-              if (head.includes('tên') || head.includes('ten') || head.includes('điểm') || head.includes('mã')) { if (iTen === -1) iTen = col; }
-              else if (head === 'lat' || head.includes('vĩ') || head.includes('vi_do') || head.includes('latitude') || head === 'y' || head.includes('toạ độ y') || head.includes('toa do y')) iLat = col;
-              else if (head === 'long' || head.includes('lng') || head.includes('kinh') || head.includes('kinh_do') || head.includes('longitude') || head === 'x' || head.includes('toạ độ x') || head.includes('toa do x')) iLong = col;
-              else if (head.includes('hướng') || head.includes('huong')) iHuong = col;
-              else if (head.includes('tuyen') || head.includes('tuyến') || head.includes('thu_muc') || head.includes('nhom') || head.includes('mã tuyến')) iTuyen = col;
-              else if (head.includes('lytrinh') || head.includes('lý trình') || head.includes('ly_trinh')) iLyTrinh = col;
-              else if (head.includes('du_tru') || head.includes('dự trữ')) iDuTru = col;
-            }
-
-            // Cơ chế quét tự động thông minh nếu không khớp tiêu đề cột
-            if (iLat === -1 || iLong === -1) {
-              for (var r = 1; r < Math.min(rows.length, 10); r++) {
-                var rowSample = rows[r];
-                if (!rowSample) continue;
-                for (var c = 0; c < rowSample.length; c++) {
-                  var val = parseFloat(rowSample[c]);
-                  if (!isNaN(val)) {
-                    if (val >= 8 && val <= 24 && iLat === -1) iLat = c;
-                    else if (val >= 102 && val <= 110 && iLong === -1) iLong = c;
-                  }
-                }
-              }
-            }
-
-            if (iTen === -1) iTen = 0;
-            if (iLat === -1) iLat = 1;
-            if (iLong === -1) iLong = 2;
-
-            for (var r = 1; r < rows.length; r++) {
-              var row = rows[r];
-              if (!row) continue;
-              var tenVal = (iTen !== -1 && row[iTen] !== undefined && row[iTen] !== null) ? String(row[iTen]).trim() : ("Điểm " + r);
-              
-              var lat = parseFloat(row[iLat]);
-              var lng = parseFloat(row[iLong]);
-              if (isNaN(lat) || isNaN(lng)) continue;
-
-              globalRowCounter++;
-              var huong = (iHuong !== -1 && row[iHuong] !== undefined && row[iHuong] !== null) ? String(row[iHuong]).trim() : '';
-              huong = huong.replace(/bên\s+trái/gi, 'Trái').replace(/bên\s+phải/gi, 'Phải');
-
-              var tuyenCapRaw = (iTuyen !== -1 && row[iTuyen] !== undefined && row[iTuyen] !== null && String(row[iTuyen]).trim() !== '') ? String(row[iTuyen]).trim() : sheetName;
-              var lyTrinh = (iLyTrinh !== -1 && row[iLyTrinh] !== undefined && row[iLyTrinh] !== null) ? String(row[iLyTrinh]).trim() : '';
-              var duTru = (iDuTru !== -1 && row[iDuTru] !== undefined && row[iDuTru] !== null && !isNaN(row[iDuTru])) ? parseFloat(row[iDuTru]) : 0;
-
-              var loaiHT = defaultType;
-              var tLower = tenVal.toLowerCase();
-              if (defaultType === "Bể" && (tLower.includes('mốc') || tLower.includes('moc'))) loaiHT = "Mốc";
-              if (tLower.includes('mx') || tLower.includes('măng xông')) loaiHT = "Măng xông";
-
-              var thuMucParts = tuyenCapRaw.split(',');
-              thuMucParts.forEach(function(rawPart) {
-                rawPart = rawPart.trim();
-                if (!rawPart) return;
-
-                var tenTuyen = "", stt = globalRowCounter;
-                var matchFull = rawPart.match(/^(Bể cáp|Bể|Cột|Mốc|Moc|Be|Cot)\s+(.+?)\s*-\s*([\d\.]+)/i);
-                if (matchFull) {
-                  tenTuyen = matchFull[2].trim();
-                  stt = parseFloat(matchFull[3]);
-                } else {
-                  var matchInherit = rawPart.match(/^(.+?)\s*-\s*([\d\.]+)$/);
-                  if (matchInherit) {
-                    tenTuyen = matchInherit[1].trim();
-                    stt = parseFloat(matchInherit[2]);
-                  } else {
-                    tenTuyen = rawPart;
-                  }
-                }
-
-                var finalTuyen = tenTuyen || sheetName;
-                allEntries.push({
-                  ten: tenVal,
-                  lat: lat,
-                  long: lng,
-                  huong: huong,
-                  tuyenList: [finalTuyen],
-                  loai: loaiHT,
-                  lyTrinh: lyTrinh,
-                  duTru: duTru,
-                  stt: !isNaN(stt) ? stt : globalRowCounter
-                });
-              });
-            }
-          }
-
-          var sheetNames = workbook.SheetNames || [];
-          sheetNames.forEach(function(sName) {
-            var sLower = String(sName || '').toLowerCase();
-            if (sLower.includes('mang_xong') || sLower.includes('mang xong') || sLower.includes('mx')) {
-              // Xử lý riêng sheet măng xông ở bước sau
-              return;
-            }
-            parseSheetData(sName, sLower.includes('cot') || sLower.includes('cột') ? "Cột" : "Bể");
-          });
-
-          var mxSheetName = sheetNames.find(function(s) { 
-            var sLow = String(s || '').toLowerCase();
-            return sLow.includes('mang_xong') || sLow.includes('mang xong') || sLow.includes('mx'); 
-          });
-          if (mxSheetName) {
-            var mxSheet = workbook.Sheets[mxSheetName];
-            var mxRows = XLSX.utils.sheet_to_json(mxSheet, { header: 1 });
-            if (mxRows && mxRows.length > 1) {
-              var mxHeaderRow = mxRows[0] || [];
-              var mxH = mxHeaderRow.map(function(item) { 
-                return (item !== undefined && item !== null) ? String(item).trim().toLowerCase() : ''; 
-              });
-              var mId = -1, mLat = -1, mLng = -1, mHuong = -1, mTuyen = -1, mLyTrinh = -1, mDuTru = -1, mDoCach = -1;
-
-              mxH.forEach(function(hText, k) {
-                var hStr = String(hText || '');
-                if (hStr.includes('mã mx') || hStr.includes('tên') || hStr === 'ten') mId = k;
-                else if (hStr === 'lat' || hStr.includes('vĩ')) mLat = k;
-                else if (hStr === 'lng' || hStr.includes('long' ) || hStr.includes('kinh')) mLng = k;
-                else if (hStr.includes('huong')) mHuong = k;
-                else if (hStr.includes('tuyen') || hStr.includes('tuyến')) mTuyen = k;
-                else if (hStr.includes('ly_trinh') || hStr.includes('lytrinh')) mLyTrinh = k;
-                else if (hStr.includes('du_tru') || hStr.includes('dự trữ')) mDuTru = k;
-                else if (hStr.includes('do_cach_tnn') || hStr.includes('đo cách tnn')) mDoCach = k;
-              });
-
-              if (mLat === -1 || mLng === -1) {
-                for (var r = 1; r < Math.min(mxRows.length, 5); r++) {
-                  var rSamp = mxRows[r];
-                  if (!rSamp) continue;
-                  for (var c = 0; c < rSamp.length; c++) {
-                    var val = parseFloat(rSamp[c]);
-                    if (!isNaN(val)) {
-                      if (val >= 8 && val <= 24 && mLat === -1) mLat = c;
-                      else if (val >= 102 && val <= 110 && mLng === -1) mLng = c;
-                    }
-                  }
-                }
-              }
-
-              if (mLat !== -1 && mLng !== -1) {
-                for (var j = 1; j < mxRows.length; j++) {
-                  var mRow = mxRows[j];
-                  if (!mRow) continue;
-                  var mxLat = parseFloat(mRow[mLat]);
-                  var mxLng = parseFloat(mRow[mLng]);
-                  if (isNaN(mxLat) || isNaN(mxLng)) continue;
-
-                  var mxTen = (mId !== -1 && mRow[mId] !== undefined && mRow[mId] !== null) ? String(mRow[mId]).trim() : ("MX " + j);
-                  var tuyenCapRaw = (mTuyen !== -1 && mRow[mTuyen] !== undefined && mRow[mTuyen] !== null) ? String(mRow[mTuyen]).trim() : 'Tất cả';
-                  var tuyenList = tuyenCapRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-                  if (tuyenList.length === 0) tuyenList = ['Tất cả'];
-
-                  var mxHuongVal = (mHuong !== -1 && mRow[mHuong] !== undefined && mRow[mHuong] !== null) ? String(mRow[mHuong]).trim() : '';
-                  var mxLyTrinhVal = (mLyTrinh !== -1 && mRow[mLyTrinh] !== undefined && mRow[mLyTrinh] !== null) ? String(mRow[mLyTrinh]).trim() : '';
-                  var mxDuTruVal = (mDuTru !== -1 && mRow[mDuTru] !== undefined && mRow[mDuTru] !== null && !isNaN(mRow[mDuTru])) ? parseFloat(mRow[mDuTru]) : 0;
-                  var mxDoCachVal = (mDoCach !== -1 && mRow[mDoCach] !== undefined && mRow[mDoCach] !== null) ? String(mRow[mDoCach]).trim() : '';
-
-                  var mxItem = {
-                    ten: mxTen,
-                    tuyenList: tuyenList,
-                    loai: "Măng xông",
-                    stt: 9999,
-                    lat: mxLat,
-                    lng: mxLng
-                  };
-                  if (mxHuongVal) mxItem.huong = mxHuongVal;
-                  if (mxLyTrinhVal) mxItem.lyTrinh = mxLyTrinhVal;
-                  if (mxDuTruVal > 0) mxItem.duTru = mxDuTruVal;
-                  if (mxDoCachVal) mxItem.doCachTnn = mxDoCachVal;
-
-                  allEntries.push(mxItem);
-                }
-              }
-            }
-          }
-
-          globalDataPoints = allEntries;
-          try { localStorage.setItem('tnn_gis_data_cache', JSON.stringify(globalDataPoints)); } catch(e){}
+        if (!data || data.length === 0) {
+          hideLoading();
+          statusBadge.innerHTML = "<span>⚠️</span> Không có dữ liệu tuyến cáp cho tỉnh " + provinceCode;
+          globalDataPoints = [];
           capNhatDanhSachTuyen(globalDataPoints);
-          hideLoading();
-          statusBadge.innerHTML = "<span>✅</span> Đã tải và đồng bộ thành công (" + globalDataPoints.length + " điểm từ Excel).";
-        })
-        .catch(function(err) {
-          hideLoading();
-          showAlert("Lỗi đọc file Excel: " + err.message);
+          return;
+        }
+
+        globalDataPoints = data.map(function(item) {
+          var pName = item.infrastructure_points ? item.infrastructure_points.point_name : "Điểm mốc";
+          var pType = item.infrastructure_points ? item.infrastructure_points.point_type : "Bể";
+          var pLat = item.infrastructure_points ? item.infrastructure_points.lat : 0;
+          var pLng = item.infrastructure_points ? item.infrastructure_points.lng : 0;
+          var rCode = item.routes ? item.routes.route_code : "Tuyến chung";
+
+          return {
+            ten: pName,
+            lat: pLat,
+            long: pLng,
+            loai: pType,
+            tuyenList: [rCode],
+            lyTrinh: item.ly_trinh || '',
+            duTru: parseFloat(item.du_tru) || 0,
+            stt: parseFloat(item.stt) || 0,
+            doCachTnn: item.do_cach_tnn || ''
+          };
         });
+
+        try { localStorage.setItem('gis_data_cache_' + provinceCode, JSON.stringify(globalDataPoints)); } catch(e){}
+        capNhatDanhSachTuyen(globalDataPoints);
+        hideLoading();
+        statusBadge.innerHTML = "<span>✅</span> Đã đồng bộ thành công (" + globalDataPoints.length + " điểm từ Supabase).";
+
+      } catch (err) {
+        hideLoading();
+        showAlert("Lỗi kết nối Supabase: " + err.message, "Lỗi cơ sở dữ liệu");
+        statusBadge.innerHTML = "<span>❌</span> Lỗi kết nối Supabase.";
+      }
     }
 
     function getBaseRouteName(tName) {
