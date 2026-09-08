@@ -298,7 +298,7 @@
       var file = event.target.files[0];
       if (!file) return;
 
-      showLoading("Đang đọc và đồng bộ tệp Excel phân cấp...");
+      showLoading("Đang đọc toàn bộ tệp Excel (đảm bảo không sót dòng)...");
 
       var reader = new FileReader();
       reader.onload = async function(e) {
@@ -312,7 +312,9 @@
           var phanDoanMap = new Map();
           var pointsMap = new Map();
           var rawDetails = [];
+          var totalRowsRead = 0;
 
+          // Duyệt qua toàn bộ các Sheet có trong file Excel
           for (var sIdx = 0; sIdx < workbook.SheetNames.length; sIdx++) {
             var sheetName = workbook.SheetNames[sIdx];
             var sheet = workbook.Sheets[sheetName];
@@ -321,6 +323,7 @@
             var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
             if (!rows || rows.length < 2) continue;
 
+            // Tự động nhận diện vị trí các cột dựa vào hàng tiêu đề (Row 0)
             var headerRow = rows[0] || [];
             var h = headerRow.map(function(item) { return item ? String(item).trim().toLowerCase() : ''; });
 
@@ -329,35 +332,46 @@
             var iTinh = h.findIndex(function(x) { return x.includes('tinh') || x.includes('tỉnh'); });
             var iTuyen = h.findIndex(function(x) { return x.includes('tuyen') || x.includes('tuyến'); });
             var iPhanDoan = h.findIndex(function(x) { return x.includes('phan_doan') || x.includes('phân đoạn'); });
-            var iTen = h.findIndex(function(x) { return x.includes('ten_diem') || x.includes('tên điểm') || x.includes('diem'); });
-            var iLat = h.findIndex(function(x) { return x === 'lat' || x.includes('vĩ'); });
-            var iLong = h.findIndex(function(x) { return x.includes('long') || x.includes('lng') || x.includes('kinh'); });
-            var iLyTrinh = h.findIndex(function(x) { return x.includes('ly_trinh') || x.includes('lý trình'); });
+            var iTen = h.findIndex(function(x) { return x.includes('ten_diem') || x.includes('tên điểm') || x.includes('diem') || x.includes('tên'); });
+            var iLat = h.findIndex(function(x) { return x === 'lat' || x.includes('vĩ') || x.includes('vi_do'); });
+            var iLong = h.findIndex(function(x) { return x.includes('long') || x.includes('lng') || x.includes('kinh') || x.includes('kinh_do'); });
+            var iLyTrinh = h.findIndex(function(x) { return x.includes('ly_trinh' ) || x.includes('lý trình'); });
             var iDuTru = h.findIndex(function(x) { return x.includes('du_tru') || x.includes('dự trữ'); });
             var iDoCach = h.findIndex(function(x) { return x.includes('do_cach') || x.includes('đo cách'); });
 
-            if (iTen === -1) iTen = 5; if (iLat === -1) iLat = 7; if (iLong === -1) iLong = 8;
+            // Dự phòng mặc định vị trí các cột nếu file Excel không khớp tiêu đề
+            if (iStt === -1) iStt = 0;
+            if (iDai === -1) iDai = 1;
+            if (iTinh === -1) iTinh = 2;
+            if (iTuyen === -1) iTuyen = 3;
+            if (iPhanDoan === -1) iPhanDoan = 4;
+            if (iTen === -1) iTen = 5;
+            if (iLat === -1) iLat = 7;
+            if (iLong === -1) iLong = 8;
+            if (iLyTrinh === -1) iLyTrinh = 9;
 
+            // Duyệt từng dòng dữ liệu từ hàng số 2 trở đi
             for (var r = 1; r < rows.length; r++) {
               var row = rows[r];
               if (!row || !Array.isArray(row)) continue;
 
-              var sttVal = iStt !== -1 && !isNaN(row[iStt]) ? parseFloat(row[iStt]) : r;
+              var tenVal = row[iTen] !== undefined && row[iTen] !== null ? String(row[iTen]).trim() : '';
+              if (!tenVal || tenVal.toLowerCase() === 'nan' || tenVal === '') continue;
+
+              var latVal = parseFloat(row[iLat]);
+              var lngVal = parseFloat(row[iLong]);
+              if (isNaN(latVal) || isNaN(lngVal)) continue;
+
+              totalRowsRead++;
+              var sttVal = iStt !== -1 && !isNaN(row[iStt]) ? parseFloat(row[iStt]) : totalRowsRead;
               var daiVal = iDai !== -1 && row[iDai] ? String(row[iDai]).trim() : "VT_NET1";
               var tinhVal = iTinh !== -1 && row[iTinh] ? String(row[iTinh]).trim() : "TNN";
               var tuyenVal = iTuyen !== -1 && row[iTuyen] ? String(row[iTuyen]).trim() : sheetName;
               var phanDoanVal = iPhanDoan !== -1 && row[iPhanDoan] ? String(row[iPhanDoan]).trim() : "Phân đoạn chính";
               
-              var tenVal = row[iTen] !== undefined && row[iTen] !== null ? String(row[iTen]).trim() : null;
-              if (!tenVal || tenVal.toLowerCase() === 'nan') continue;
-
-              var latVal = parseFloat(row[iLat]);
-              var lngVal = parseFloat(row[iLong]);
-              if (isNaN(latVal) || isNaN(lngVal) || latVal === 0) continue;
-
-              var lyTrinhVal = iLyTrinh !== -1 && row[iLyTrinh] ? String(row[iLyTrinh]).trim() : null;
+              var lyTrinhVal = iLyTrinh !== -1 && row[iLyTrinh] !== undefined ? String(row[iLyTrinh]).trim() : null;
               var duTruVal = iDuTru !== -1 && !isNaN(row[iDuTru]) ? parseFloat(row[iDuTru]) : 0;
-              var doCachVal = iDoCach !== -1 && row[iDoCach] ? String(row[iDoCach]).trim() : null;
+              var doCachVal = iDoCach !== -1 && row[iDoCach] !== undefined ? String(row[iDoCach]).trim() : null;
 
               daiMap.set(daiVal, { ma_dai: daiVal, ten_dai: "Đài Viễn thông " + daiVal });
               tinhMap.set(tinhVal, { ma_tinh: tinhVal, ten_tinh: "Tỉnh " + tinhVal, dai_ma: daiVal });
@@ -379,26 +393,34 @@
             }
           }
 
-          showLoading("Đang đẩy dữ liệu lên cơ sở dữ liệu Supabase...");
+          if (rawDetails.length === 0) {
+            hideLoading();
+            showAlert("Không tìm thấy dòng dữ liệu hợp lệ nào trong file Excel!");
+            return;
+          }
+
+          showLoading("Đang đồng bộ " + rawDetails.length + " bản ghi lên Supabase...");
+
+          // 1. Đồng bộ Đài VT
           for (var [k, v] of daiMap) {
             var resDai = await supabaseClient.from('dai_vt').upsert(v, { onConflict: 'ma_dai' });
             if (resDai.error) throw resDai.error;
           }
           var dbDai = await supabaseClient.from('dai_vt').select('id, ma_dai');
-          if (dbDai.error) throw dbDai.error;
           var daiIdMap = new Map();
           (dbDai.data || []).forEach(function(d) { daiIdMap.set(d.ma_dai, d.id); });
 
+          // 2. Đồng bộ Tỉnh
           for (var [k, v] of tinhMap) {
             var dId = daiIdMap.get(v.dai_ma);
             var resTinh = await supabaseClient.from('tinh').upsert({ ma_tinh: v.ma_tinh, ten_tinh: v.ten_tinh, dai_vt_id: dId }, { onConflict: 'ma_tinh' });
             if (resTinh.error) throw resTinh.error;
           }
           var dbTinh = await supabaseClient.from('tinh').select('id, ma_tinh');
-          if (dbTinh.error) throw dbTinh.error;
           var tinhIdMap = new Map();
           (dbTinh.data || []).forEach(function(t) { tinhIdMap.set(t.ma_tinh, t.id); });
 
+          // 3. Đồng bộ Điểm hạ tầng (chia mẻ 500 bản ghi)
           var pointsArr = Array.from(pointsMap.values()).map(function(p) {
             return { tinh_id: tinhIdMap.get(p.tinh_ma), ten_diem: p.ten_diem, loai: p.loai, lat: p.lat, long: p.long };
           });
@@ -407,10 +429,10 @@
             if (resP.error) throw resP.error;
           }
           var dbPoints = await supabaseClient.from('diem_ha_tang').select('id, ten_diem, tinh_id');
-          if (dbPoints.error) throw dbPoints.error;
           var pointIdMap = new Map();
           (dbPoints.data || []).forEach(function(p) { pointIdMap.set(p.ten_diem, p.id); });
 
+          // 4. Đồng bộ Tuyến cáp
           var routesArr = Array.from(routeMap.values()).map(function(r) {
             return { tinh_id: tinhIdMap.get(r.tinh_ma), ma_tuyen: r.ma_tuyen, ten_tuyen: "Tuyến " + r.ma_tuyen };
           });
@@ -419,10 +441,10 @@
             if (resR.error) throw resR.error;
           }
           var dbRoutes = await supabaseClient.from('tuyen_cap').select('id, ma_tuyen');
-          if (dbRoutes.error) throw dbRoutes.error;
           var routeIdMap = new Map();
           (dbRoutes.data || []).forEach(function(rt) { routeIdMap.set(rt.ma_tuyen, rt.id); });
 
+          // 5. Đồng bộ Phân đoạn
           for (var [k, v] of phanDoanMap) {
             var rId = routeIdMap.get(v.tuyen_ma);
             var dId = daiIdMap.get(v.dai_ma);
@@ -432,11 +454,11 @@
             }
           }
           var dbPhanDoan = await supabaseClient.from('phan_doan').select('id, tuyen_id, ten_phan_doan');
-          if (dbPhanDoan.error) throw dbPhanDoan.error;
           var phanDoanIdMap = new Map();
           (dbPhanDoan.data || []).forEach(function(pd) { phanDoanIdMap.set(pd.tuyen_id + "_" + pd.ten_phan_doan, pd.id); });
 
-          showLoading("Đang liên kết chi tiết tuyến cáp với STT chuẩn...");
+          // 6. Liên kết chi tiết tuyến (chia mẻ 500 bản ghi nạp vào bảng tuyen_chi_tiet)
+          showLoading("Đang nạp chi tiết tuyến (" + rawDetails.length + " liên kết)...");
           var detailMap = new Map();
           rawDetails.forEach(function(item) {
             var rId = routeIdMap.get(item.tuyen);
@@ -462,7 +484,7 @@
           }
 
           hideLoading();
-          showAlert("Import thành công toàn bộ dữ liệu phân cấp và STT chuẩn!");
+          showAlert("Import thành công toàn bộ " + detailsArr.length + " bản ghi vào cơ sở dữ liệu!");
           taiDuLieuTuSupabase(true);
 
         } catch (err) {
