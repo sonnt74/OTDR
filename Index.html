@@ -345,10 +345,10 @@
             var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
             if (!rows || rows.length < 2) continue;
 
+            // Lọc và chuyển đổi header an toàn tuyệt đối, tránh lỗi undefined.includes
             var headerRow = rows[0] || [];
-            // Vá lỗi: Đảm bảo item luôn là chuỗi an toàn trước khi gọi includes / toLowerCase
             var h = headerRow.map(function(item) { 
-              return (item !== undefined && item !== null) ? String(item).trim().toLowerCase() : ''; 
+              return item !== undefined && item !== null ? String(item).trim().toLowerCase() : ''; 
             });
 
             var iTen = h.findIndex(function(x) { return x.includes('tên') || x.includes('ten') || x.includes('mã') || x.includes('diem'); });
@@ -368,10 +368,10 @@
 
             for (var r = 1; r < rows.length; r++) {
               var row = rows[r];
-              if (!row) continue;
-              var tenVal = (row[iTen] !== undefined && row[iTen] !== null) ? String(row[iTen]).trim() : ("Diem " + r);
-              if (!tenVal) continue;
+              if (!row || !Array.isArray(row)) continue;
 
+              var tenVal = (row[iTen] !== undefined && row[iTen] !== null && String(row[iTen]).trim() !== '') ? String(row[iTen]).trim() : ("Diem " + r);
+              
               var latVal = parseFloat(row[iLat]);
               var lngVal = parseFloat(row[iLong]);
               if (isNaN(latVal) || isNaN(lngVal) || latVal === 0 || lngVal === 0) continue;
