@@ -337,7 +337,6 @@
             var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
             if (!rows || rows.length === 0) continue;
 
-            // Tự động tìm dòng tiêu đề (header) chứa từ khóa nhận diện
             var headerIdx = 0;
             var iTen = 0, iLat = 1, iLong = 2, iTuyen = 3, iLyTrinh = 4, iDuTru = 5, iDoCach = 6;
 
@@ -372,13 +371,12 @@
             var isMx = String(sheetName).toLowerCase().includes('mang_xong') || String(sheetName).toLowerCase().includes('mx');
             var defaultType = isMx ? "Mang xong" : (String(sheetName).toLowerCase().includes('cot') ? "Cot" : "Be");
 
-            // Đọc dữ liệu từ các dòng phía dưới header
             for (var r = headerIdx + 1; r < rows.length; r++) {
               var row = rows[r];
               if (!row || !Array.isArray(row)) continue;
 
               var rawTen = row[iTen];
-              var tenVal = (rawTen !== undefined && rawTen !== null && String(rawTen).trim() !== '') ? String(rawTen).trim() : null;
+              var tenVal = (rawTen !== undefined && rawTen !== null && String(rawTen).trim() !== '') ? String(rawTen).trim().substring(0, 250) : null;
               if (!tenVal || tenVal.toLowerCase() === 'nan' || tenVal.toLowerCase() === 'undefined') continue;
 
               var latVal = parseFloat(row[iLat]);
@@ -387,13 +385,13 @@
 
               globalRowCounter++;
               var rawLyTrinh = row[iLyTrinh];
-              var lyTrinhVal = (rawLyTrinh !== undefined && rawLyTrinh !== null && String(rawLyTrinh).trim() !== '') ? String(rawLyTrinh).trim() : null;
+              var lyTrinhVal = (rawLyTrinh !== undefined && rawLyTrinh !== null && String(rawLyTrinh).trim() !== '') ? String(rawLyTrinh).trim().substring(0, 100) : null;
               
               var rawDuTru = row[iDuTru];
               var duTruVal = (rawDuTru !== undefined && rawDuTru !== null && !isNaN(rawDuTru)) ? parseFloat(rawDuTru) : 0;
               
               var rawDoCach = row[iDoCach];
-              var doCachVal = (rawDoCach !== undefined && rawDoCach !== null && String(rawDoCach).trim() !== '') ? String(rawDoCach).trim() : null;
+              var doCachVal = (rawDoCach !== undefined && rawDoCach !== null && String(rawDoCach).trim() !== '') ? String(rawDoCach).trim().substring(0, 250) : null;
 
               var loaiHt = defaultType;
               var tLower = tenVal.toLowerCase();
@@ -405,7 +403,7 @@
               allPointsMap.set(tenVal, { tinh_id: tinhId, ten_diem: tenVal, loai: loaiHt, lat: latVal, long: lngVal });
 
               var rawTuyen = row[iTuyen];
-              var tuyenVal = (rawTuyen !== undefined && rawTuyen !== null && String(rawTuyen).trim() !== '') ? String(rawTuyen).trim() : sheetName;
+              var tuyenVal = (rawTuyen !== undefined && rawTuyen !== null && String(rawTuyen).trim() !== '') ? String(rawTuyen).trim().substring(0, 250) : sheetName;
               var tuyenList = tuyenVal.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
               if (tuyenList.length === 0) tuyenList = [sheetName];
 
