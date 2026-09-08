@@ -325,7 +325,7 @@
             var h = headerRow.map(function(item) { return item ? String(item).trim().toLowerCase() : ''; });
 
             var iStt = h.findIndex(function(x) { return x === 'stt' || x.includes('thứ tự'); });
-            var iDai = h.findIndex(function(x) { return x.includes('dai_vt') || x.includes('đài'); });
+            var iDai = h.findIndex(function(x) { return x.includes('dai_vt' ) || x.includes('đài'); });
             var iTinh = h.findIndex(function(x) { return x.includes('tinh') || x.includes('tỉnh'); });
             var iTuyen = h.findIndex(function(x) { return x.includes('tuyen') || x.includes('tuyến'); });
             var iPhanDoan = h.findIndex(function(x) { return x.includes('phan_doan') || x.includes('phân đoạn'); });
@@ -458,6 +458,7 @@
             };
           }).filter(function(p) { return p.tuyen_id !== undefined; });
 
+          // SỬA LỖI: Cập nhật onConflict thành 'tuyen_id,ten_diem' đúng với khóa duy nhất của bảng mới
           for (var i = 0; i < pointsToInsert.length; i += 500) {
             var batch = pointsToInsert.slice(i, i + 500);
             var resP = await supabaseClient.from('diem_ha_tang').upsert(batch, { onConflict: 'tuyen_id,ten_diem' });
