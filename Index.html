@@ -381,50 +381,60 @@
 
           showLoading("Đang đẩy dữ liệu lên cơ sở dữ liệu Supabase...");
           for (var [k, v] of daiMap) {
-            await supabaseClient.from('dai_vt').upsert(v, { onConflict: 'ma_dai' });
+            var resDai = await supabaseClient.from('dai_vt').upsert(v, { onConflict: 'ma_dai' });
+            if (resDai.error) throw resDai.error;
           }
           var dbDai = await supabaseClient.from('dai_vt').select('id, ma_dai');
+          if (dbDai.error) throw dbDai.error;
           var daiIdMap = new Map();
-          dbDai.data.forEach(function(d) { daiIdMap.set(d.ma_dai, d.id); });
+          (dbDai.data || []).forEach(function(d) { daiIdMap.set(d.ma_dai, d.id); });
 
           for (var [k, v] of tinhMap) {
             var dId = daiIdMap.get(v.dai_ma);
-            await supabaseClient.from('tinh').upsert({ ma_tinh: v.ma_tinh, ten_tinh: v.ten_tinh, dai_vt_id: dId }, { onConflict: 'ma_tinh' });
+            var resTinh = await supabaseClient.from('tinh').upsert({ ma_tinh: v.ma_tinh, ten_tinh: v.ten_tinh, dai_vt_id: dId }, { onConflict: 'ma_tinh' });
+            if (resTinh.error) throw resTinh.error;
           }
           var dbTinh = await supabaseClient.from('tinh').select('id, ma_tinh');
+          if (dbTinh.error) throw dbTinh.error;
           var tinhIdMap = new Map();
-          dbTinh.data.forEach(function(t) { tinhIdMap.set(t.ma_tinh, t.id); });
+          (dbTinh.data || []).forEach(function(t) { tinhIdMap.set(t.ma_tinh, t.id); });
 
           var pointsArr = Array.from(pointsMap.values()).map(function(p) {
             return { tinh_id: tinhIdMap.get(p.tinh_ma), ten_diem: p.ten_diem, loai: p.loai, lat: p.lat, long: p.long };
           });
           for (var i = 0; i < pointsArr.length; i += 500) {
-            await supabaseClient.from('diem_ha_tang').upsert(pointsArr.slice(i, i+500), { onConflict: 'tinh_id,ten_diem' });
+            var resP = await supabaseClient.from('diem_ha_tang').upsert(pointsArr.slice(i, i+500), { onConflict: 'tinh_id,ten_diem' });
+            if (resP.error) throw resP.error;
           }
           var dbPoints = await supabaseClient.from('diem_ha_tang').select('id, ten_diem, tinh_id');
+          if (dbPoints.error) throw dbPoints.error;
           var pointIdMap = new Map();
-          dbPoints.data.forEach(function(p) { pointIdMap.set(p.ten_diem, p.id); });
+          (dbPoints.data || []).forEach(function(p) { pointIdMap.set(p.ten_diem, p.id); });
 
           var routesArr = Array.from(routeMap.values()).map(function(r) {
             return { tinh_id: tinhIdMap.get(r.tinh_ma), ma_tuyen: r.ma_tuyen, ten_tuyen: "Tuyến " + r.ma_tuyen };
           });
           for (var i = 0; i < routesArr.length; i += 500) {
-            await supabaseClient.from('tuyen_cap').upsert(routesArr.slice(i, i+500), { onConflict: 'tinh_id,ma_tuyen' });
+            var resR = await supabaseClient.from('tuyen_cap').upsert(routesArr.slice(i, i+500), { onConflict: 'tinh_id,ma_tuyen' });
+            if (resR.error) throw resR.error;
           }
           var dbRoutes = await supabaseClient.from('tuyen_cap').select('id, ma_tuyen');
+          if (dbRoutes.error) throw dbRoutes.error;
           var routeIdMap = new Map();
-          dbRoutes.data.forEach(function(rt) { routeIdMap.set(rt.ma_tuyen, rt.id); });
+          (dbRoutes.data || []).forEach(function(rt) { routeIdMap.set(rt.ma_tuyen, rt.id); });
 
           for (var [k, v] of phanDoanMap) {
             var rId = routeIdMap.get(v.tuyen_ma);
             var dId = daiIdMap.get(v.dai_ma);
             if (rId && dId) {
-              await supabaseClient.from('phan_doan').upsert({ tuyen_id: rId, dai_vt_id: dId, ten_phan_doan: v.ten_phan_doan }, { onConflict: 'tuyen_id,ten_phan_doan' });
+              var resPD = await supabaseClient.from('phan_doan').upsert({ tuyen_id: rId, dai_vt_id: dId, ten_phan_doan: v.ten_phan_doan }, { onConflict: 'tuyen_id,ten_phan_doan' });
+              if (resPD.error) throw resPD.error;
             }
           }
           var dbPhanDoan = await supabaseClient.from('phan_doan').select('id, tuyen_id, ten_phan_doan');
+          if (dbPhanDoan.error) throw dbPhanDoan.error;
           var phanDoanIdMap = new Map();
-          dbPhanDoan.data.forEach(function(pd) { phanDoanIdMap.set(pd.tuyen_id + "_" + pd.ten_phan_doan, pd.id); });
+          (dbPhanDoan.data || []).forEach(function(pd) { phanDoanIdMap.set(pd.tuyen_id + "_" + pd.ten_phan_doan, pd.id); });
 
           showLoading("Đang liên kết chi tiết tuyến cáp với STT chuẩn...");
           var detailMap = new Map();
@@ -447,7 +457,8 @@
 
           var detailsArr = Array.from(detailMap.values());
           for (var i = 0; i < detailsArr.length; i += 500) {
-            await supabaseClient.from('tuyen_chi_tiet').upsert(detailsArr.slice(i, i+500), { onConflict: 'tuyen_id,diem_id' });
+            var resDT = await supabaseClient.from('tuyen_chi_tiet').upsert(detailsArr.slice(i, i+500), { onConflict: 'tuyen_id,diem_id' });
+            if (resDT.error) throw resDT.error;
           }
 
           hideLoading();
