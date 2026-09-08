@@ -460,10 +460,10 @@
             for (var col = 0; col < h.length; col++) {
               var head = String(h[col] || '');
               if (head.includes('tên') || head.includes('ten')) { if (iTen === -1) iTen = col; }
-              else if (head === 'lat' || head.includes('vĩ')) iLat = col;
-              else if (head === 'long' || head.includes('lng') || head.includes('kinh')) iLong = col;
+              else if (head === 'lat' || head.includes('vĩ') || head.includes('vi_do')) iLat = col;
+              else if (head === 'long' || head.includes('lng') || head.includes('kinh') || head.includes('kinh_do')) iLong = col;
               else if (head.includes('hướng') || head.includes('huong')) iHuong = col;
-              else if (head.includes('tuyen') || head.includes('tuyến') || head.includes('thu_muc')) iTuyen = col;
+              else if (head.includes('tuyen') || head.includes('tuyến') || head.includes('thu_muc') || head.includes('nhom')) iTuyen = col;
               else if (head.includes('lytrinh') || head.includes('lý trình') || head.includes('ly_trinh')) iLyTrinh = col;
               else if (head.includes('du_tru') || head.includes('dự trữ')) iDuTru = col;
             }
@@ -486,8 +486,8 @@
               var huong = (iHuong !== -1 && row[iHuong] !== undefined && row[iHuong] !== null) ? String(row[iHuong]).trim() : '';
               huong = huong.replace(/bên\s+trái/gi, 'Trái').replace(/bên\s+phải/gi, 'Phải');
 
-              var tuyenCapRaw = (iTuyen !== -1 && row[iTuyen] !== undefined && row[iTuyen] !== null) ? String(row[iTuyen]).trim() : 'Tuyến Chung';
-              if (tuyenCapRaw === '') tuyenCapRaw = 'Tuyến Chung';
+              // Lấy tên tuyến, nếu cột tuyến không có thì mặc định lấy tên Sheet
+              var tuyenCapRaw = (iTuyen !== -1 && row[iTuyen] !== undefined && row[iTuyen] !== null && String(row[iTuyen]).trim() !== '') ? String(row[iTuyen]).trim() : sheetName;
               var lyTrinh = (iLyTrinh !== -1 && row[iLyTrinh] !== undefined && row[iLyTrinh] !== null) ? String(row[iLyTrinh]).trim() : '';
               var duTru = (iDuTru !== -1 && row[iDuTru] !== undefined && row[iDuTru] !== null && !isNaN(row[iDuTru])) ? parseFloat(row[iDuTru]) : 0;
 
@@ -517,7 +517,7 @@
                   }
                 }
 
-                var finalTuyen = tenTuyen || "Tuyến Chung";
+                var finalTuyen = tenTuyen || sheetName;
                 allEntries.push({
                   ten: tenVal,
                   lat: lat,
@@ -536,16 +536,17 @@
           var sheetNames = workbook.SheetNames || [];
           sheetNames.forEach(function(sName) {
             var sLower = String(sName || '').toLowerCase();
-            if (sLower.includes('be') || sLower.includes('moc') || sLower.includes('mốc') || sLower.includes('bể')) {
+            if (sLower.includes('be') || sLower.includes('moc') || sLower.includes('mốc') || sLower.includes('bể') || sLower.includes('cot') || sLower.includes('cột')) {
+              parseSheetData(sName, sLower.includes('cot') || sLower.includes('cột') ? "Cột" : "Bể");
+            } else {
+              // Quét các sheet khác làm dữ liệu chung nếu có tọa độ
               parseSheetData(sName, "Bể");
-            } else if (sLower.includes('cot') || sLower.includes('cột')) {
-              parseSheetData(sName, "Cột");
             }
           });
 
           var mxSheetName = sheetNames.find(function(s) { 
             var sLow = String(s || '').toLowerCase();
-            return sLow.includes('mang_xong') || sLow.includes('mang xong'); 
+            return sLow.includes('mang_xong') || sLow.includes('mang xong') || sLow.includes('mx'); 
           });
           if (mxSheetName) {
             var mxSheet = workbook.Sheets[mxSheetName];
@@ -840,7 +841,10 @@
       if (sel === 'ALL') return;
 
       var pts = getPointsCuaTuyenHienTai();
-      if (pts.length === 0) return;
+      if (pts.length < 2) {
+        showAlert("Tuyến '" + sel + "' hiện chỉ có " + pts.length + " điểm tọa độ. Cần ít nhất 2 điểm để vẽ tuyến cáp!");
+        return;
+      }
 
       var calculatedLyTrinhs = calculateRouteMilestones(pts, sel);
       var bounds = [];
