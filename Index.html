@@ -437,7 +437,7 @@
 
       fetch('Tuyen_cap_quang_TNN_Net1.xlsx')
         .then(function(response) {
-          if (!response.ok) throw new Error("Không tìm thấy tệp Tuyen_cap_quang_TNN_Net1.xlsx trên Netlify.");
+          if (!response.ok) throw new Error("Không tìm thấy tệp Tuyen_cap_quang_TNN_Net1.xlsx trên Netlify. Hãy kiểm tra tên tệp trong thư mục.");
           return response.arrayBuffer();
         })
         .then(function(buffer) {
@@ -451,7 +451,8 @@
             var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
             if (rows.length < 2) return;
 
-            var h = rows[0].map(function(item) { return item ? item.toString().trim().toLowerCase() : ''; });
+            // An toàn hóa giá trị tiêu đề cột để tránh lỗi undefined.includes()
+            var h = rows[0].map(function(item) { return item !== undefined && item !== null ? item.toString().trim().toLowerCase() : ''; });
             var iTen = -1, iLat = -1, iLong = -1, iHuong = -1, iTuyen = -1, iLyTrinh = -1, iDuTru = -1;
 
             for (var col = 0; col < h.length; col++) {
@@ -544,14 +545,15 @@
             var mxSheet = workbook.Sheets[mxSheetName];
             var mxRows = XLSX.utils.sheet_to_json(mxSheet, { header: 1 });
             if (mxRows.length > 1) {
-              var mxH = mxRows[0].map(function(item) { return item ? item.toString().trim().toLowerCase() : ''; });
+              // An toàn hóa giá trị tiêu đề sheet măng xông
+              var mxH = mxRows[0].map(function(item) { return item !== undefined && item !== null ? item.toString().trim().toLowerCase() : ''; });
               var mId = -1, mLat = -1, mLng = -1, mHuong = -1, mTuyen = -1, mLyTrinh = -1, mDuTru = -1, mDoCach = -1;
 
               mxH.forEach(function(hText, k) {
                 if (hText.includes('mã mx') || hText.includes('tên') || hText === 'ten') mId = k;
                 else if (hText === 'lat' || hText.includes('vĩ')) mLat = k;
                 else if (hText === 'lng' || hText === 'long' || hText.includes('kinh')) mLng = k;
-                else if (hText === 'huong') mHuong = k;
+                else if (hText.includes('huong')) mHuong = k;
                 else if (hText.includes('tuyen') || hText.includes('tuyến')) mTuyen = k;
                 else if (hText.includes('ly_trinh') || hText.includes('lytrinh')) mLyTrinh = k;
                 else if (hText.includes('du_tru') || hText.includes('dự trữ')) mDuTru = k;
@@ -602,7 +604,7 @@
         })
         .catch(function(err) {
           hideLoading();
-          showAlert("Lỗi đọc file Excel: " + err.message + "\nHãy đảm bảo tệp Tuyen_cap_quang_TNN_Net1.xlsx nằm cùng thư mục với index.html trên Netlify.");
+          showAlert("Lỗi đọc file Excel: " + err.message);
         });
     }
 
@@ -1017,7 +1019,7 @@
       if (!pathPts || pathPts.length < 2) return 0;
       var minDst = Infinity, bestDist = 0, currentDist = 0;
       for (var i = 0; i < pathPts.length - 1; i++) {
-        var p1 = pathPts[i], p2 = pathPts[i+1];
+        var p1 = pathpts[i] || pathPts[i], p2 = pathPts[i+1];
         var segLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
         if (segLen === 0) continue;
         var dx = p2.lng - p1.lng, dy = p2.lat - p1.lat;
