@@ -329,52 +329,72 @@
           var rawRoutePoints = [];
           var globalRowCounter = 0;
 
-          // Duyệt qua từng Sheet trong file Excel thô
           for (var sIdx = 0; sIdx < workbook.SheetNames.length; sIdx++) {
-            var sheetName = workbook.SheetNames[sIdx];
+            var sheetName = workbook.SheetNames[sIdx] || ('Sheet' + sIdx);
             var sheet = workbook.Sheets[sheetName];
-            var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-            if (!rows || rows.length < 2) continue;
+            if (!sheet) continue;
+            
+            var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+            if (!rows || rows.length === 0) continue;
 
-            // Nhận diện linh hoạt vị trí các cột dựa trên từ khóa ở dòng tiêu đề đầu tiên
-            var headerRow = rows[0] || [];
+            // Tự động tìm dòng tiêu đề (header) chứa từ khóa nhận diện
+            var headerIdx = 0;
+            var iTen = 0, iLat = 1, iLong = 2, iTuyen = 3, iLyTrinh = 4, iDuTru = 5, iDoCach = 6;
+
+            for (var r = 0; r < Math.min(rows.length, 5); r++) {
+              var rowArr = rows[r];
+              if (!Array.isArray(rowArr)) continue;
+              for (var c = 0; c < rowArr.length; c++) {
+                var cellVal = String(rowArr[c] || '').trim().toLowerCase();
+                if (cellVal.includes('tên') || cellVal.includes('ten') || cellVal.includes('diem') || cellVal.includes('lat') || cellVal.includes('vĩ')) {
+                  headerIdx = r;
+                  break;
+                }
+              }
+            }
+
+            var headerRow = rows[headerIdx] || [];
             var h = headerRow.map(function(item) { 
               return (item !== undefined && item !== null) ? String(item).trim().toLowerCase() : ''; 
             });
 
-            var iTen = h.findIndex(function(x) { return x.includes('tên') || x.includes('ten') || x.includes('mã') || x.includes('diem') || x.includes('điểm'); });
-            var iLat = h.findIndex(function(x) { return x === 'lat' || x.includes('vĩ') || x.includes('vi_do'); });
-            var iLong = h.findIndex(function(x) { return x === 'long' || x.includes('lng') || x.includes('kinh') || x.includes('kinh_do'); });
-            var iTuyen = h.findIndex(function(x) { return x.includes('tuyen') || x.includes('tuyến') || x.includes('thu_muc') || x.includes('nhom'); });
-            var iLyTrinh = h.findIndex(function(x) { return x.includes('lytrinh') || x.includes('lý trình') || x.includes('ly_trinh'); });
-            var iDuTru = h.findIndex(function(x) { return x.includes('du_tru') || x.includes('dự trữ'); });
-            var iDoCach = h.findIndex(function(x) { return x.includes('do_cach') || x.includes('đo cách'); });
+            for (var c = 0; c < h.length; c++) {
+              var colName = h[c];
+              if (colName.includes('tên') || colName.includes('ten') || colName.includes('mã') || colName.includes('diem') || colName.includes('điểm')) iTen = c;
+              else if (colName === 'lat' || colName.includes('vĩ') || colName.includes('vi_do')) iLat = c;
+              else if (colName === 'long' || colName.includes('lng') || colName.includes('kinh') || colName.includes('kinh_do')) iLong = c;
+              else if (colName.includes('tuyen') || colName.includes('tuyến') || colName.includes('thu_muc') || colName.includes('nhom')) iTuyen = c;
+              else if (colName.includes('lytrinh') || colName.includes('lý trình') || colName.includes('ly_trinh')) iLyTrinh = c;
+              else if (colName.includes('du_tru') || colName.includes('dự trữ')) iDuTru = c;
+              else if (colName.includes('do_cach') || colName.includes('đo cách')) iDoCach = c;
+            }
 
-            // Mặc định dự phòng theo thứ tự cột phổ biến nếu không tìm thấy từ khóa
-            if (iTen === -1) iTen = 0; 
-            if (iLat === -1) iLat = 1; 
-            if (iLong === -1) iLong = 2;
+            var isMx = String(sheetName).toLowerCase().includes('mang_xong') || String(sheetName).toLowerCase().includes('mx');
+            var defaultType = isMx ? "Mang xong" : (String(sheetName).toLowerCase().includes('cot') ? "Cot" : "Be");
 
-            var isMx = sheetName.toLowerCase().includes('mang_xong') || sheetName.toLowerCase().includes('mx');
-            var defaultType = isMx ? "Mang xong" : (sheetName.toLowerCase().includes('cot') ? "Cot" : "Be");
-
-            // Đọc dữ liệu từng dòng từ dòng thứ 2 trở đi
-            for (var r = 1; r < rows.length; r++) {
+            // Đọc dữ liệu từ các dòng phía dưới header
+            for (var r = headerIdx + 1; r < rows.length; r++) {
               var row = rows[r];
               if (!row || !Array.isArray(row)) continue;
 
-              var tenVal = (row[iTen] !== undefined && row[iTen] !== null && String(row[iTen]).trim() !== '') ? String(row[iTen]).trim() : ("Diem " + r);
+              var rawTen = row[iTen];
+              var tenVal = (rawTen !== undefined && rawTen !== null && String(rawTen).trim() !== '') ? String(rawTen).trim() : null;
+              if (!tenVal || tenVal.toLowerCase() === 'nan' || tenVal.toLowerCase() === 'undefined') continue;
+
               var latVal = parseFloat(row[iLat]);
               var lngVal = parseFloat(row[iLong]);
-
               if (isNaN(latVal) || isNaN(lngVal) || latVal === 0 || lngVal === 0) continue;
 
               globalRowCounter++;
-              var lyTrinhVal = (iLyTrinh !== -1 && row[iLyTrinh] !== undefined && row[iLyTrinh] !== null) ? String(row[iLyTrinh]).trim() : null;
-              var duTruVal = (iDuTru !== -1 && row[iDuTru] !== undefined && !isNaN(row[iDuTru])) ? parseFloat(row[iDuTru]) : 0;
-              var doCachVal = (iDoCach !== -1 && row[iDoCach] !== undefined && row[iDoCach] !== null) ? String(row[iDoCach]).trim() : null;
+              var rawLyTrinh = row[iLyTrinh];
+              var lyTrinhVal = (rawLyTrinh !== undefined && rawLyTrinh !== null && String(rawLyTrinh).trim() !== '') ? String(rawLyTrinh).trim() : null;
+              
+              var rawDuTru = row[iDuTru];
+              var duTruVal = (rawDuTru !== undefined && rawDuTru !== null && !isNaN(rawDuTru)) ? parseFloat(rawDuTru) : 0;
+              
+              var rawDoCach = row[iDoCach];
+              var doCachVal = (rawDoCach !== undefined && rawDoCach !== null && String(rawDoCach).trim() !== '') ? String(rawDoCach).trim() : null;
 
-              // Chuẩn hóa loại điểm không dấu
               var loaiHt = defaultType;
               var tLower = tenVal.toLowerCase();
               if (tLower.includes('mốc') || tLower.includes('moc')) loaiHt = "Moc";
@@ -384,8 +404,9 @@
 
               allPointsMap.set(tenVal, { tinh_id: tinhId, ten_diem: tenVal, loai: loaiHt, lat: latVal, long: lngVal });
 
-              var tuyenRaw = (iTuyen !== -1 && row[iTuyen] !== undefined && row[iTuyen] !== null && String(row[iTuyen]).trim() !== '') ? String(row[iTuyen]).trim() : sheetName;
-              var tuyenList = tuyenRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+              var rawTuyen = row[iTuyen];
+              var tuyenVal = (rawTuyen !== undefined && rawTuyen !== null && String(rawTuyen).trim() !== '') ? String(rawTuyen).trim() : sheetName;
+              var tuyenList = tuyenVal.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
               if (tuyenList.length === 0) tuyenList = [sheetName];
 
               tuyenList.forEach(function(tItem) {
@@ -393,6 +414,12 @@
                 rawRoutePoints.push({ tuyen: tItem, ten_diem: tenVal, stt: globalRowCounter, ly_trinh: lyTrinhVal, du_tru: duTruVal, do_cach: doCachVal });
               });
             }
+          }
+
+          if (allPointsMap.size === 0) {
+            hideLoading();
+            showAlert("Không tìm thấy dữ liệu tọa độ hợp lệ trong file Excel. Vui lòng kiểm tra lại cấu trúc file!");
+            return;
           }
 
           showLoading("Đang nạp danh mục điểm hạ tầng vào CSDL...");
