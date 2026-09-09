@@ -298,7 +298,7 @@
       var file = event.target.files[0];
       if (!file) return;
 
-      showLoading("Đang đọc tệp Excel và đồng bộ cấu trúc 3NF chuẩn...");
+      showLoading("Đang đọc tệp Excel và đồng bộ cấu trúc 3NF...");
 
       var reader = new FileReader();
       reader.onload = async function(e) {
@@ -376,6 +376,7 @@
               routeMap.set(tuyenVal, { ma_tuyen: tuyenVal, tinh_ma: tinhVal });
               phanDoanMap.set(tuyenVal + "_" + phanDoanVal, { tuyen_ma: tuyenVal, dai_ma: daiVal, ten_phan_doan: phanDoanVal });
 
+              // 1. Danh mục điểm hạ tầng gốc (CHỈ chứa tọa độ, loại và tên điểm)
               pointsMap.set(tinhVal + "_" + tenVal, {
                 tinh_ma: tinhVal,
                 ten_diem: tenVal,
@@ -384,6 +385,7 @@
                 long: lngVal
               });
 
+              // 2. Chi tiết liên kết tuyến (Chứa STT, lý trình, dự trữ, đo cách và phân đoạn)
               rawDetails.push({
                 tuyen_ma: tuyenVal,
                 phan_doan_key: tuyenVal + "_" + phanDoanVal,
@@ -494,7 +496,7 @@
           }
 
           hideLoading();
-          showAlert("Import thành công trọn vẹn " + detailsArr.length + " bản ghi vào hệ thống 3NF!");
+          showAlert("Import thành công trọn vẹn " + detailsArr.length + " bản ghi vào hệ thống 3NF chuẩn!");
           taiDuLieuTuSupabase(true);
 
         } catch (err) {
