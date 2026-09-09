@@ -532,41 +532,148 @@
     }
 
     // Nút lệnh nhập dữ liệu trực tiếp lên Database Supabase 3NF
+    // Hàm Import chuẩn 3NF: Tự động gán Đài LSN, Trạm TNN và phân tách dữ liệu lên Supabase
     async function importExcelToSupabase(event) {
       var file = event.target.files[0];
       if (!file) return;
 
-      showLoading("Đang đẩy dữ liệu lên cơ sở dữ liệu Supabase...");
-      var reader = new FileReader();
-      reader.onload = async function(e) {
-        try {
-          var data = new Uint8Array(e.target.result);
-          var workbook = XLSX.read(data, { type: 'array' });
-          // Sử dụng lại logic phân tích mảng dữ liệu allEntries từ globalDataPoints
-          if (globalDataPoints.length === 0) {
-            hideLoading();
-            showAlert("Chưa có dữ liệu để đẩy lên database. Hãy chắc chắn file Excel đã được tải.");
-            return;
-          }
+      if (!globalDataPoints || globalDataPoints.length === 0) {
+        showAlert("Chưa có dữ liệu điểm hạ tầng trong bộ nhớ! Hãy chắc chắn tệp Excel đã được tải và đọc thành công.");
+        event.target.value = '';
+        return;
+      }
 
-          // Ví dụ đẩy danh mục điểm vào bảng diem_ha_tang qua Supabase API
-          for (var i = 0; i < globalDataPoints.length; i += 500) {
-            var batch = globalDataPoints.slice(i, i + 500).map(function(pt) {
-              return { ten_diem: pt.ten, loai: pt.loai, lat: pt.lat, long: pt.lng };
-            });
-            var res = await supabaseClient.from('diem_ha_tang').upsert(batch, { onConflict: 'ten_diem' });
-            if (res.error) throw res.error;
-          }
+      showLoading("Đang đồng bộ dữ liệu phân cấp (Đài LSN - Trạm TNN) lên Supabase...");
 
-          hideLoading();
-          showAlert("Đã import thành công toàn bộ dữ liệu lên cơ sở dữ liệu Supabase!");
-        } catch (err) {
-          hideLoading();
-          showAlert("Lỗi Import Supabase: " + err.message);
+      try {
+        var maDaiVal = "LSN";
+        var tenDaiVal = "Đài Viễn thông Lạng Sơn";
+        var maTramVal = "TNN";
+        var tenTramVal = "Trạm Viễn thông Thái Nguyên";
+        var maTinhVal = "TNN";
+        var tenTinhVal = "Tỉnh Thái Nguyên";
+
+        // 1. Đồng bộ cấp Đài (LSN)
+        var resDai = await supabaseClient.from('dai_vt')
+          .upsert({ ma_dai: maDaiVal, ten_dai: tenDaiVal }, { onConflict: 'ma_dai' })
+          .select('id');
+        if (resDai.error) throw resDai.error;
+        
+        var dbDai = await supabaseClient.from('dai_vt').select('id').eq('ma_dai', maDaiVal).single();
+        var daiId = dbDai.data.id;
+
+        // 2. Đồng bộ cấp Trạm (TNN) trực thuộc Đài LSN
+        var resTram = await supabaseClient.from('tram_vt')
+          .upsert({ dai_vt_id: daiId, ma_tram: maTramVal, ten_tram: tenTramVal }, { onConflict: 'ma_tram' })
+          .select('id');
+        if (resTram.error) throw resTram.error;
+
+        var dbTram = await supabaseClient.from('tram_vt').select('id').eq('ma_tram', maTramVal).single();
+        var tramId = dbTram.data.id;
+
+        // 3. Đồng bộ cấp Tỉnh
+        var resTinh = await supabaseClient.from('tinh')
+          .upsert({ dai_vt_id: daiId, ma_tinh: maTinhVal, ten_tinh: tenTinhVal }, { onConflict: 'ma_tinh' })
+          .select('id');
+        if (resTinh.error) throw resTinh.error;
+
+        var dbTinh = await supabaseClient.from('tinh').select('id').eq('ma_tinh', maTinhVal).single();
+        var tinhId = dbTinh.data.id;
+
+        showLoading("Đang đồng bộ danh mục Tuyến cáp...");
+        
+        // Thu thập danh sách tuyến duy nhất
+        var routeMap = new Map();
+        globalDataPoints.forEach(function(pt) {
+          parseTuyenList(pt.tuyenList).forEach(function(t) {
+            if (t && t.toLowerCase() !== 'tất cả' && t.toLowerCase() !== 'tuyến chung') {
+              var baseName = getBaseRouteName(t);
+              routeMap.set(baseName, { tinh_id: tinhId, ma_tuyen: baseName, ten_tuyen: "Tuyến " + baseName });
+            }
+          });
+        });
+
+        var routesArr = Array.from(routeMap.values());
+        for (var i = 0; i < routesArr.length; i += 500) {
+          var resR = await supabaseClient.from('tuyen_cap').upsert(routesArr.slice(i, i + 500), { onConflict: 'tinh_id,ma_tuyen' });
+          if (resR.error) throw resR.error;
         }
-      };
-      reader.readAsArrayBuffer(file);
-      event.target.value = '';
+
+        // Lấy ID tuyến từ DB
+        var dbRoutes = await supabaseClient.from('tuyen_cap').select('id, ma_tuyen').eq('tinh_id', tinhId);
+        var routeIdMap = new Map();
+        (dbRoutes.data || []).forEach(function(rt) { routeIdMap.set(rt.ma_tuyen, rt.id); });
+
+        showLoading("Đang đồng bộ danh mục điểm hạ tầng gốc...");
+        
+        // Thu thập danh sách điểm hạ tầng gốc duy nhất theo tỉnh
+        var pointsMap = new Map();
+        globalDataPoints.forEach(function(pt) {
+          var key = maTinhVal + "_" + pt.ten;
+          pointsMap.set(key, {
+            tinh_id: tinhId,
+            ten_diem: pt.ten,
+            loai: pt.loai || "Bể",
+            lat: pt.lat,
+            long: pt.lng
+          });
+        });
+
+        var pointsArr = Array.from(pointsMap.values());
+        for (var i = 0; i < pointsArr.length; i += 500) {
+          var batchP = pointsArr.slice(i, i + 500);
+          var resP = await supabaseClient.from('diem_ha_tang').upsert(batchP, { onConflict: 'tinh_id,ten_diem' });
+          if (resP.error) throw resP.error;
+        }
+
+        // Lấy ID điểm từ DB
+        var dbPoints = await supabaseClient.from('diem_ha_tang').select('id, ten_diem').eq('tinh_id', tinhId);
+        var pointIdMap = new Map();
+        (dbPoints.data || []).forEach(function(p) { pointIdMap.set(p.ten_diem, p.id); });
+
+        showLoading("Đang đồng bộ chi tiết tuyến vào bảng tuyen_chi_tiet...");
+        
+        // Liên kết điểm vào tuyến kèm thông số kỹ thuật
+        var detailMap = new Map();
+        globalDataPoints.forEach(function(pt) {
+          var pId = pointIdMap.get(pt.ten);
+          if (!pId) return;
+
+          parseTuyenList(pt.tuyenList).forEach(function(t) {
+            if (t && t.toLowerCase() !== 'tất cả' && t.toLowerCase() !== 'tuyến chung') {
+              var baseName = getBaseRouteName(t);
+              var rId = routeIdMap.get(baseName);
+              if (rId) {
+                var uniqueKey = rId + "_" + pId;
+                detailMap.set(uniqueKey, {
+                  tuyen_id: rId,
+                  diem_id: pId,
+                  stt: pt.stt || 0,
+                  ly_trinh: pt.lyTrinh || null,
+                  du_tru: pt.duTru || 0,
+                  do_cach: pt.doCachTnn || null
+                });
+              }
+            }
+          });
+        });
+
+        var detailsArr = Array.from(detailMap.values());
+        for (var i = 0; i < detailsArr.length; i += 500) {
+          var batchDT = detailsArr.slice(i, i + 500);
+          var resDT = await supabaseClient.from('tuyen_chi_tiet').upsert(batchDT, { onConflict: 'tuyen_id,diem_id' });
+          if (resDT.error) throw resDT.error;
+        }
+
+        hideLoading();
+        showAlert("Import thành công trọn vẹn " + detailsArr.length + " bản ghi vào hệ thống Đài LSN - Trạm TNN!");
+
+      } catch (err) {
+        hideLoading();
+        showAlert("Lỗi đồng bộ Supabase: " + err.message);
+      } finally {
+        event.target.value = '';
+      }
     }
 
     // Các hàm phụ trợ giữ nguyên vẹn 100% logic thuật toán của anh
