@@ -533,65 +533,7 @@
 
     // Nút lệnh nhập dữ liệu trực tiếp lên Database Supabase 3NF
     // Hàm Import chuẩn 3NF: Tự động gán Đài LSN, Trạm TNN và phân tách dữ liệu lên Supabase
-    async function importExcelToSupabase(event) {
-      var file = event.target.files[0];
-      if (!file) return;
-
-      if (!globalDataPoints || globalDataPoints.length === 0) {
-        showAlert("Chưa có dữ liệu điểm hạ tầng trong bộ nhớ! Hãy chắc chắn tệp Excel đã được tải và đọc thành công.");
-        event.target.value = '';
-        return;
-      }
-
-      showLoading("Đang đồng bộ dữ liệu phân cấp (Đài LSN - Trạm TNN) lên Supabase...");
-
-      try {
-        var maDaiVal = "LSN";
-        var tenDaiVal = "Đài Viễn thông Lạng Sơn";
-        var maTramVal = "TNN";
-        var tenTramVal = "Trạm Viễn thông Thái Nguyên";
-        var maTinhVal = "TNN";
-        var tenTinhVal = "Tỉnh Thái Nguyên";
-
-        // 1. Đồng bộ cấp Đài (LSN)
-        var resDai = await supabaseClient.from('dai_vt')
-          .upsert({ ma_dai: maDaiVal, ten_dai: tenDaiVal }, { onConflict: 'ma_dai' })
-          .select('id');
-        if (resDai.error) throw resDai.error;
-        
-        var dbDai = await supabaseClient.from('dai_vt').select('id').eq('ma_dai', maDaiVal).single();
-        var daiId = dbDai.data.id;
-
-        // 2. Đồng bộ cấp Trạm (TNN) trực thuộc Đài LSN
-        var resTram = await supabaseClient.from('tram_vt')
-          .upsert({ dai_vt_id: daiId, ma_tram: maTramVal, ten_tram: tenTramVal }, { onConflict: 'ma_tram' })
-          .select('id');
-        if (resTram.error) throw resTram.error;
-
-        var dbTram = await supabaseClient.from('tram_vt').select('id').eq('ma_tram', maTramVal).single();
-        var tramId = dbTram.data.id;
-
-        // 3. Đồng bộ cấp Tỉnh
-        var resTinh = await supabaseClient.from('tinh')
-          .upsert({ dai_vt_id: daiId, ma_tinh: maTinhVal, ten_tinh: tenTinhVal }, { onConflict: 'ma_tinh' })
-          .select('id');
-        if (resTinh.error) throw resTinh.error;
-
-        var dbTinh = await supabaseClient.from('tinh').select('id').eq('ma_tinh', maTinhVal).single();
-        var tinhId = dbTinh.data.id;
-
-        showLoading("Đang đồng bộ danh mục Tuyến cáp...");
-        
-        // Thu thập danh sách tuyến duy nhất
-        var routeMap = new Map();
-        globalDataPoints.forEach(function(pt) {
-          parseTuyenList(pt.tuyenList).forEach(function(t) {
-            if (t && t.toLowerCase() !== 'tất cả' && t.toLowerCase() !== 'tuyến chung') {
-              var baseName = getBaseRouteName(t);
-              routeMap.set(baseName, { tinh_id: tinhId, ma_tuyen: baseName, ten_tuyen: "Tuyến " + baseName });
-            }
-          });
-        }// Hàm Import chuẩn 3NF: Tự động gán Đài LSN, Trạm TNN và phân tách dữ liệu lên Supabase
+    // Hàm Import chuẩn 3NF: Tự động gán Đài LSN, Trạm TNN và phân tách dữ liệu lên Supabase
     async function importExcelToSupabase(event) {
       var file = event.target.files[0];
       if (!file) return;
