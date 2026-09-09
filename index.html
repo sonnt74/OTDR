@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html>
 <head>
   <base target="_top">
@@ -265,9 +266,7 @@
           </select>
         </div>
         <div class="form-group" style="margin-top: 15px;">
-          <label>Nhập file Excel vào Database Supabase:</label>
-          <input type="file" id="importExcelFile" accept=".xlsx, .xls" onchange="importExcelToSupabase(event)" style="display:none">
-          <button class="btn-import" onclick="document.getElementById('importExcelFile').click()">📤 IMPORT EXCEL LÊN SUPABASE</button>
+          <button class="btn-import" onclick="importExcelToSupabase()">📤 IMPORT EXCEL LÊN SUPABASE</button>
         </div>
         <div class="form-group" style="margin-top: 10px;">
           <button class="btn-chuanhoa" onclick="taiLaiDuLieu(true)">🔄 TẢI LẠI DỮ LIỆU</button>
@@ -362,19 +361,12 @@
       return { meters: null, suffix: "" };
     }
 
-    // Đã bọc an toàn tuyệt đối chống lỗi Cannot read properties of undefined (reading 'includes')
-    function taiLaiDuLieu(forceRefresh = false) {
+    // Hàm đọc file Excel chạy ngầm hoặc qua nút lệnh
+    function taiLaiDuLieu(forceRefresh = false, callback = null) {
       var statusBadge = document.getElementById('statusBadge');
-      if (!forceRefresh) {
-        var cached = localStorage.getItem('tnn_gis_data_cache');
-        if (cached) {
-          try {
-            globalDataPoints = JSON.parse(cached);
-            capNhatDanhSachTuyen(globalDataPoints);
-            statusBadge.innerHTML = "<span>✅</span> Đã tải dữ liệu từ bộ nhớ thiết bị (" + globalDataPoints.length + " điểm).";
-            return;
-          } catch(e) { localStorage.removeItem('tnn_gis_data_cache'); }
-        }
+      if (!forceRefresh && globalDataPoints && globalDataPoints.length > 0) {
+        if (callback) callback();
+        return;
       }
 
       showLoading("Đang tải và xử lý file Excel...");
@@ -524,10 +516,11 @@
           }
 
           globalDataPoints = allEntries;
-          try { localStorage.setItem('tnn_gis_data_cache', JSON.stringify(globalDataPoints)); } catch(e){}
           capNhatDanhSachTuyen(globalDataPoints);
           hideLoading();
           statusBadge.innerHTML = "<span>✅</span> Đã tải và đồng bộ thành công (" + globalDataPoints.length + " điểm từ Excel).";
+          
+          if (callback) callback();
         })
         .catch(function(err) {
           hideLoading();
@@ -535,16 +528,20 @@
         });
     }
 
-    // Hàm Import lên Supabase tự động gán Đài LSN, Trạm TNN
-    async function importExcelToSupabase(event) {
-      var file = event.target.files[0];
-      if (!file) {
-        if (!globalDataPoints || globalDataPoints.length === 0) {
-          showAlert("Chưa có dữ liệu điểm hạ tầng trong bộ nhớ! Hãy bấm Tải lại dữ liệu trước.");
-          return;
-        }
+    // Hàm Import thông minh: Tự động tải file Excel nếu bộ nhớ trống rồi đẩy lên Supabase
+    function importExcelToSupabase() {
+      if (!globalDataPoints || globalDataPoints.length === 0) {
+        // Nếu chưa có dữ liệu, tự động gọi hàm tải file Excel rồi mới thực hiện đẩy lên CSDL
+        taiLaiDuLieu(true, function() {
+          thucHienDayDuLieuSupabase();
+        });
+      } else {
+        thucHienDayDuLieuSupabase();
       }
+    }
 
+    // Thực thi đẩy dữ liệu phân cấp Đài LSN - Trạm TNN lên Supabase
+    async function thucHienDayDuLieuSupabase() {
       showLoading("Đang đẩy dữ liệu phân cấp (Đài LSN - Trạm TNN) lên Supabase...");
 
       try {
@@ -670,8 +667,6 @@
       } catch (err) {
         hideLoading();
         showAlert("Lỗi đồng bộ Supabase: " + err.message);
-      } finally {
-        if (event && event.target) event.target.value = '';
       }
     }
 
