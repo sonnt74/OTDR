@@ -16,56 +16,207 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+    
     #control-panel {
-      position: absolute; top: 15px; left: 15px; z-index: 1000; background: white;
-      padding: 15px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.25); width: 330px; max-height: 92vh; overflow-y: auto;
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      z-index: 1000;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      width: 330px;
+      max-height: 92vh;
+      overflow-y: auto;
+      transition: max-height 0.3s ease, padding 0.3s ease;
     }
+    
     .panel-header {
-      background-color: #0d6efd; color: white; padding: 10px 12px; font-weight: bold; font-size: 14px;
-      border-radius: 6px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+      background-color: #0d6efd;
+      color: white;
+      padding: 10px 12px;
+      font-weight: bold;
+      font-size: 14px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
     }
-    .status-badge { background-color: #e8f4fd; color: #084298; border: 1px solid #b6effb; padding: 8px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; margin-bottom: 14px; }
+
+    .panel-body-content { display: block; transition: opacity 0.3s ease; }
+    .collapsed .panel-body-content { display: none; }
+
+    .status-badge {
+      background-color: #e8f4fd;
+      color: #084298;
+      border: 1px solid #b6effb;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #333; text-transform: uppercase; }
-    .form-group select, .form-group input { width: 100%; padding: 7px 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 12px; box-sizing: border-box; }
-    .btn-action { background-color: #dc3545; color: white; border: none; font-weight: bold; cursor: pointer; padding: 11px; border-radius: 6px; font-size: 12px; width: 100%; margin-top: 4px; }
-    .checkbox-group { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 12px; background: #f8f9fa; padding: 6px 8px; border-radius: 4px; }
-    #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99999; justify-content: center; align-items: center; color: #fff; font-size: 16px; flex-direction: column; }
-    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #0d6efd; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; margin-bottom: 12px; }
+    .form-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: bold;
+      margin-bottom: 4px;
+      color: #333;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .form-group select, .form-group input {
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 12px;
+      box-sizing: border-box;
+    }
+
+    .btn-action {
+      background-color: #dc3545;
+      color: white;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+      padding: 11px;
+      border-radius: 6px;
+      font-size: 12px;
+      width: 100%;
+      margin-top: 4px;
+      box-shadow: 0 2px 4px rgba(220,53,69,0.3);
+    }
+    .btn-action:hover { background-color: #bb2d3b; }
+
+    .btn-options-main {
+      background-color: #495057;
+      color: white;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      width: 100%;
+      margin-top: 8px;
+      box-shadow: 0 2px 4px rgba(73,80,87,0.3);
+    }
+    .btn-options-main:hover { background-color: #343a40; }
+
+    .btn-chuanhoa { background-color: #6610f2; color: white; border: none; font-weight: bold; padding: 10px; border-radius: 4px; width: 100%; margin-top: 4px; cursor: pointer; }
+    .btn-clear { background-color: #dc3545; color: white; border: none; font-weight: bold; padding: 10px; border-radius: 4px; width: 100%; margin-top: 4px; cursor: pointer; }
+
+    button:disabled, select:disabled, input:disabled { opacity: 0.65; cursor: not-allowed !important; }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      margin-bottom: 12px;
+      color: #333;
+      background: #f8f9fa;
+      padding: 6px 8px;
+      border-radius: 4px;
+    }
+    .checkbox-group input { width: auto; }
+
+    #loading-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 99999;
+      justify-content: center;
+      align-items: center;
+      color: #fff;
+      font-size: 16px;
+      flex-direction: column;
+    }
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #0d6efd;
+      border-radius: 50%;
+      width: 45px; height: 45px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 12px;
+    }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    .gmaps-btn { background: #4285F4; color: white; padding: 5px 10px; border-radius: 4px; font-size: 11px; margin-top: 6px; font-weight: bold; display: inline-flex; text-decoration: none; }
+
+    #optionsModal, #customAlertModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 10000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background: white; width: 90%; max-width: 500px; max-height: 85vh;
+      border-radius: 8px; padding: 20px; display: flex; flex-direction: column;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 2px solid #0d6efd; padding-bottom: 10px; margin-bottom: 12px;
+      font-weight: bold; color: #0d6efd; font-size: 15px;
+    }
+    .modal-body { overflow-y: auto; flex-grow: 1; font-size: 12px; }
+    .gmaps-btn { background: #4285F4; color: white; padding: 5px 10px; border-radius: 4px; font-size: 11px; margin-top: 6px; font-weight: bold; display: inline-flex; gap: 4px; text-decoration: none; }
+    
+    .mx-marker { width: 14px; height: 14px; background-color: #198754; border: 2px solid #fff; transform: rotate(45deg); box-shadow: 0 0 6px rgba(0,0,0,0.4); }
     .standard-marker { width: 10px; height: 10px; background-color: #0d6efd; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,0.4); }
-    .point-a-marker { background: #ffc107; color: #000; font-weight: bold; font-size: 12px; text-align: center; line-height: 28px; width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff; }
-    .point-b-marker { background: #dc3545; color: #fff; font-weight: bold; font-size: 12px; text-align: center; line-height: 28px; width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff; }
+    
+    .point-a-marker { background: linear-gradient(135deg, #ffc107, #ff9800); color: #000; font-weight: bold; font-size: 12px; text-align: center; line-height: 28px; width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 14px rgba(255,193,7,0.9); }
+    .point-b-marker { background: linear-gradient(135deg, #dc3545, #b02a37); color: #fff; font-weight: bold; font-size: 12px; text-align: center; line-height: 28px; width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 14px rgba(220,53,69,0.9); }
+    
+    .lytrinh-badge { background: #fd7e14; color: white; font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: bold; white-space: nowrap; }
   </style>
 </head>
 <body>
 
   <div id="loading-overlay">
     <div class="spinner"></div>
-    <div id="loading-overlay-text">Đang kết nối cơ sở dữ liệu...</div>
+    <div id="loading-overlay-text">Đang tải dữ liệu từ Supabase...</div>
   </div>
 
   <div id="map"></div>
 
   <div id="control-panel">
-    <div class="panel-header">
-      <span>⚙️ GIS & OTDR (Supabase 3NF)</span>
+    <div class="panel-header" onclick="toggleControlPanel()">
+      <span>⚙️ HỆ THỐNG GIS & ĐỊNH VỊ CÁP OTDR</span>
+      <span id="panelToggleIcon" style="margin-left: auto; font-size: 12px;">▲ Thu gọn</span>
     </div>
 
-    <div class="panel-body-content">
-      <div id="statusBadge" class="status-badge">Đang tải danh mục từ Supabase...</div>
+    <div class="panel-body-content" id="panelBodyContent">
+      <div id="statusBadge" class="status-badge"><span>ℹ️</span> Đang kết nối Supabase...</div>
 
       <div class="form-group">
-        <label>1. Chọn tuyến cáp quang:</label>
+        <label>1. Chọn mã tuyến cáp (Bắt buộc):</label>
         <select id="selectTuyen" onchange="onTuyenChange()">
-          <option value="">-- Chọn tuyến --</option>
+          <option value="ALL">-- Chọn tuyến cần hiển thị --</option>
         </select>
       </div>
 
       <div class="form-group">
-        <label>2. Nguồn điểm đo (Điểm A):</label>
+        <label>2. Nguồn điểm đo (Trạm TNN / MX):</label>
         <select id="comboDiemA" onchange="onDiemAChange()">
           <option value="DEFAULT">📍 Trạm TNN (21.593365, 105.839945)</option>
         </select>
@@ -77,160 +228,631 @@
       </div>
 
       <div class="form-group">
-        <label>3. Hệ số chùng cáp:</label>
+        <label>3. Hệ số chùng cáp (Độ chùng vật lý):</label>
         <input type="number" id="txtDoChung" value="1.075" step="0.001">
       </div>
 
       <div class="form-group">
         <label>4. Khoảng cách đo OTDR (km):</label>
-        <input type="number" id="txtKcOtdr" value="3.5" step="0.1">
+        <input type="number" id="txtKcOtdr" value="3.5" step="0.1" placeholder="Nhập km từ máy đo...">
       </div>
 
       <div class="form-group">
-        <button class="btn-action" onclick="timViTriDut()">🔍 PHÂN TÍCH & TÌM SỰ CỐ</button>
+        <button class="btn-action" onclick="timViTriDut()">🔍 PHÂN TÍCH & TÌM VỊ TRÍ SỰ CỐ</button>
+        <button class="btn-options-main" onclick="document.getElementById('optionsModal').style.display='flex'">⚙️ TÙY CHỌN NÂNG CAO</button>
       </div>
     </div>
   </div>
 
+  <!-- Options Modal -->
+  <div id="optionsModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span>⚙️ Tùy chọn hệ thống nâng cao</span>
+        <button onclick="document.getElementById('optionsModal').style.display='none'" style="background:#dc3545; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">Đóng</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Chế độ định tuyến cáp:</label>
+          <select id="cheDoDinhTuyen" onchange="onCheDoDinhTuyenChange()">
+            <option value="standard">Bám Tuyến CSHT (Chuẩn STT)</option>
+            <option value="road">Bám đường giao thông</option>
+            <option value="manual">Tự vẽ thủ công</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-top: 15px;">
+          <button class="btn-chuanhoa" onclick="taiLaiDuLieuSupabase()">🔄 TẢI LẠI DỮ LIỆU TỪ DATABASE</button>
+        </div>
+        <div class="form-group">
+          <button class="btn-clear" onclick="xoaTuyenThuCong()">🗑️ LÀM SẠCH BẢN ĐỒ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="customAlertModal">
+    <div class="modal-content" style="max-width: 400px; text-align: center;">
+      <div class="modal-header" style="justify-content: center; border-bottom: none;"><span id="customAlertTitle">Thông báo</span></div>
+      <div class="modal-body" id="customAlertBody" style="padding: 10px 0;"></div>
+      <div style="text-align: center; margin-top: 10px;">
+        <button onclick="closeCustomAlert()" style="background:#0d6efd; color:white; border:none; padding:8px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">Đã hiểu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 
   <script>
+    // --- CẤU HÌNH SUPABASE ---
     const SUPABASE_URL = 'https://lmxbzjislncqkwmcnlgy.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_nRRO1mpzjiCLRI57LihWyQ_DZhWZ9HK';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     var map;
     var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
+    var mxLayer = L.layerGroup();
     var polylinesLayer = L.layerGroup();
-    var currentRoutePoints = [];
+    var lyTrinhLayer = L.layerGroup();
+    
+    var globalRoutesMap = {}; 
+    var globalRoutePoints = {}; 
+    var globalDataPoints = []; 
+    var customManualPoints = [];
+
+    var measureActive = false;
+    var measurePoints = [];
+    var measureMarkers = [];
+    var measurePolyline = null;
+
+    function showAlert(msg, title = "Thông báo") {
+      document.getElementById('customAlertTitle').textContent = title;
+      document.getElementById('customAlertBody').textContent = msg;
+      document.getElementById('customAlertModal').style.display = 'flex';
+    }
+    function closeCustomAlert() { document.getElementById('customAlertModal').style.display = 'none'; }
+    function toggleControlPanel() {
+      var panel = document.getElementById('control-panel');
+      panel.classList.toggle('collapsed');
+      document.getElementById('panelToggleIcon').textContent = panel.classList.contains('collapsed') ? '▼ Mở rộng' : '▲ Thu gọn';
+    }
 
     window.onload = function() {
-      var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21 });
-      map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, layers: [osm] });
-      polylinesLayer.addTo(map);
-      markersLayer.addTo(map);
+      var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
+      var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 19 });
 
-      taiDanhSachTuyenSupabase();
+      map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [osm] });
+      polylinesLayer.addTo(map); 
+      markersLayer.addTo(map); 
+      mxLayer.addTo(map); 
+      lyTrinhLayer.addTo(map);
+
+      L.control.layers(
+        { "Bản đồ OSM": osm, "Vệ tinh": sat }, 
+        { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
+        { position: 'topright' }
+      ).addTo(map);
+
+      var MeasureControl = L.Control.extend({
+        options: { position: 'topright' },
+        onAdd: function (map) {
+          var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+          var button = L.DomUtil.create('a', '', container);
+          button.innerHTML = '📏';
+          button.href = '#';
+          button.title = 'Bật/Tắt đo khoảng cách';
+          button.style.backgroundColor = 'white';
+          button.style.width = '30px';
+          button.style.height = '30px';
+          button.style.lineHeight = '30px';
+          button.style.textAlign = 'center';
+          button.style.fontSize = '16px';
+          button.style.textDecoration = 'none';
+          button.style.color = 'black';
+          button.style.cursor = 'pointer';
+
+          L.DomEvent.on(button, 'click', function (e) {
+            L.DomEvent.stopPropagation(e);
+            L.DomEvent.preventDefault(e);
+            measureActive = !measureActive;
+            if (measureActive) {
+              button.style.backgroundColor = '#e0e0e0';
+            } else {
+              button.style.backgroundColor = 'white';
+              clearMeasure();
+            }
+          });
+          return container;
+        }
+      });
+      map.addControl(new MeasureControl());
+
+      map.on('click', function(e) {
+        if (measureActive) {
+          measurePoints.push(e.latlng);
+          var marker = L.circleMarker(e.latlng, { radius: 5, color: '#ff5722', fillColor: '#ff5722', fillOpacity: 1 }).addTo(map);
+          measureMarkers.push(marker);
+
+          if (!measurePolyline) {
+            measurePolyline = L.polyline(measurePoints, { color: '#ff5722', weight: 3, dashArray: '5, 5' }).addTo(map);
+          } else {
+            measurePolyline.setLatLngs(measurePoints);
+          }
+
+          if (measurePoints.length > 1) {
+            var totalDistance = 0;
+            for (var i = 0; i < measurePoints.length - 1; i++) {
+              totalDistance += measurePoints[i].distanceTo(measurePoints[i + 1]);
+            }
+            var textDist = totalDistance >= 1000 ? (totalDistance / 1000).toFixed(2) + ' km' : Math.round(totalDistance) + ' m';
+            marker.bindTooltip(textDist, { permanent: true, direction: 'top' }).openTooltip();
+          }
+          return;
+        }
+
+        if (document.getElementById('cheDoDinhTuyen').value === 'manual' && document.getElementById('selectTuyen').value !== 'ALL') {
+          customManualPoints.push({ ten: "Điểm vẽ " + (customManualPoints.length + 1), lat: e.latlng.lat, long: e.latlng.lng, lyTrinh: "", tuyenList: [globalRoutesMap[document.getElementById('selectTuyen').value]], stt: customManualPoints.length + 1 });
+          veLaiTuyenAB();
+        }
+      });
+
+      taiLaiDuLieuSupabase();
     };
 
+    function clearMeasure() {
+      measurePoints = [];
+      if (measurePolyline) { map.removeLayer(measurePolyline); measurePolyline = null; }
+      measureMarkers.forEach(function (m) { map.removeLayer(m); });
+      measureMarkers = [];
+    }
+
     function showLoading(text) {
-      document.getElementById('loading-overlay-text').textContent = text || "Đang tải...";
+      document.getElementById('loading-overlay-text').textContent = text || "Đang xử lý...";
       document.getElementById('loading-overlay').style.display = 'flex';
     }
     function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
 
-    // Truy vấn trực tiếp danh sách tuyến từ Supabase
-    async function taiDanhSachTuyenSupabase() {
-      showLoading("Đang tải danh mục tuyến từ Supabase...");
-      try {
-        var res = await supabaseClient.from('tuyen_cap').select('id, ma_tuyen, ten_tuyen').order('ma_tuyen');
-        if (res.error) throw res.error;
+    function parseLyTrinh(str) {
+      if (!str) return { meters: null, suffix: "" };
+      var s = str.toString().trim();
+      var match = s.match(/(?:km\s*)?(\d+)\s*\+\s*(\d+)(.*)/i);
+      if (match) {
+        var km = parseInt(match[1]) || 0;
+        var m = parseInt(match[2]) || 0;
+        var suffix = match[3] ? match[3].trim() : "";
+        return { meters: km * 1000 + m, suffix: suffix };
+      }
+      return { meters: null, suffix: "" };
+    }
 
-        var select = document.getElementById('selectTuyen');
-        select.innerHTML = '<option value="">-- Chọn tuyến --</option>';
-        (res.data || []).forEach(function(rt) {
+    async function taiLaiDuLieuSupabase() {
+      var statusBadge = document.getElementById('statusBadge');
+      showLoading("Đang tải dữ liệu từ cơ sở dữ liệu Supabase...");
+      statusBadge.innerHTML = "<span>ℹ️</span> Đang truy vấn CSDL Supabase...";
+
+      try {
+        var resRoutes = await supabaseClient.from('tuyen_cap').select('id, ma_tuyen, ten_tuyen').order('ma_tuyen');
+        if (resRoutes.error) throw resRoutes.error;
+
+        var selectTuyen = document.getElementById('selectTuyen');
+        selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cần hiển thị --</option>';
+        globalRoutesMap = {};
+
+        (resRoutes.data || []).forEach(function(rt) {
+          globalRoutesMap[rt.id] = rt.ma_tuyen;
           var opt = document.createElement('option');
           opt.value = rt.id;
           opt.textContent = rt.ten_tuyen || rt.ma_tuyen;
-          select.appendChild(opt);
+          selectTuyen.appendChild(opt);
+        });
+
+        var resPoints = await supabaseClient.from('diem_ha_tang').select('id, ten_diem, loai, lat, long');
+        if (resPoints.error) throw resPoints.error;
+
+        globalDataPoints = (resPoints.data || []).map(function(p) {
+          return {
+            ten: p.ten_diem,
+            lat: parseFloat(p.lat),
+            long: parseFloat(p.long),
+            loai: p.loai,
+            tuyenList: ['Tất cả']
+          };
         });
 
         hideLoading();
-        document.getElementById('statusBadge').textContent = "Đã kết nối cơ sở dữ liệu Supabase thành công!";
+        statusBadge.innerHTML = "<span>✅</span> Đã kết nối và đồng bộ từ Database Supabase thành công.";
       } catch (err) {
         hideLoading();
-        alert("Lỗi tải danh mục tuyến: " + err.message);
+        showAlert("Lỗi kết nối Supabase: " + err.message);
+        statusBadge.innerHTML = "<span>❌</span> Lỗi kết nối CSDL.";
       }
     }
 
-    // Khi chọn tuyến, truy vấn chi tiết các điểm thuộc tuyến từ Supabase qua bảng trung gian
+    function isMangXong(pt) {
+      if (!pt) return false;
+      var t = (pt.ten || '').toUpperCase(), l = (pt.loai || '').toUpperCase();
+      return l === 'MANG XÔNG' || l === 'MX' || l === 'SC' || t.includes('MX') || t.includes('MANG XÔNG');
+    }
+
     async function onTuyenChange() {
+      customManualPoints = [];
       var tuyenId = document.getElementById('selectTuyen').value;
-      if (!tuyenId) return;
+      if (tuyenId === 'ALL') {
+        document.getElementById('comboDiemA').innerHTML = '<option value="DEFAULT">📍 Trạm TNN (21.593365, 105.839945)</option>';
+        markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers(); lyTrinhLayer.clearLayers();
+        return;
+      }
 
-      showLoading("Đang tải chi tiết tuyến từ cơ sở dữ liệu...");
+      showLoading("Đang gọi hàm query_diem_ha_tang từ Supabase...");
       try {
-        var res = await supabaseClient
-          .from('tuyen_chi_tiet')
-          .select('stt, ly_trinh, du_tru, do_cach, diem_ha_tang(id, ten_diem, loai, lat, long)')
-          .eq('tuyen_id', tuyenId)
-          .order('stt', { ascending: true });
-
+        var res = await supabaseClient.rpc('query_diem_ha_tang', { p_tuyen_id: parseInt(tuyenId) });
         if (res.error) throw res.error;
 
-        currentRoutePoints = (res.data || []).map(function(item) {
+        globalRoutePoints[tuyenId] = (res.data || []).map(function(item) {
           return {
-            id: item.diem_ha_tang.id,
-            ten: item.diem_ha_tang.ten_diem,
-            loai: item.diem_ha_tang.loai,
-            lat: parseFloat(item.diem_ha_tang.lat),
-            long: parseFloat(item.diem_ha_tang.long),
-            lyTrinh: item.ly_trinh,
-            duTru: item.du_tru,
-            stt: item.stt
+            diem_id: item.diem_id,
+            ten: item.ten_diem,
+            loai: item.loai,
+            lat: parseFloat(item.lat),
+            long: parseFloat(item.long),
+            stt: item.stt,
+            lyTrinh: item.ly_trinh || "",
+            duTru: item.du_tru || 0,
+            doCachTnn: item.do_cach || "",
+            tuyenList: item.danh_sach_tuyen ? item.danh_sach_tuyen.split(', ') : []
           };
         });
 
         capNhatComboDiemA();
-        veBanDoTuyen();
+        veLaiTuyenAB();
         hideLoading();
       } catch (err) {
         hideLoading();
-        alert("Lỗi tải chi tiết tuyến: " + err.message);
+        showAlert("Lỗi truy vấn điểm hạ tầng tuyến: " + err.message);
       }
     }
 
-    function onDiemAChange() { veBanDoTuyen(); }
+    function onDiemAChange() { 
+      veLaiTuyenAB(); 
+      var pts = getPointsCuaTuyenHienTai();
+      if (pts.length > 0) { map.setView([pts[0].lat, pts[0].long], 20, { animate: true }); }
+    }
+
+    function onCheDoDinhTuyenChange() { veLaiTuyenAB(); }
 
     function capNhatComboDiemA() {
+      var tuyenId = document.getElementById('selectTuyen').value;
       var combo = document.getElementById('comboDiemA');
       combo.innerHTML = '<option value="DEFAULT">📍 Trạm TNN (21.593365, 105.839945)</option>';
-      currentRoutePoints.forEach(function(pt) {
-        if (pt.loai && pt.loai.toLowerCase().includes('mang xông')) {
-          var opt = document.createElement('option');
-          opt.value = pt.ten;
+      if (tuyenId === 'ALL' || !globalRoutePoints[tuyenId]) return;
+
+      globalRoutePoints[tuyenId].forEach(function(pt) {
+        if (isMangXong(pt)) {
+          var opt = document.createElement('option'); 
+          opt.value = pt.ten; 
           opt.textContent = "🔀 " + pt.ten;
           combo.appendChild(opt);
         }
       });
     }
 
-    function veBanDoTuyen() {
-      markersLayer.clearLayers();
-      polylinesLayer.clearLayers();
+    function getPointsCuaTuyenHienTai() {
+      var cheDo = document.getElementById('cheDoDinhTuyen').value;
+      var tuyenId = document.getElementById('selectTuyen').value;
+      if (tuyenId === 'ALL') return [];
+      if (cheDo === 'manual') return customManualPoints;
 
-      if (currentRoutePoints.length === 0) return;
-      var pts = currentRoutePoints.slice();
+      var pts = (globalRoutePoints[tuyenId] || []).slice();
+      pts.sort(function(a, b) { return Number(a.stt) - Number(b.stt); });
 
       if (!pts.some(function(p) { return Math.abs(p.lat - 21.593365) < 0.00001; })) {
-        pts.unshift({ ten: "Trạm TNN", lat: 21.593365, long: 105.839945, loai: "Trạm" });
+        pts.unshift({ ten: "Trạm TNN", lat: 21.593365, long: 105.839945, lyTrinh: "", tuyenList: [globalRoutesMap[tuyenId]], stt: -9999, loai: "Trạm" });
       }
 
-      if (document.getElementById('chkNghichHuong').checked) {
-        pts.reverse();
+      var selectedA = document.getElementById('comboDiemA').value;
+      if (selectedA !== 'DEFAULT') {
+        var mxObj = pts.find(function(p) { return p.ten === selectedA && isMangXong(p); });
+        if (mxObj) {
+          var closestIdx = 0, minDst = Infinity;
+          pts.forEach(function(p, idx) {
+            var d = calculateHaversine(mxObj.lat, mxObj.long, p.lat, p.lng);
+            if (d < minDst) { minDst = d; closestIdx = idx; }
+          });
+          pts = pts.slice(closestIdx);
+          pts[0] = { ten: mxObj.ten, lat: mxObj.lat, long: mxObj.long, lyTrinh: mxObj.lyTrinh, tuyenList: mxObj.tuyenList, stt: -999, loai: "Mang xông" };
+        } else {
+          var idx = pts.findIndex(function(p) { return p.ten === selectedA; });
+          if (idx >= 0) pts = pts.slice(idx);
+        }
+      }
+      return document.getElementById('chkNghichHuong').checked ? pts.slice().reverse() : pts;
+    }
+
+    function calculateRouteMilestones(pts, sel) {
+      if (!pts || pts.length === 0) return [];
+      var nodeDistances = [0], totalGeom = 0;
+      for (var i = 0; i < pts.length - 1; i++) {
+        totalGeom += calculateHaversine(pts[i].lat, pts[i].long, pts[i+1].lat, pts[i+1].lng);
+        nodeDistances.push(totalGeom);
       }
 
-      var bounds = [];
-      pts.forEach(function(pt, idx) {
-        bounds.push([pt.lat, pt.long]);
-        var html = idx === 0 ? '<div class="point-a-marker">A</div>' : (idx === pts.length - 1 ? '<div class="point-b-marker">B</div>' : '<div class="standard-marker"></div>');
-        var marker = L.marker([pt.lat, pt.long], { icon: L.divIcon({ className: '', html: html, iconSize: [30, 30], iconAnchor: [15, 15] }) });
-        marker.bindPopup("<b>Điểm:</b> " + pt.ten + "<br><b>Loại:</b> " + pt.loai + "<br><a href='https://www.google.com/maps/search/?api=1&query=" + pt.lat + "," + pt.long + "' target='_blank' class='gmaps-btn'>Google Maps</a>");
-        markersLayer.addLayer(marker);
+      var globalSuffix = "", rawAnchors = [];
+      pts.forEach(function(p, idx) {
+        var pf = parseLyTrinh(p.lyTrinh);
+        if (pf.suffix && !globalSuffix) globalSuffix = pf.suffix;
+        if (pf.meters !== null) {
+          rawAnchors.push({ geom: nodeDistances[idx], meters: pf.meters, suffix: pf.suffix });
+        }
       });
 
-      var line = pts.map(function(p) { return [p.lat, p.long]; });
-      if (line.length > 1) {
-        polylinesLayer.addLayer(L.polyline(line, { color: '#0d6efd', weight: 3.5 }));
+      rawAnchors.sort(function(a, b) { return a.geom - b.geom; });
+      var anchors = [];
+      rawAnchors.forEach(function(an) {
+        if (anchors.length === 0 || Math.abs(anchors[anchors.length - 1].geom - an.geom) > 1) anchors.push(an);
+      });
+
+      var resultMeters = new Array(pts.length), resultSuffixes = new Array(pts.length);
+      var isHNI = sel && sel.toUpperCase().indexOf('HNI') !== -1;
+
+      if (anchors.length === 0) {
+        for (var i = 0; i < pts.length; i++) {
+          resultMeters[i] = nodeDistances[i];
+          resultSuffixes[i] = globalSuffix;
+        }
+      } else {
+        for (var i = pts.length - 1; i >= 0; i--) {
+          var geom_i = nodeDistances[i];
+          var activeAnchor = null;
+          for (var a = anchors.length - 1; a >= 0; a--) {
+            if (anchors[a].geom >= geom_i - 0.01) { activeAnchor = anchors[a]; } else { break; }
+          }
+          if (!activeAnchor) activeAnchor = anchors[anchors.length - 1];
+
+          var deltaGeom = activeAnchor.geom - geom_i;
+          resultMeters[i] = isHNI ? (activeAnchor.meters + deltaGeom) : (activeAnchor.meters - deltaGeom);
+          resultSuffixes[i] = activeAnchor.suffix ? activeAnchor.suffix : globalSuffix;
+        }
       }
-      if (bounds.length > 0) {
-        map.fitBounds(bounds, { padding: [50, 50] });
+
+      return pts.map(function(pt, idx) {
+        var pf = parseLyTrinh(pt.lyTrinh);
+        if (idx === 0 && (pt.stt === -9999 || !pt.lyTrinh || pf.meters === null)) return "";
+        if (pf.meters !== null && pt.lyTrinh) {
+          var currentLt = pt.lyTrinh.toString().trim();
+          var ptSuffix = pf.suffix ? pf.suffix : resultSuffixes[idx];
+          if (ptSuffix && !currentLt.includes(ptSuffix)) currentLt += " " + ptSuffix;
+          return currentLt;
+        }
+
+        var mVal = Math.max(0, resultMeters[idx]);
+        var km = Math.floor(mVal / 1000);
+        var m = Math.round(mVal % 1000);
+        var segmentSuffix = resultSuffixes[idx] || globalSuffix;
+
+        return "Km " + km + "+" + (m < 10 ? "00" + m : (m < 100 ? "0" + m : m)) + (segmentSuffix ? " " + segmentSuffix : "");
+      });
+    }
+
+    function interpolateLyTrinhAtDistance(exactPhysDist, pts, calculatedLyTrinhs, sel) {
+      var nodeDistances = [0], totalGeom = 0;
+      for (var i = 0; i < pts.length - 1; i++) {
+        totalGeom += calculateHaversine(pts[i].lat, pts[i].long, pts[i+1].lat, pts[i+1].lng);
+        nodeDistances.push(totalGeom);
       }
+
+      for (var i = 0; i < pts.length - 1; i++) {
+        if (exactPhysDist >= nodeDistances[i] && exactPhysDist <= nodeDistances[i+1]) {
+          var pf1 = parseLyTrinh(calculatedLyTrinhs[i]);
+          var pf2 = parseLyTrinh(calculatedLyTrinhs[i+1]);
+          var segLen = nodeDistances[i+1] - nodeDistances[i];
+          var r = segLen > 0 ? (exactPhysDist - nodeDistances[i]) / segLen : 0;
+
+          if (pf1.meters !== null && pf2.meters !== null) {
+            var exactMeters = pf1.meters + r * (pf2.meters - pf1.meters);
+            var km = Math.floor(exactMeters / 1000);
+            var m = Math.round(exactMeters % 1000);
+            return "Km " + km + "+" + (m < 10 ? "00" + m : (m < 100 ? "0" + m : m)) + (pf1.suffix ? " " + pf1.suffix : "");
+          }
+        }
+      }
+      return calculatedLyTrinhs[calculatedLyTrinhs.length - 1] || "Km 0+000";
+    }
+
+    function veLaiTuyenAB() {
+      markersLayer.clearLayers(); 
+      mxLayer.clearLayers(); 
+      polylinesLayer.clearLayers(); 
+      lyTrinhLayer.clearLayers();
+      
+      var tuyenId = document.getElementById('selectTuyen').value;
+      if (tuyenId === 'ALL') return;
+      var selName = globalRoutesMap[tuyenId] || "";
+
+      var pts = getPointsCuaTuyenHienTai();
+      if (pts.length === 0) return;
+
+      var calculatedLyTrinhs = calculateRouteMilestones(pts, selName);
+      var bounds = [];
+      
+      pts.forEach(function(pt, idx) {
+        var lat = parseFloat(pt.lat), lng = parseFloat(pt.long);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          bounds.push([lat, lng]);
+          var html = idx === 0 ? '<div class="point-a-marker">A</div>' : (idx === pts.length - 1 ? '<div class="point-b-marker">B</div>' : '<div class="standard-marker"></div>');
+          var marker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: html, iconSize: [30, 30], iconAnchor: [15, 15] }) });
+          
+          var ltText = calculatedLyTrinhs[idx];
+          var popupRole = idx === 0 ? "<b>📍 Điểm Đo Nguồn (Điểm A)</b><br>" : (idx === pts.length - 1 ? "<b>🏁 Điểm Cuối Tuyến (Điểm B)</b><br>" : "");
+          var popupLtStr = ltText ? ltText : "Không có (Điểm gốc)";
+          
+          var dsTuyenStr = (pt.tuyenList && pt.tuyenList.length > 0) ? pt.tuyenList.join(', ') : selName;
+          marker.bindPopup("<b>Tuyến: " + selName + "</b><br>" + popupRole + "Tên: " + pt.ten + "<br>Loại: " + pt.loai + "<br>Lý trình: <b>" + popupLtStr + "</b><br>Các tuyến đi qua: <i>" + dsTuyenStr + "</i><br><a href='https://www.google.com/maps/search/?api=1&query=" + lat + "," + lng + "' target='_blank' class='gmaps-btn'>🗺️ Google Maps</a>");
+          
+          markersLayer.addLayer(marker);
+          if ((idx === pts.length - 1 || (idx === 0 && ltText)) && ltText) {
+            lyTrinhLayer.addLayer(L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="lytrinh-badge">' + ltText + '</div>', iconSize: [110, 20], iconAnchor: [-10, 10] }), interactive: false }));
+          }
+        }
+      });
+
+      var routeMXs = pts.filter(function(pt) { return isMangXong(pt); });
+      routeMXs.forEach(function(mx) {
+        var lat = parseFloat(mx.lat), lng = parseFloat(mx.long);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          var mxMarker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [30, 30], iconAnchor: [15, 15] }) });
+          var mxPopup = "<b>" + mx.ten + "</b><br>Tuyến: " + selName + "<br>";
+          if (mx.lyTrinh) mxPopup += "Lý trình: <b>" + mx.lyTrinh + "</b><br>";
+          if (mx.doCachTnn) mxPopup += "⚡ Đo cách TNN: <b>" + mx.doCachTnn + "</b><br>";
+          mxPopup += "<a href='https://www.google.com/maps/search/?api=1&query=" + lat + "," + lng + "' target='_blank' class='gmaps-btn'>🗺️ Google Maps</a>";
+          mxMarker.bindPopup(mxPopup);
+          mxLayer.addLayer(mxMarker);
+        }
+      });
+
+      var line = pts.map(function(p) { return [parseFloat(p.lat), parseFloat(p.long)]; });
+      if (line.length > 1) polylinesLayer.addLayer(L.polyline(line, { color: '#0d6efd', weight: 3.5 }));
+      if (bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
     }
 
     function timViTriDut() {
-      alert("Thuật toán phân tích OTDR đã sẵn sàng trên nền tảng Database Supabase!");
+      var kcOtdr = parseFloat(document.getElementById('txtKcOtdr').value);
+      var heSoChung = parseFloat(document.getElementById('txtDoChung').value) || 1.05;
+      var tuyenId = document.getElementById('selectTuyen').value;
+
+      if (isNaN(kcOtdr) || kcOtdr <= 0) { showAlert("Vui lòng nhập khoảng cách đo OTDR hợp lệ!"); return; }
+      if (tuyenId === 'ALL') { showAlert("Vui lòng chọn tuyến cáp cần phân tích!"); return; }
+      var selName = globalRoutesMap[tuyenId] || "";
+
+      var pts = getPointsCuaTuyenHienTai();
+      if (pts.length < 2) { showAlert("Tuyến hiện tại không đủ điểm để tính toán nội suy!"); return; }
+
+      var calculatedLyTrinhs = calculateRouteMilestones(pts, selName);
+      var targetMeters = kcOtdr * 1000;
+
+      var routeStops = [];
+      pts.forEach(function(p) {
+        var d = getDistanceAlongRoute(p, pts);
+        routeStops.push({ ten: p.ten, lat: p.lat, long: p.long, lyTrinh: p.lyTrinh || "", dist: d, duTru: isMangXong(p) ? (parseFloat(p.duTru) || 0) : 0, isMX: isMangXong(p) });
+      });
+
+      routeStops.sort(function(a, b) { return a.dist - b.dist; });
+
+      var stopFiberDistances = [0], totalFiber = 0;
+      for (var k = 0; k < routeStops.length - 1; k++) {
+        var dPhys = routeStops[k+1].dist - routeStops[k].dist;
+        var duTruNext = routeStops[k+1].duTru || 0;
+        totalFiber += (dPhys * heSoChung) + duTruNext;
+        stopFiberDistances.push(totalFiber);
+      }
+
+      var targetLat, targetLng, calcLyTrinhStr = "Km 0+000", lastIdx = routeStops.length - 1;
+
+      if (targetMeters >= stopFiberDistances[lastIdx]) {
+        targetLat = routeStops[lastIdx].lat;
+        targetLng = routeStops[lastIdx].long;
+        calcLyTrinhStr = calculatedLyTrinhs[calculatedLyTrinhs.length - 1];
+      } else {
+        var segIdx = 0;
+        for (var k = 0; k < stopFiberDistances.length - 1; k++) {
+          if (targetMeters >= stopFiberDistances[k] && targetMeters <= stopFiberDistances[k+1]) { segIdx = k; break; }
+        }
+
+        var s1 = routeStops[segIdx], s2 = routeStops[segIdx+1];
+        var fiberStart = stopFiberDistances[segIdx], remFiber = targetMeters - fiberStart;
+        var dPhysSeg = s2.dist - s1.dist, fiberPhysPart = dPhysSeg * heSoChung;
+        var ratio = remFiber <= fiberPhysPart ? (fiberPhysPart > 0 ? remFiber / fiberPhysPart : 0) : 1.0;
+
+        targetLat = s1.lat + (s2.lat - s1.lat) * ratio;
+        targetLng = s1.long + (s2.long - s1.long) * ratio;
+
+        var exactPhysDist = s1.dist + dPhysSeg * ratio;
+        calcLyTrinhStr = interpolateLyTrinhAtDistance(exactPhysDist, pts, calculatedLyTrinhs, selName);
+      }
+
+      var stopFiberMap = {}, currF = 0;
+      for (var k = 0; k < routeStops.length; k++) {
+        if (k > 0) {
+          var dPhys = routeStops[k].dist - routeStops[k-1].dist;
+          currF += (dPhys * heSoChung) + (routeStops[k].duTru || 0);
+        }
+        stopFiberMap[routeStops[k].ten] = currF;
+      }
+
+      var mxCandidates = [];
+      routeStops.forEach(function(s) { if (s.isMX) mxCandidates.push({ ten: s.ten, distFromStart: stopFiberMap[s.ten] }); });
+      mxCandidates.sort(function(a, b) { return a.distFromStart - b.distFromStart; });
+
+      var prevMXInfo = "Không xác định", nextMXInfo = "Không xác định";
+      var prevMXs = mxCandidates.filter(function(m) { return m.distFromStart <= targetMeters; });
+      var nextMXs = mxCandidates.filter(function(m) { return m.distFromStart > targetMeters; });
+
+      if (prevMXs.length > 0) {
+        var closestPrev = prevMXs[prevMXs.length - 1];
+        prevMXInfo = closestPrev.ten + " (Cách sự cố ~" + Math.round(targetMeters - closestPrev.distFromStart) + "m)";
+      }
+      if (nextMXs.length > 0) {
+        var closestNext = nextMXs[0];
+        nextMXInfo = closestNext.ten + " (Cách sự cố ~" + Math.round(closestNext.distFromStart - targetMeters) + "m)";
+      }
+
+      map.setView([targetLat, targetLng], 21, { animate: true });
+      var faultMarker = L.marker([targetLat, targetLng], { icon: L.divIcon({ className: '', html: '<div style="background:#ff3333; color:white; width:32px; height:32px; border-radius:50%; border:3px solid #fff; display:flex; align-items:center; justify-content:center; font-weight:bold; box-shadow:0 0 15px rgba(255,0,0,0.9);">⚡</div>', iconSize: [32, 32], iconAnchor: [16, 16] }) }).addTo(markersLayer);
+
+      var initialPopupHtml = "<b>⚠️ VỊ TRÍ SỰ CỐ (ĐÃ ZOOM CẬN CẢNH)</b><br>" +
+                           "Khoảng cách đo OTDR: <b>" + kcOtdr + " km</b><br>" +
+                           "📍 Lý trình thực tế: <b style='color:#fd7e14;'>" + calcLyTrinhStr + "</b><br>" +
+                           "• Măng xông trước: <b>" + prevMXInfo + "</b><br>" +
+                           "• Măng xông sau: <b>" + nextMXInfo + "</b><br>" +
+                           "🏠 Địa chỉ hành chính: <span id='fault-address' style='color:#0d6efd;'>Đang tra cứu...</span><br>" +
+                           '<a href="https://www.google.com/maps/search/?api=1&query=' + targetLat + ',' + targetLng + '" target="_blank" class="gmaps-btn">🗺️ Dẫn đường Google Maps</a>';
+
+      faultMarker.bindPopup(initialPopupHtml).openPopup();
+
+      fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + targetLat + '&lon=' + targetLng + '&accept-language=vi')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          var addr = (data && data.display_name) ? data.display_name : "Không xác định được địa chỉ hành chính chi tiết";
+          faultMarker.setPopupContent(initialPopupHtml.replace("Đang tra cứu...", addr));
+        })
+        .catch(function(err) {
+          faultMarker.setPopupContent(initialPopupHtml.replace("Đang tra cứu...", "Không thể tải địa chỉ hành chính"));
+        });
+    }
+
+    function xoaTuyenThuCong() {
+      customManualPoints = []; 
+      markersLayer.clearLayers(); 
+      mxLayer.clearLayers();
+      polylinesLayer.clearLayers(); 
+      lyTrinhLayer.clearLayers();
+      document.getElementById('selectTuyen').value = 'ALL';
+      showAlert("Đã làm sạch bản đồ.");
+    }
+
+    function getDistanceAlongRoute(targetPt, pathPts) {
+      if (!pathPts || pathPts.length < 2) return 0;
+      var minDst = Infinity, bestDist = 0, currentDist = 0;
+      for (var i = 0; i < pathPts.length - 1; i++) {
+        var p1 = pathPts[i], p2 = pathPts[i+1];
+        var segLen = calculateHaversine(p1.lat, p1.long, p2.lat, p2.long);
+        if (segLen === 0) continue;
+        var dx = p2.long - p1.long, dy = p2.lat - p1.lat;
+        var lenSq = dx * dx + dy * dy;
+        var t = lenSq === 0 ? 0 : ((targetPt.long - p1.long) * dx + (targetPt.lat - p1.lat) * dy) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+        var distToProj = calculateHaversine(targetPt.lat, targetPt.long, p1.lat + t * dy, p1.long + t * dx);
+        if (distToProj < minDst) { minDst = distToProj; bestDist = currentDist + t * segLen; }
+        currentDist += segLen;
+      }
+      return bestDist;
+    }
+
+    function calculateHaversine(lat1, lon1, lat2, lon2) {
+      var R = 6371000;
+      var dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
+      var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
   </script>
 </body>
