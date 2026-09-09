@@ -376,7 +376,6 @@
               routeMap.set(tuyenVal, { ma_tuyen: tuyenVal, tinh_ma: tinhVal });
               phanDoanMap.set(tuyenVal + "_" + phanDoanVal, { tuyen_ma: tuyenVal, dai_ma: daiVal, ten_phan_doan: phanDoanVal });
 
-              // 1. Chỉ lưu thông tin cơ bản vào danh mục điểm theo Tỉnh
               pointsMap.set(tinhVal + "_" + tenVal, {
                 tinh_ma: tinhVal,
                 ten_diem: tenVal,
@@ -385,7 +384,6 @@
                 long: lngVal
               });
 
-              // 2. Lưu thông số kỹ thuật riêng vào bảng chi tiết tuyến
               rawDetails.push({
                 tuyen_ma: tuyenVal,
                 phan_doan_key: tuyenVal + "_" + phanDoanVal,
