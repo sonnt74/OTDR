@@ -2,137 +2,203 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Script Import D? Li?u Lên Supabase</title>
+  <title>Công c? N?p D? Li?u Excel lên Supabase</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 30px; background: #f4f6f9; }
+    .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 600px; margin: auto; }
+    h2 { color: #0d6efd; margin-top: 0; }
+    .btn { background: #198754; color: white; padding: 12px 20px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 15px; font-size: 14px; }
+    .btn:hover { background: #157347; }
+    #log { margin-top: 20px; white-space: pre-wrap; background: #212529; color: #33ff33; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 12px; max-height: 350px; overflow-y: auto; }
+  </style>
 </head>
-<body style="font-family: Arial; padding: 20px;">
-  <h2>Công c? N?p D? Li?u Excel lên Supabase 3NF</h2>
-  <button onclick="thucHienImport()" style="padding: 10px 20px; background: #198754; color: white; font-weight: bold; border: none; cursor: pointer;">B?t d?u n?p d? li?u t? t?p Tuyen_cap_quang_TNN_Net1.xlsx</button>
-  <div id="log" style="margin-top: 20px; white-space: pre-wrap; background: #f8f9fa; padding: 10px; border: 1px solid #ccc;"></div>
+<body>
+
+  <div class="card">
+    <h2>?? N?p d? li?u Excel lên Supabase (3NF)</h2>
+    <p>Ch?n t?p Excel trên máy c?a anh d? ti?n hành d?ng b?:</p>
+    
+    <input type="file" id="excelFile" accept=".xlsx, .xls" style="margin-top: 10px; width: 100%; padding: 8px; box-sizing: border-box;">
+    <button class="btn" onclick="xuLyImportExcel()">B?T Ð?U N?P D? LI?U</button>
+    
+    <div id="log">Tr?ng thái: S?n sàng...</div>
+  </div>
 
   <script>
+    // Thay th? thông tin k?t n?i Supabase c?a anh vào dây
     const SUPABASE_URL = 'https://lmxbzjislncqkwmcnlgy.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_nRRO1mpzjiCLRI57LihWyQ_DZhWZ9HK';<!DOCTYPE html>
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     function log(msg) {
-      document.getElementById('log').textContent += msg + "\n";
+      var logBox = document.getElementById('log');
+      logBox.textContent += "\n" + msg;
+      logBox.scrollTop = logBox.scrollHeight;
     }
 
-    async function thucHienImport() {
-      log("Ðang t?i t?p Excel...");
-      try {
-        var response = await fetch('Tuyen_cap_quang_TNN_Net1.xlsx');
-        var buffer = await response.arrayBuffer();
-        var workbook = XLSX.read(buffer, { type: 'array' });
-        var allEntries = [];
-        var globalRowCounter = 0;
+    function xuLyImportExcel() {
+      var fileInput = document.getElementById('excelFile');
+      if (!fileInput.files || fileInput.files.length === 0) {
+        alert("Vui lòng ch?n t?p Excel tru?c khi b?m nút!");
+        return;
+      }
 
-        // Quét d? li?u Be_Moc / Cot
-        workbook.SheetNames.forEach(function(sName) {
-          var sLower = sName.toLowerCase();
-          var defaultType = (sLower.includes('cot') || sLower.includes('c?t')) ? "C?t" : "B?";
-          var sheet = workbook.Sheets[sName];
-          var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-          if (rows.length < 2) return;
+      var file = fileInput.files[0];
+      document.getElementById('log').textContent = "Ðang d?c t?p " + file.name + "...";
 
-          var h = rows[0].map(function(item) { return item ? item.toString().trim().toLowerCase() : ''; });
-          var iTen = 0, iLat = 1, iLong = 2, iHuong = -1, iTuyen = -1, iLyTrinh = -1, iDuTru = -1;
+      var reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          var data = new Uint8Array(e.target.result);
+          var workbook = XLSX.read(data, { type: 'array' });
+          var allEntries = [];
+          var globalRowCounter = 0;
 
-          h.forEach(function(head, col) {
-            if (head.includes('tên') || head.includes('ten')) iTen = col;
-            else if (head === 'lat' || head.includes('vi')) iLat = col;
-            else if (head === 'long' || head.includes('lng') || head.includes('kinh')) iLong = col;
-            else if (head.includes('tuyen') || head.includes('tuy?n')) iTuyen = col;
-            else if (head.includes('lytrinh') || head.includes('lý trình')) iLyTrinh = col;
-            else if (head.includes('du_tru') || head.includes('d? tr?')) iDuTru = col;
-          });
+          log("Các Sheet tìm th?y trong t?p: " + workbook.SheetNames.join(", "));
 
-          for (var r = 1; r < rows.length; r++) {
-            var row = rows[r];
-            var tenVal = row[iTen] ? row[iTen].toString().trim() : "";
-            if (!tenVal) continue;
-            var lat = parseFloat(row[iLat]), lng = parseFloat(row[iLong]);
-            if (isNaN(lat) || isNaN(lng)) continue;
+          // Quét d? li?u t?ng sheet an toàn
+          workbook.SheetNames.forEach(function(sName) {
+            var sLower = sName.toLowerCase();
+            var defaultType = (sLower.includes('cot') || sLower.includes('c?t')) ? "C?t" : "B?";
+            if (sLower.includes('mang_xong') || sLower.includes('mang xong')) defaultType = "Mang xông";
 
-            globalRowCounter++;
-            var tuyenCapRaw = (iTuyen !== -1 && row[iTuyen]) ? row[iTuyen].toString().trim() : 'Tuy?n Chung';
-            var lyTrinh = (iLyTrinh !== -1 && row[iLyTrinh]) ? row[iLyTrinh].toString().trim() : '';
-            var duTru = (iDuTru !== -1 && !isNaN(row[iDuTru])) ? parseFloat(row[iDuTru]) : 0;
+            var sheet = workbook.Sheets[sName];
+            var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            if (rows.length < 2) return;
 
-            tuyenCapRaw.split(',').forEach(function(rawPart) {
-              rawPart = rawPart.trim();
-              if (!rawPart) return;
-              var matchFull = rawPart.match(/^(B? cáp|B?|C?t|M?c|Moc|Be|Cot)\s+(.+?)\s*-\s*([\d\.]+)/i);
-              var tenTuyen = matchFull ? matchFull[2].trim() : rawPart;
-              var stt = matchFull ? parseFloat(matchFull[3]) : globalRowCounter;
+            var h = rows[0].map(function(item) { return item ? item.toString().trim().toLowerCase() : ''; });
+            var iTen = -1, iLat = -1, iLong = -1, iTuyen = -1, iLyTrinh = -1, iDuTru = -1;
 
-              allEntries.push({
-                ten: tenVal, lat: lat, long: lng,
-                tuyenList: [tenTuyen || "Tuy?n Chung"],
-                loai: defaultType, lyTrinh: lyTrinh, duTru: duTru, stt: !isNaN(stt) ? stt : globalRowCounter
-              });
+            h.forEach(function(head, col) {
+              if (head.includes('tên') || head.includes('ten') || head.includes('mã mx') || head === 'id') iTen = col;
+              else if (head.includes('lat') || head.includes('vi') || head.includes('vi')) iLat = col;
+              else if (head.includes('long') || head.includes('lng') || head.includes('kinh')) iLong = col;
+              else if (head.includes('tuyen') || head.includes('tuy?n') || head.includes('thu_muc')) iTuyen = col;
+              else if (head.includes('lytrinh') || head.includes('lý trình') || head.includes('ly_trinh')) iLyTrinh = col;
+              else if (head.includes('du_tru') || head.includes('d? tr?')) iDuTru = col;
             });
-          }
-        });
 
-        log("Ðã quét xong " + allEntries.length + " b?n ghi. Ðang d?y lên Supabase...");
+            // M?c d?nh c?t co b?n n?u không dò th?y tiêu d?
+            if (iTen === -1) iTen = 0;
+            if (iLat === -1) iLat = 1;
+            if (iLong === -1) iLong = 2;
 
-        // Ð?ng b? Phân c?p Ðài LSN - Tr?m TNN
-        await supabaseClient.from('dai_vt').upsert({ ma_dai: 'LSN', ten_dai: 'Ðài Vi?n thông L?ng Son' }, { onConflict: 'ma_dai' });
-        var dbDai = await supabaseClient.from('dai_vt').select('id').eq('ma_dai', 'LSN').single();
-        var daiId = dbDai.data.id;
+            log(`Ðang quét sheet [${sName}] (C?t: Tên=${iTen}, Lat=${iLat}, Long=${iLong}, Tuy?n=${iTuyen})...`);
 
-        await supabaseClient.from('tram_vt').upsert({ dai_vt_id: daiId, ma_tram: 'TNN', ten_tram: 'Tr?m Vi?n thông Thái Nguyên' }, { onConflict: 'ma_tram' });
-        
-        await supabaseClient.from('tinh').upsert({ dai_vt_id: daiId, ma_tinh: 'TNN', ten_tinh: 'T?nh Thái Nguyên' }, { onConflict: 'ma_tinh' });
-        var dbTinh = await supabaseClient.from('tinh').select('id').eq('ma_tinh', 'TNN').single();
-        var tinhId = dbTinh.data.id;
+            for (var r = 1; r < rows.length; r++) {
+              var row = rows[r];
+              if (!row || row.length === 0) continue;
+              var tenVal = row[iTen] !== undefined && row[iTen] !== null ? row[iTen].toString().trim() : "";
+              if (!tenVal) continue;
+              
+              var lat = parseFloat(row[iLat]);
+              var lng = parseFloat(row[iLong]);
+              if (isNaN(lat) || isNaN(lng)) continue;
 
-        // Ð?ng b? Tuy?n cáp
-        var routeMap = new Map();
-        allEntries.forEach(function(pt) {
-          pt.tuyenList.forEach(function(t) {
-            if (t && t.toLowerCase() !== 't?t c?') routeMap.set(t, { tinh_id: tinhId, ma_tuyen: t, ten_tuyen: "Tuy?n " + t });
-          });
-        });
-        await supabaseClient.from('tuyen_cap').upsert(Array.from(routeMap.values()), { onConflict: 'tinh_id,ma_tuyen' });
-        var dbRoutes = await supabaseClient.from('tuyen_cap').select('id, ma_tuyen').eq('tinh_id', tinhId);
-        var routeIdMap = new Map();
-        dbRoutes.data.forEach(function(rt) { routeIdMap.set(rt.ma_tuyen, rt.id); });
+              globalRowCounter++;
+              var tuyenCapRaw = (iTuyen !== -1 && row[iTuyen] !== undefined && row[iTuyen] !== null) ? row[iTuyen].toString().trim() : 'Tuy?n Chung';
+              if (!tuyenCapRaw) tuyenCapRaw = 'Tuy?n Chung';
 
-        // Ð?ng b? Ði?m h? t?ng g?c
-        var pointsMap = new Map();
-        allEntries.forEach(function(pt) {
-          pointsMap.set(pt.ten, { tinh_id: tinhId, ten_diem: pt.ten, loai: pt.loai, lat: pt.lat, long: pt.lng });
-        });
-        await supabaseClient.from('diem_ha_tang').upsert(Array.from(pointsMap.values()), { onConflict: 'tinh_id,ten_diem' });
-        var dbPoints = await supabaseClient.from('diem_ha_tang').select('id, ten_diem').eq('tinh_id', tinhId);
-        var pointIdMap = new Map();
-        dbPoints.data.forEach(function(p) { pointIdMap.set(p.ten_diem, p.id); });
+              var lyTrinh = (iLyTrinh !== -1 && row[iLyTrinh] !== undefined) ? row[iLyTrinh].toString().trim() : '';
+              var duTru = (iDuTru !== -1 && row[iDuTru] !== undefined && !isNaN(row[iDuTru])) ? parseFloat(row[iDuTru]) : 0;
 
-        // Ð?ng b? Chi ti?t tuy?n
-        var detailsArr = [];
-        allEntries.forEach(function(pt) {
-          var pId = pointIdMap.get(pt.ten);
-          if (!pId) return;
-          pt.tuyenList.forEach(function(t) {
-            var rId = routeIdMap.get(t);
-            if (rId) {
-              detailsArr.push({ tuyen_id: rId, diem_id: pId, stt: pt.stt, ly_trinh: pt.lyTrinh, du_tru: pt.duTru });
+              tuyenCapRaw.split(',').forEach(function(rawPart) {
+                rawPart = rawPart.trim();
+                if (!rawPart) return;
+                var matchFull = rawPart.match(/^(B? cáp|B?|C?t|M?c|Moc|Be|Cot)\s+(.+?)\s*-\s*([\d\.]+)/i);
+                var tenTuyen = matchFull ? matchFull[2].trim() : rawPart;
+                var stt = matchFull ? parseFloat(matchFull[3]) : globalRowCounter;
+
+                allEntries.push({
+                  ten: tenVal, lat: lat, long: lng,
+                  tuyenList: [tenTuyen || "Tuy?n Chung"],
+                  loai: defaultType, lyTrinh: lyTrinh, duTru: duTru, stt: !isNaN(stt) ? stt : globalRowCounter
+                });
+              });
             }
           });
-        });
 
-        for (var i = 0; i < detailsArr.length; i += 500) {
-          await supabaseClient.from('tuyen_chi_tiet').upsert(detailsArr.slice(i, i + 500), { onConflict: 'tuyen_id,diem_id' });
+          log("? Ðã bóc tách thành công t?ng c?ng " + allEntries.length + " b?n ghi.");
+          log("Ðang k?t n?i và d?ng b? lên Supabase...");
+
+          // 1. Ð?ng b? Ðài & Tr?m & T?nh
+          await supabaseClient.from('dai_vt').upsert({ ma_dai: 'LSN', ten_dai: 'Ðài Vi?n thông L?ng Son' }, { onConflict: 'ma_dai' });
+          var dbDai = await supabaseClient.from('dai_vt').select('id').eq('ma_dai', 'LSN').single();
+          var daiId = dbDai.data.id;
+
+          await supabaseClient.from('tram_vt').upsert({ dai_vt_id: daiId, ma_tram: 'TNN', ten_tram: 'Tr?m Vi?n thông Thái Nguyên' }, { onConflict: 'ma_tram' });
+          
+          await supabaseClient.from('tinh').upsert({ dai_vt_id: daiId, ma_tinh: 'TNN', ten_tinh: 'T?nh Thái Nguyên' }, { onConflict: 'ma_tinh' });
+          var dbTinh = await supabaseClient.from('tinh').select('id').eq('ma_tinh', 'TNN').single();
+          var tinhId = dbTinh.data.id;
+
+          // 2. Ð?ng b? Tuy?n cáp
+          log("Ðang d?ng b? danh m?c Tuy?n cáp...");
+          var routeMap = new Map();
+          allEntries.forEach(function(pt) {
+            pt.tuyenList.forEach(function(t) {
+              if (t && t.toLowerCase() !== 't?t c?' && t.toLowerCase() !== 'tuy?n chung') {
+                routeMap.set(t, { tinh_id: tinhId, ma_tuyen: t, ten_tuyen: "Tuy?n " + t });
+              }
+            });
+          });
+          
+          var routesArr = Array.from(routeMap.values());
+          for (var i = 0; i < routesArr.length; i += 500) {
+            var resR = await supabaseClient.from('tuyen_cap').upsert(routesArr.slice(i, i + 500), { onConflict: 'tinh_id,ma_tuyen' });
+            if (resR.error) throw resR.error;
+          }
+
+          var dbRoutes = await supabaseClient.from('tuyen_cap').select('id, ma_tuyen').eq('tinh_id', tinhId);
+          var routeIdMap = new Map();
+          dbRoutes.data.forEach(function(rt) { routeIdMap.set(rt.ma_tuyen, rt.id); });
+
+          // 3. Ð?ng b? di?m h? t?ng g?c
+          log("Ðang d?ng b? danh m?c Ði?m h? t?ng g?c...");
+          var pointsMap = new Map();
+          allEntries.forEach(function(pt) {
+            pointsMap.set(pt.ten, { tinh_id: tinhId, ten_diem: pt.ten, loai: pt.loai, lat: pt.lat, long: pt.long });
+          });
+
+          var pointsArr = Array.from(pointsMap.values());
+          for (var i = 0; i < pointsArr.length; i += 500) {
+            var resP = await supabaseClient.from('diem_ha_tang').upsert(pointsArr.slice(i, i + 500), { onConflict: 'tinh_id,ten_diem' });
+            if (resP.error) throw resP.error;
+          }
+
+          var dbPoints = await supabaseClient.from('diem_ha_tang').select('id, ten_diem').eq('tinh_id', tinhId);
+          var pointIdMap = new Map();
+          dbPoints.data.forEach(function(p) { pointIdMap.set(p.ten_diem, p.id); });
+
+          // 4. Ð?ng b? chi ti?t tuy?n
+          log("Ðang d?ng b? Chi ti?t tuy?n vào b?ng tuyen_chi_tiet...");
+          var detailsArr = [];
+          allEntries.forEach(function(pt) {
+            var pId = pointIdMap.get(pt.ten);
+            if (!pId) return;
+            pt.tuyenList.forEach(function(t) {
+              var rId = routeIdMap.get(t);
+              if (rId) {
+                detailsArr.push({ tuyen_id: rId, diem_id: pId, stt: pt.stt, ly_trinh: pt.lyTrinh, du_tru: pt.duTru });
+              }
+            });
+          });
+
+          for (var i = 0; i < detailsArr.length; i += 500) {
+            var batch = detailsArr.slice(i, i + 500);
+            var resDT = await supabaseClient.from('tuyen_chi_tiet').upsert(batch, { onConflict: 'tuyen_id,diem_id' });
+            if (resDT.error) throw resDT.error;
+          }
+
+          log("? HOÀN T?T N?P D? LI?U LÊN SUPABASE THÀNH CÔNG!");
+        } catch (err) {
+          log("? L?I TRONG QUÁ TRÌNH X? LÝ: " + err.message);
+          console.error(err);
         }
-
-        log("HOÀN T?T IMPORT D? LI?U LÊN SUPABASE!");
-      } catch (err) {
-        log("L?i: " + err.message);
-      }
+      };
+      reader.readAsArrayBuffer(file);
     }
   </script>
 </body>
