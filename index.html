@@ -298,7 +298,7 @@
       var file = event.target.files[0];
       if (!file) return;
 
-      showLoading("Đang đọc trọn vẹn tệp Excel vào cơ sở dữ liệu...");
+      showLoading("Đang đọc tệp Excel và đồng bộ cấu trúc 3NF...");
 
       var reader = new FileReader();
       reader.onload = async function(e) {
@@ -310,7 +310,8 @@
           var tinhMap = new Map();
           var routeMap = new Map();
           var phanDoanMap = new Map();
-          var rawPoints = [];
+          var pointsMap = new Map();
+          var rawDetails = [];
           var totalRead = 0;
 
           for (var sIdx = 0; sIdx < workbook.SheetNames.length; sIdx++) {
@@ -375,14 +376,21 @@
               routeMap.set(tuyenVal, { ma_tuyen: tuyenVal, tinh_ma: tinhVal });
               phanDoanMap.set(tuyenVal + "_" + phanDoanVal, { tuyen_ma: tuyenVal, dai_ma: daiVal, ten_phan_doan: phanDoanVal });
 
-              rawPoints.push({
-                tuyen_ma: tuyenVal,
-                phan_doan_key: tuyenVal + "_" + phanDoanVal,
+              // Lưu danh mục điểm độc lập theo tỉnh
+              pointsMap.set(tinhVal + "_" + tenVal, {
                 tinh_ma: tinhVal,
                 ten_diem: tenVal,
                 loai: tenVal.toLowerCase().includes('mx') ? 'Mang xong' : 'Be',
                 lat: latVal,
-                long: lngVal,
+                long: lngVal
+              });
+
+              // Lưu chi tiết liên kết tuyến
+              rawDetails.push({
+                tuyen_ma: tuyenVal,
+                phan_doan_key: tuyenVal + "_" + phanDoanVal,
+                tinh_ma: tinhVal,
+                ten_diem: tenVal,
                 stt: sttVal,
                 ly_trinh: lyTrinhVal,
                 du_tru: duTruVal,
@@ -391,9 +399,9 @@
             }
           }
 
-          if (rawPoints.length === 0) {
+          if (rawDetails.length === 0) {
             hideLoading();
-            showAlert("Không đọc được dòng dữ liệu tọa độ nào!");
+            showAlert("Không tìm thấy dữ liệu hợp lệ trong file Excel!");
             return;
           }
 
@@ -440,41 +448,55 @@
           var phanDoanIdMap = new Map();
           (dbPhanDoan.data || []).forEach(function(pd) { phanDoanIdMap.set(pd.tuyen_id + "_" + pd.ten_phan_doan, pd.id); });
 
-          showLoading("Đang xử lý và khử trùng lặp điểm hạ tầng...");
-          
-          // Dùng Map để lọc bỏ tuyệt đối các bản ghi trùng lặp (tuyen_id + ten_diem) trong cùng mẻ
-          var uniquePointsMap = new Map();
-          rawPoints.forEach(function(p) {
-            var rId = routeIdMap.get(p.tuyen_ma);
-            var pdId = phanDoanIdMap.get(p.phan_doan_key);
-            if (rId !== undefined && p.ten_diem) {
-              var uniqueKey = rId + "_" + p.ten_diem;
-              uniquePointsMap.set(uniqueKey, {
+          showLoading("Đang nạp danh mục điểm hạ tầng...");
+          var pointsArr = Array.from(pointsMap.values()).map(function(p) {
+            return {
+              tinh_id: tinhIdMap.get(p.tinh_ma),
+              ten_diem: p.ten_diem,
+              loai: p.loai,
+              lat: p.lat,
+              long: p.long
+            };
+          });
+          for (var i = 0; i < pointsArr.length; i += 500) {
+            var batch = pointsArr.slice(i, i + 500);
+            var resP = await supabaseClient.from('diem_ha_tang').upsert(batch, { onConflict: 'tinh_id,ten_diem' });
+            if (resP.error) throw resP.error;
+          }
+
+          var dbPoints = await supabaseClient.from('diem_ha_tang').select('id, ten_diem, tinh_id');
+          var pointIdMap = new Map();
+          (dbPoints.data || []).forEach(function(p) { pointIdMap.set(p.tinh_id + "_" + p.ten_diem, p.id); });
+
+          showLoading("Đang nạp chi tiết tuyến vào bảng tuyen_chi_tiet...");
+          var detailMap = new Map();
+          rawDetails.forEach(function(item) {
+            var tId = tinhIdMap.get(item.tinh_ma);
+            var rId = routeIdMap.get(item.tuyen_ma);
+            var pId = pointIdMap.get(tId + "_" + item.ten_diem);
+            var pdId = phanDoanIdMap.get(rId + "_" + item.phan_doan_key);
+            if (rId && pId) {
+              detailMap.set(rId + "_" + pId, {
                 tuyen_id: rId,
+                diem_id: pId,
                 phan_doan_id: pdId || null,
-                ten_diem: p.ten_diem,
-                loai: p.loai,
-                lat: p.lat,
-                long: p.long,
-                stt: p.stt,
-                ly_trinh: p.ly_trinh,
-                du_tru: p.du_tru,
-                do_cach: p.do_cach
+                stt: item.stt,
+                ly_trinh: item.ly_trinh,
+                du_tru: item.du_tru,
+                do_cach: item.do_cach
               });
             }
           });
 
-          var pointsToInsert = Array.from(uniquePointsMap.values());
-
-          // Tiến hành chia mẻ 500 bản ghi để upsert an toàn tuyệt đối
-          for (var i = 0; i < pointsToInsert.length; i += 500) {
-            var batch = pointsToInsert.slice(i, i + 500);
-            var resP = await supabaseClient.from('diem_ha_tang').upsert(batch, { onConflict: 'tuyen_id,ten_diem' });
-            if (resP.error) throw resP.error;
+          var detailsArr = Array.from(detailMap.values());
+          for (var i = 0; i < detailsArr.length; i += 500) {
+            var batchDT = detailsArr.slice(i, i + 500);
+            var resDT = await supabaseClient.from('tuyen_chi_tiet').upsert(batchDT, { onConflict: 'tuyen_id,diem_id' });
+            if (resDT.error) throw resDT.error;
           }
 
           hideLoading();
-          showAlert("Import thành công trọn vẹn " + pointsToInsert.length + " bản ghi độc lập vào CSDL!");
+          showAlert("Import thành công trọn vẹn " + detailsArr.length + " bản ghi vào hệ thống 3NF!");
           taiDuLieuTuSupabase(true);
 
         } catch (err) {
