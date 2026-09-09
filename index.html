@@ -298,7 +298,7 @@
       var file = event.target.files[0];
       if (!file) return;
 
-      showLoading("Đang đọc tệp Excel và đồng bộ cấu trúc 3NF...");
+      showLoading("Đang đọc tệp Excel và đồng bộ cấu trúc 3NF chuẩn...");
 
       var reader = new FileReader();
       reader.onload = async function(e) {
@@ -376,7 +376,7 @@
               routeMap.set(tuyenVal, { ma_tuyen: tuyenVal, tinh_ma: tinhVal });
               phanDoanMap.set(tuyenVal + "_" + phanDoanVal, { tuyen_ma: tuyenVal, dai_ma: daiVal, ten_phan_doan: phanDoanVal });
 
-              // Lưu danh mục điểm độc lập theo tỉnh
+              // 1. Chỉ lưu thông tin cơ bản vào danh mục điểm theo Tỉnh
               pointsMap.set(tinhVal + "_" + tenVal, {
                 tinh_ma: tinhVal,
                 ten_diem: tenVal,
@@ -385,7 +385,7 @@
                 long: lngVal
               });
 
-              // Lưu chi tiết liên kết tuyến
+              // 2. Lưu thông số kỹ thuật riêng vào bảng chi tiết tuyến
               rawDetails.push({
                 tuyen_ma: tuyenVal,
                 phan_doan_key: tuyenVal + "_" + phanDoanVal,
@@ -448,7 +448,7 @@
           var phanDoanIdMap = new Map();
           (dbPhanDoan.data || []).forEach(function(pd) { phanDoanIdMap.set(pd.tuyen_id + "_" + pd.ten_phan_doan, pd.id); });
 
-          showLoading("Đang nạp danh mục điểm hạ tầng...");
+          showLoading("Đang nạp danh mục điểm hạ tầng gốc...");
           var pointsArr = Array.from(pointsMap.values()).map(function(p) {
             return {
               tinh_id: tinhIdMap.get(p.tinh_ma),
