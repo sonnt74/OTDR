@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html>
 <head>
   <base target="_top">
@@ -297,7 +296,7 @@
   <script>
     // Cấu hình kết nối Supabase của bạn
     const SUPABASE_URL = 'https://lmxbzjislncqkwmcnlgy.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_nRRO1mpzjiCLRI57LihWyQ_DZhWZ9HK';
+    const SUPABASE_ANON_KEY = 'sb_publishable_nRRO1mpzjiCLRI57LihWyQ_DZhWZ9HK';<!DOCTYPE html>
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     var map;
@@ -363,7 +362,7 @@
       return { meters: null, suffix: "" };
     }
 
-    // Giữ nguyên logic đọc file Excel hiện tại của anh
+    // Đã bọc an toàn tuyệt đối chống lỗi Cannot read properties of undefined (reading 'includes')
     function taiLaiDuLieu(forceRefresh = false) {
       var statusBadge = document.getElementById('statusBadge');
       if (!forceRefresh) {
@@ -401,14 +400,14 @@
             var iTen = -1, iLat = -1, iLong = -1, iHuong = -1, iTuyen = -1, iLyTrinh = -1, iDuTru = -1;
 
             for (var col = 0; col < h.length; col++) {
-              var head = h[col];
-              if (head.includes('tên') || head.includes('ten')) { if (iTen === -1) iTen = col; }
-              else if (head === 'lat' || head.includes('vĩ')) iLat = col;
-              else if (head === 'long' || head.includes('lng') || head.includes('kinh')) iLong = col;
-              else if (head.includes('hướng') || head.includes('huong')) iHuong = col;
-              else if (head.includes('tuyen') || head.includes('tuyến') || head.includes('thu_muc')) iTuyen = col;
-              else if (head.includes('lytrinh') || head.includes('lý trình') || head.includes('ly_trinh')) iLyTrinh = col;
-              else if (head.includes('du_tru') || head.includes('dự trữ')) iDuTru = col;
+              var headStr = String(h[col] || '').toLowerCase();
+              if (headStr.includes('tên') || headStr.includes('ten')) { if (iTen === -1) iTen = col; }
+              else if (headStr === 'lat' || headStr.includes('vĩ') || headStr.includes('vi')) iLat = col;
+              else if (headStr === 'long' || headStr.includes('lng') || headStr.includes('kinh')) iLong = col;
+              else if (headStr.includes('hướng') || headStr.includes('huong')) iHuong = col;
+              else if (headStr.includes('tuyen') || headStr.includes('tuyến') || headStr.includes('thu_muc')) iTuyen = col;
+              else if (headStr.includes('lytrinh') || headStr.includes('lý trình') || headStr.includes('ly_trinh')) iLyTrinh = col;
+              else if (headStr.includes('du_tru') || headStr.includes('dự trữ')) iDuTru = col;
             }
 
             if (iTen === -1) iTen = 0;
@@ -469,7 +468,7 @@
 
           var sheetNames = workbook.SheetNames;
           sheetNames.forEach(function(sName) {
-            var sLower = sName.toLowerCase();
+            var sLower = String(sName || '').toLowerCase();
             if (sLower.includes('be') || sLower.includes('moc') || sLower.includes('mốc') || sLower.includes('bể')) {
               parseSheetData(sName, "Bể");
             } else if (sLower.includes('cot') || sLower.includes('cột')) {
@@ -477,7 +476,11 @@
             }
           });
 
-          var mxSheetName = sheetNames.find(function(s) { return s.toLowerCase().includes('mang_xong') || s.toLowerCase().includes('mang xong'); });
+          var mxSheetName = sheetNames.find(function(s) { 
+            var sStr = String(s || '').toLowerCase();
+            return sStr.includes('mang_xong') || sStr.includes('mang xong'); 
+          });
+
           if (mxSheetName) {
             var mxSheet = workbook.Sheets[mxSheetName];
             var mxRows = XLSX.utils.sheet_to_json(mxSheet, { header: 1 });
@@ -486,14 +489,15 @@
               var mId = -1, mLat = -1, mLng = -1, mHuong = -1, mTuyen = -1, mLyTrinh = -1, mDuTru = -1, mDoCach = -1;
 
               mxH.forEach(function(hText, k) {
-                if (hText.includes('mã mx') || hText.includes('tên') || hText === 'ten') mId = k;
-                else if (hText === 'lat' || hText.includes('vĩ')) mLat = k;
-                else if (hText === 'lng' || hText === 'long' || hText.includes('kinh')) mLng = k;
-                else if (hText === 'huong') mHuong = k;
-                else if (hText.includes('tuyen') || hText.includes('tuyến')) mTuyen = k;
-                else if (hText.includes('ly_trinh') || hText.includes('lytrinh')) mLyTrinh = k;
-                else if (hText.includes('du_tru') || hText.includes('du tru')) mDuTru = k;
-                else if (hText.includes('do_cach_tnn') || hText.includes('đo cách tnn')) mDoCach = k;
+                var hStr = String(hText || '').toLowerCase();
+                if (hStr.includes('mã mx') || hStr.includes('tên') || hStr === 'ten') mId = k;
+                else if (hStr === 'lat' || hStr.includes('vĩ') || hStr.includes('vi')) mLat = k;
+                else if (hStr === 'lng' || hStr.includes('long') || hStr.includes('kinh')) mLng = k;
+                else if (hStr.includes('huong') || hStr.includes('hướng')) mHuong = k;
+                else if (hStr.includes('tuyen') || hStr.includes('tuyến')) mTuyen = k;
+                else if (hStr.includes('ly_trinh') || hStr.includes('lytrinh')) mLyTrinh = k;
+                else if (hStr.includes('du_tru') || hStr.includes('du tru')) mDuTru = k;
+                else if (hStr.includes('do_cach_tnn') || hStr.includes('đo cách tnn')) mDoCach = k;
               });
 
               if (mLat !== -1 && mLng !== -1) {
@@ -531,20 +535,17 @@
         });
     }
 
-    // Nút lệnh nhập dữ liệu trực tiếp lên Database Supabase 3NF
-    // Hàm Import chuẩn 3NF: Tự động gán Đài LSN, Trạm TNN và phân tách dữ liệu lên Supabase
-    // Hàm Import chuẩn 3NF: Tự động gán Đài LSN, Trạm TNN và phân tách dữ liệu lên Supabase
+    // Hàm Import lên Supabase tự động gán Đài LSN, Trạm TNN
     async function importExcelToSupabase(event) {
       var file = event.target.files[0];
-      if (!file) return;
-
-      if (!globalDataPoints || globalDataPoints.length === 0) {
-        showAlert("Chưa có dữ liệu điểm hạ tầng trong bộ nhớ! Hãy chắc chắn tệp Excel đã được tải và đọc thành công.");
-        event.target.value = '';
-        return;
+      if (!file) {
+        if (!globalDataPoints || globalDataPoints.length === 0) {
+          showAlert("Chưa có dữ liệu điểm hạ tầng trong bộ nhớ! Hãy bấm Tải lại dữ liệu trước.");
+          return;
+        }
       }
 
-      showLoading("Đang đồng bộ dữ liệu phân cấp (Đài LSN - Trạm TNN) lên Supabase...");
+      showLoading("Đang đẩy dữ liệu phân cấp (Đài LSN - Trạm TNN) lên Supabase...");
 
       try {
         var maDaiVal = "LSN";
@@ -554,7 +555,7 @@
         var maTinhVal = "TNN";
         var tenTinhVal = "Tỉnh Thái Nguyên";
 
-        // 1. Đồng bộ cấp Đài (LSN)
+        // 1. Đồng bộ Đài LSN
         var resDai = await supabaseClient.from('dai_vt')
           .upsert({ ma_dai: maDaiVal, ten_dai: tenDaiVal }, { onConflict: 'ma_dai' })
           .select('id');
@@ -563,7 +564,7 @@
         var dbDai = await supabaseClient.from('dai_vt').select('id').eq('ma_dai', maDaiVal).single();
         var daiId = dbDai.data.id;
 
-        // 2. Đồng bộ cấp Trạm (TNN) trực thuộc Đài LSN
+        // 2. Đồng bộ Trạm TNN trực thuộc Đài LSN
         var resTram = await supabaseClient.from('tram_vt')
           .upsert({ dai_vt_id: daiId, ma_tram: maTramVal, ten_tram: tenTramVal }, { onConflict: 'ma_tram' })
           .select('id');
@@ -572,7 +573,7 @@
         var dbTram = await supabaseClient.from('tram_vt').select('id').eq('ma_tram', maTramVal).single();
         var tramId = dbTram.data.id;
 
-        // 3. Đồng bộ cấp Tỉnh
+        // 3. Đồng bộ Tỉnh
         var resTinh = await supabaseClient.from('tinh')
           .upsert({ dai_vt_id: daiId, ma_tinh: maTinhVal, ten_tinh: tenTinhVal }, { onConflict: 'ma_tinh' })
           .select('id');
@@ -583,12 +584,12 @@
 
         showLoading("Đang đồng bộ danh mục Tuyến cáp...");
         
-        // Thu thập danh sách tuyến duy nhất
         var routeMap = new Map();
         globalDataPoints.forEach(function(pt) {
           parseTuyenList(pt.tuyenList).forEach(function(t) {
-            if (t && t.toLowerCase() !== 'tất cả' && t.toLowerCase() !== 'tuyến chung') {
-              var baseName = getBaseRouteName(t);
+            var tStr = String(t || '').trim();
+            if (tStr && tStr.toLowerCase() !== 'tất cả' && tStr.toLowerCase() !== 'tuyến chung') {
+              var baseName = getBaseRouteName(tStr);
               routeMap.set(baseName, { tinh_id: tinhId, ma_tuyen: baseName, ten_tuyen: "Tuyến " + baseName });
             }
           });
@@ -600,14 +601,12 @@
           if (resR.error) throw resR.error;
         }
 
-        // Lấy ID tuyến từ DB
         var dbRoutes = await supabaseClient.from('tuyen_cap').select('id, ma_tuyen').eq('tinh_id', tinhId);
         var routeIdMap = new Map();
         (dbRoutes.data || []).forEach(function(rt) { routeIdMap.set(rt.ma_tuyen, rt.id); });
 
         showLoading("Đang đồng bộ danh mục điểm hạ tầng gốc...");
         
-        // Thu thập danh sách điểm hạ tầng gốc duy nhất theo tỉnh
         var pointsMap = new Map();
         globalDataPoints.forEach(function(pt) {
           var key = maTinhVal + "_" + pt.ten;
@@ -627,22 +626,21 @@
           if (resP.error) throw resP.error;
         }
 
-        // Lấy ID điểm từ DB
         var dbPoints = await supabaseClient.from('diem_ha_tang').select('id, ten_diem').eq('tinh_id', tinhId);
         var pointIdMap = new Map();
         (dbPoints.data || []).forEach(function(p) { pointIdMap.set(p.ten_diem, p.id); });
 
         showLoading("Đang đồng bộ chi tiết tuyến vào bảng tuyen_chi_tiet...");
         
-        // Liên kết điểm vào tuyến kèm thông số kỹ thuật
         var detailMap = new Map();
         globalDataPoints.forEach(function(pt) {
           var pId = pointIdMap.get(pt.ten);
           if (!pId) return;
 
           parseTuyenList(pt.tuyenList).forEach(function(t) {
-            if (t && t.toLowerCase() !== 'tất cả' && t.toLowerCase() !== 'tuyến chung') {
-              var baseName = getBaseRouteName(t);
+            var tStr = String(t || '').trim();
+            if (tStr && tStr.toLowerCase() !== 'tất cả' && tStr.toLowerCase() !== 'tuyến chung') {
+              var baseName = getBaseRouteName(tStr);
               var rId = routeIdMap.get(baseName);
               if (rId) {
                 var uniqueKey = rId + "_" + pId;
@@ -667,17 +665,17 @@
         }
 
         hideLoading();
-        showAlert("Import thành công trọn vẹn " + detailsArr.length + " bản ghi vào hệ thống Đài LSN - Trạm TNN!");
+        showAlert("Import thành công " + detailsArr.length + " bản ghi vào hệ thống Đài LSN - Trạm TNN!");
 
       } catch (err) {
         hideLoading();
         showAlert("Lỗi đồng bộ Supabase: " + err.message);
       } finally {
-        event.target.value = '';
+        if (event && event.target) event.target.value = '';
       }
     }
 
-    // Các hàm phụ trợ giữ nguyên vẹn 100% logic thuật toán của anh
+    // Giữ nguyên vẹn 100% các hàm logic thuật toán OTDR và hiển thị
     function getBaseRouteName(tName) {
       if (!tName) return '';
       return tName.toString().trim().replace(/[-_][0-9a-zA-Z.]+$/i, '').trim();
@@ -695,7 +693,8 @@
       dataPoints.forEach(function(pt) {
         if (isMangXong(pt)) return;
         parseTuyenList(pt.tuyenList).forEach(function(t) {
-          if (t && t.toLowerCase() !== 'tất cả' && t.toLowerCase() !== 'tuyến chung') {
+          var tStr = String(t || '').trim().toLowerCase();
+          if (tStr && tStr !== 'tất cả' && tStr !== 'tuyến chung') {
             set[getBaseRouteName(t)] = true;
           }
         });
@@ -711,7 +710,8 @@
     function onCheDoDinhTuyenChange() { veLaiTuyenAB(); }
     function isMangXong(pt) {
       if (!pt) return false;
-      var t = (pt.ten || '').toUpperCase(), l = (pt.loai || '').toUpperCase();
+      var t = String(pt.ten || '').toUpperCase();
+      var l = String(pt.loai || '').toUpperCase();
       return l === 'MANG XÔNG' || l === 'MX' || l === 'SC' || t.includes('MX') || t.includes('MANG XÔNG');
     }
     function capNhatComboDiemA() {
