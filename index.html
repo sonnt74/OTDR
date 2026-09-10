@@ -119,8 +119,9 @@
     }
     .btn-options-main:hover { background-color: #343a40; }
 
-    .btn-chuanhoa { background-color: #6610f2; color: white; border: none; font-weight: bold; padding: 10px; border-radius: 4px; width: 100%; margin-top: 4px; cursor: pointer; }
-    .btn-clear { background-color: #dc3545; color: white; border: none; font-weight: bold; padding: 10px; border-radius: 4px; width: 100%; margin-top: 4px; cursor: pointer; }
+    .btn-chuanhoa { background-color: #6610f2; color: white; border: none; font-weight: bold; padding: 10px; border-radius: 4px; width: 100%; margin-top: 6px; cursor: pointer; }
+    .btn-chuanhoa:hover { background-color: #520dc2; }
+    .btn-clear { background-color: #dc3545; color: white; border: none; font-weight: bold; padding: 10px; border-radius: 4px; width: 100%; margin-top: 6px; cursor: pointer; }
 
     button:disabled, select:disabled, input:disabled { opacity: 0.65; cursor: not-allowed !important; }
 
@@ -137,7 +138,6 @@
     }
     .checkbox-group input { width: auto; }
 
-    /* BẢNG TẠM DEBUG DỮ LIỆU VẼ */
     #debug-table-container {
       margin-top: 15px;
       border-top: 2px dashed #0d6efd;
@@ -291,7 +291,7 @@
         <button class="btn-options-main" onclick="document.getElementById('optionsModal').style.display='flex'">⚙️ TÙY CHỌN NÂNG CAO</button>
       </div>
 
-      <!-- BẢNG TẠM DEBUG DỮ LIỆU ĐỂ KIỂM TRA -->
+      <!-- BẢNG TẠM DEBUG -->
       <div id="debug-table-container">
         <h4>📊 Bảng Tạm Debug Điểm Vẽ (<span id="debug-count">0</span> điểm)</h4>
         <div class="debug-table-wrapper">
@@ -331,7 +331,10 @@
           </select>
         </div>
         <div class="form-group" style="margin-top: 15px;">
-          <button class="btn-chuanhoa" onclick="taiLaiDuLieuSupabase()">🔄 TẢI LẠI DỮ LIỆU TỪ DATABASE</button>
+          <button class="btn-chuanhoa" onclick="chuanHoaVaLuuDuLieu()">⚡ CHUẨN HÓA LẠI DỮ LIỆU TUYẾN</button>
+        </div>
+        <div class="form-group" style="margin-top: 8px;">
+          <button class="btn-chuanhoa" style="background:#0d6efd;" onclick="taiLaiDuLieuSupabase()">🔄 TẢI LẠI DỮ LIỆU TỪ DATABASE</button>
         </div>
         <div class="form-group">
           <button class="btn-clear" onclick="xoaTuyenThuCong()">🗑️ LÀM SẠCH BẢN ĐỒ</button>
@@ -372,6 +375,7 @@
     var cacheLoaiDiem = {};
     var cacheHuong = {};
     var cacheDiems = [];
+    var globalRoutePoints = {}; 
     var customManualPoints = [];
 
     var measureActive = false;
@@ -402,7 +406,7 @@
       lyTrinhLayer.addTo(map);
 
       L.control.layers(
-        { "Bản đồ OSM": OSM = osm, "Vệ tinh": sat }, 
+        { "Bản đồ OSM": osm, "Vệ tinh": sat }, 
         { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
         { position: 'topright' }
       ).addTo(map);
@@ -548,6 +552,79 @@
       }
     }
 
+    // --- CHỨC NĂNG CHUẨN HÓA VÀ LƯU VÀO BẢNG TUYẾN CHI TIẾT ---
+    async function chuanHoaVaLuuDuLieu() {
+      document.getElementById('optionsModal').style.display = 'none';
+      showLoading("Đang duyệt cung đoạn, sắp xếp và đồng bộ dữ liệu vào bảng tuyến chi tiết...");
+
+      try {
+        var totalInserted = 0;
+
+        for (var i = 0; i < cacheTuyenCap.length; i++) {
+          var tuyen = cacheTuyenCap[i];
+          var tuyenId = tuyen.id_tuyen_cap;
+
+          // 1. Lấy tất cả cung đoạn thuộc tuyến này, sắp xếp theo id_doan_cap tăng dần
+          var routeSegments = cacheDoanCap.filter(function(d) {
+            return String(d.id_tuyen) === String(tuyenId);
+          });
+          routeSegments.sort(function(a, b) { return Number(a.id_doan_cap) - Number(b.id_doan_cap); });
+
+          // 2. Duyệt tuần tự từng cung đoạn và sắp xếp điểm theo stt
+          var orderedPoints = [];
+          var addedIds = new Set();
+
+          routeSegments.forEach(function(seg) {
+            var segPts = [];
+            cacheDiems.forEach(function(pt) {
+              var stt = parseSttForSegment(pt.ds_doan_cap, seg.id_doan_cap);
+              if (stt !== null) {
+                var ptCopy = Object.assign({}, pt);
+                ptCopy._parsedStt = stt;
+                segPts.push(ptCopy);
+              }
+            });
+            segPts.sort(function(a, b) { return a._parsedStt - b._parsedStt; });
+
+            segPts.forEach(function(p) {
+              if (!addedIds.has(p.id_diem)) {
+                addedIds.add(p.id_diem);
+                orderedPoints.push(p);
+              }
+            });
+          });
+
+          if (orderedPoints.length === 0) continue;
+
+          // Xóa dữ liệu cũ của tuyến này trên bảng tuyen_chi_tiet trước khi ghi mới
+          await supabaseClient.from('tuyen_chi_tiet').delete().eq('tuyen_id', tuyenId);
+
+          // Chuẩn bị batch insert
+          var batchRows = orderedPoints.map(function(pt, idx) {
+            return {
+              tuyen_id: tuyenId,
+              diem_id: pt.id_diem,
+              stt: idx + 1,
+              ly_trinh: pt.ly_trinh || "",
+              du_tru: pt.du_tru || 0,
+              do_cach: pt.do_cach_tram || ""
+            };
+          });
+
+          var resIns = await supabaseClient.from('tuyen_chi_tiet').insert(batchRows);
+          if (resIns.error) throw resIns.error;
+          totalInserted += batchRows.length;
+        }
+
+        hideLoading();
+        showAlert("Đã chuẩn hóa và lưu thành công " + totalInserted + " điểm chi tiết tuyến vào bảng 'tuyen_chi_tiet' trên CSDL!", "Thành công");
+        onTuyenChange();
+      } catch (err) {
+        hideLoading();
+        showAlert("Lỗi khi chuẩn hóa dữ liệu: " + err.message, "Lỗi");
+      }
+    }
+
     function onDaiChange() {
       capNhatComboTuyen();
       onTuyenChange();
@@ -565,7 +642,7 @@
       });
     }
 
-    function onTuyenChange() {
+    async function onTuyenChange() {
       var tuyenId = document.getElementById('selectTuyen').value;
       var selDoan = document.getElementById('selectDoanCap');
       selDoan.innerHTML = '<option value="ALL">-- Tất cả cung đoạn --</option>';
@@ -573,6 +650,38 @@
       var filteredDoan = cacheDoanCap;
       if (tuyenId !== 'ALL') {
         filteredDoan = cacheDoanCap.filter(function(d) { return String(d.id_tuyen) === String(tuyenId); });
+        
+        showLoading("Đang tải chi tiết tuyến từ cơ sở dữ liệu...");
+        try {
+          var res = await supabaseClient
+            .from('tuyen_chi_tiet')
+            .select('stt, ly_trinh, du_tru, do_cach, diem_ha_tang(id_diem, ten_diem, lat, long, id_loai, ds_doan_cap)')
+            .eq('tuyen_id', parseInt(tuyenId))
+            .order('stt', { ascending: true });
+
+          if (!res.error && res.data && res.data.length > 0) {
+            globalRoutePoints[tuyenId] = res.data.map(function(item) {
+              var pt = item.diem_ha_tang || {};
+              return {
+                id_diem: pt.id_diem,
+                ten_diem: pt.ten_diem || "",
+                lat: parseFloat(pt.lat) || 0,
+                long: parseFloat(pt.long) || 0,
+                id_loai: pt.id_loai || 0,
+                ds_doan_cap: pt.ds_doan_cap || "",
+                stt: item.stt || 0,
+                ly_trinh: item.ly_trinh || "",
+                du_tru: item.du_tru || 0,
+                do_cach_tram: item.do_cach || ""
+              };
+            });
+          } else {
+            globalRoutePoints[tuyenId] = null; 
+          }
+        } catch (e) {
+          globalRoutePoints[tuyenId] = null;
+        }
+        hideLoading();
       }
 
       filteredDoan.forEach(function(d) {
@@ -583,6 +692,7 @@
       });
 
       customManualPoints = [];
+      capNhatComboDiemA();
       veLaiTuyenAB();
     }
 
@@ -607,7 +717,6 @@
     }
 
     function capNhatComboDiemA() {
-      var doanId = document.getElementById('selectDoanCap').value;
       var tuyenId = document.getElementById('selectTuyen').value;
       var combo = document.getElementById('comboDiemA');
       combo.innerHTML = '<option value="DEFAULT">📍 Trạm mặc định / Trạm TNN</option>';
@@ -650,42 +759,52 @@
 
       var pts = [];
 
-      if (doanId !== 'ALL') {
-        cacheDiems.forEach(function(pt) {
-          var stt = parseSttForSegment(pt.ds_doan_cap, doanId);
-          if (stt !== null) {
-            var ptCopy = Object.assign({}, pt);
-            ptCopy._parsedStt = stt;
-            pts.push(ptCopy);
-          }
-        });
-        pts.sort(function(a, b) { return a._parsedStt - b._parsedStt; });
+      if (globalRoutePoints[tuyenId] && globalRoutePoints[tuyenId].length > 0) {
+        if (doanId !== 'ALL') {
+          pts = globalRoutePoints[tuyenId].filter(function(pt) {
+            return parseSttForSegment(pt.ds_doan_cap, doanId) !== null;
+          });
+        } else {
+          pts = globalRoutePoints[tuyenId].slice();
+        }
       } else {
-        var routeSegments = cacheDoanCap.filter(function(d) {
-          return String(d.id_tuyen) === String(tuyenId);
-        });
-        routeSegments.sort(function(a, b) { return Number(a.id_doan_cap) - Number(b.id_doan_cap); });
-
-        var addedIds = new Set();
-        routeSegments.forEach(function(seg) {
-          var segPts = [];
+        if (doanId !== 'ALL') {
           cacheDiems.forEach(function(pt) {
-            var stt = parseSttForSegment(pt.ds_doan_cap, seg.id_doan_cap);
+            var stt = parseSttForSegment(pt.ds_doan_cap, doanId);
             if (stt !== null) {
               var ptCopy = Object.assign({}, pt);
               ptCopy._parsedStt = stt;
-              segPts.push(ptCopy);
+              pts.push(ptCopy);
             }
           });
-          segPts.sort(function(a, b) { return a._parsedStt - b._parsedStt; });
+          pts.sort(function(a, b) { return a._parsedStt - b._parsedStt; });
+        } else {
+          var routeSegments = cacheDoanCap.filter(function(d) {
+            return String(d.id_tuyen) === String(tuyenId);
+          });
+          routeSegments.sort(function(a, b) { return Number(a.id_doan_cap) - Number(b.id_doan_cap); });
 
-          segPts.forEach(function(p) {
-            if (!addedIds.has(p.id_diem)) {
-              addedIds.add(p.id_diem);
-              pts.push(p);
-            }
+          var addedIds = new Set();
+          routeSegments.forEach(function(seg) {
+            var segPts = [];
+            cacheDiems.forEach(function(pt) {
+              var stt = parseSttForSegment(pt.ds_doan_cap, seg.id_doan_cap);
+              if (stt !== null) {
+                var ptCopy = Object.assign({}, pt);
+                ptCopy._parsedStt = stt;
+                segPts.push(ptCopy);
+              }
+            });
+            segPts.sort(function(a, b) { return a._parsedStt - b._parsedStt; });
+
+            segPts.forEach(function(p) {
+              if (!addedIds.has(p.id_diem)) {
+                addedIds.add(p.id_diem);
+                pts.push(p);
+              }
+            });
           });
-        });
+        }
       }
 
       if (pts.length > 0 && !pts.some(function(p) { return Math.abs(p.lat - 21.593365) < 0.00001; })) {
@@ -709,7 +828,6 @@
       return document.getElementById('chkNghichHuong').checked ? pts.slice().reverse() : pts;
     }
 
-    // --- HÀM CẬP NHẬT BẢNG TẠM DEBUG GIAO DIỆN ---
     function updateDebugTable(pts) {
       var tbody = document.getElementById('debug-table-body');
       var countSpan = document.getElementById('debug-count');
@@ -726,7 +844,7 @@
           '<td>' + (idx + 1) + '</td>' +
           '<td><b>' + (p.ten_diem || '') + '</b></td>' +
           '<td>' + (p.lat || 0).toFixed(5) + ', ' + (p.long || 0).toFixed(5) + '</td>' +
-          '<td><span style="background:#e9ecef; padding:2px 4px; border-radius:3px;">' + (p.ds_doan_cap || 'N/A') + ' (stt: ' + (p._parsedStt !== undefined ? p._parsedStt : '-') + ')</span></td>' +
+          '<td><span style="background:#e9ecef; padding:2px 4px; border-radius:3px;">' + (p.ds_doan_cap || 'N/A') + ' (stt: ' + (p.stt || p._parsedStt || '-') + ')</span></td>' +
           '</tr>';
       });
       tbody.innerHTML = html;
@@ -838,8 +956,6 @@
       var selName = tuyenObj ? (tuyenObj.ten_tuyencap || tuyenObj.ma_tuyencap) : "";
 
       var pts = getPointsCuaTuyenHienTai();
-      
-      // Cập nhật lên bảng tạm debug để anh quan sát trực quan
       updateDebugTable(pts);
 
       if (pts.length === 0) return;
