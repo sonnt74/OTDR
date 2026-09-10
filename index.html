@@ -298,7 +298,6 @@
     
     var globalRoutesMap = {}; 
     var globalRoutePoints = {}; 
-    var globalDataPoints = []; 
     var customManualPoints = [];
 
     var measureActive = false;
@@ -392,7 +391,7 @@
         }
 
         if (document.getElementById('cheDoDinhTuyen').value === 'manual' && document.getElementById('selectTuyen').value !== 'ALL') {
-          customManualPoints.push({ ten: "Điểm vẽ " + (customManualPoints.length + 1), lat: e.latlng.lat, long: e.latlng.lng, lyTrinh: "", tuyenList: [globalRoutesMap[document.getElementById('selectTuyen').value]], stt: customManualPoints.length + 1 });
+          customManualPoints.push({ ten: "Điểm vẽ " + (customManualPoints.length + 1), lat: e.latlng.lat, long: e.latlng.lng, lyTrinh: "", tuyenList: [globalRoutesMap[document.getElementById('selectTuyen').value]], stt: customManualPoints.length + 1, loai: "Cột", duTru: 0 });
           veLaiTuyenAB();
         }
       });
@@ -428,7 +427,7 @@
 
     async function taiLaiDuLieuSupabase() {
       var statusBadge = document.getElementById('statusBadge');
-      showLoading("Đang tải dữ liệu từ cơ sở dữ liệu Supabase...");
+      showLoading("Đang tải danh mục tuyến từ Supabase...");
       statusBadge.innerHTML = "<span>ℹ️</span> Đang truy vấn CSDL Supabase...";
 
       try {
@@ -447,21 +446,8 @@
           selectTuyen.appendChild(opt);
         });
 
-        var resPoints = await supabaseClient.from('diem_ha_tang').select('id, ten_diem, loai, lat, long');
-        if (resPoints.error) throw resPoints.error;
-
-        globalDataPoints = (resPoints.data || []).map(function(p) {
-          return {
-            ten: p.ten_diem,
-            lat: parseFloat(p.lat),
-            long: parseFloat(p.long),
-            loai: p.loai,
-            tuyenList: ['Tất cả']
-          };
-        });
-
         hideLoading();
-        statusBadge.innerHTML = "<span>✅</span> Đã kết nối và đồng bộ từ Database Supabase thành công.";
+        statusBadge.innerHTML = "<span>✅</span> Kết nối Database Supabase thành công.";
       } catch (err) {
         hideLoading();
         showAlert("Lỗi kết nối Supabase: " + err.message);
@@ -484,7 +470,7 @@
         return;
       }
 
-      showLoading("Đang gọi hàm query_diem_ha_tang từ Supabase...");
+      showLoading("Đang tải điểm hạ tầng qua hàm RPC...");
       try {
         var res = await supabaseClient.rpc('query_diem_ha_tang', { p_tuyen_id: parseInt(tuyenId) });
         if (res.error) throw res.error;
@@ -498,7 +484,7 @@
             long: parseFloat(item.long),
             stt: item.stt,
             lyTrinh: item.ly_trinh || "",
-            duTru: item.du_tru || 0,
+            duTru: parseFloat(item.du_tru) || 0,
             doCachTnn: item.do_cach || "",
             tuyenList: item.danh_sach_tuyen ? item.danh_sach_tuyen.split(', ') : []
           };
@@ -547,7 +533,7 @@
       pts.sort(function(a, b) { return Number(a.stt) - Number(b.stt); });
 
       if (!pts.some(function(p) { return Math.abs(p.lat - 21.593365) < 0.00001; })) {
-        pts.unshift({ ten: "Trạm TNN", lat: 21.593365, long: 105.839945, lyTrinh: "", tuyenList: [globalRoutesMap[tuyenId]], stt: -9999, loai: "Trạm" });
+        pts.unshift({ ten: "Trạm TNN", lat: 21.593365, long: 105.839945, lyTrinh: "", tuyenList: [globalRoutesMap[tuyenId]], stt: -9999, loai: "Trạm", duTru: 0 });
       }
 
       var selectedA = document.getElementById('comboDiemA').value;
@@ -560,7 +546,7 @@
             if (d < minDst) { minDst = d; closestIdx = idx; }
           });
           pts = pts.slice(closestIdx);
-          pts[0] = { ten: mxObj.ten, lat: mxObj.lat, long: mxObj.long, lyTrinh: mxObj.lyTrinh, tuyenList: mxObj.tuyenList, stt: -999, loai: "Mang xông" };
+          pts[0] = { ten: mxObj.ten, lat: mxObj.lat, long: mxObj.long, lyTrinh: mxObj.lyTrinh, tuyenList: mxObj.tuyenList, stt: -999, loai: "Mang xông", duTru: mxObj.duTru };
         } else {
           var idx = pts.findIndex(function(p) { return p.ten === selectedA; });
           if (idx >= 0) pts = pts.slice(idx);
@@ -733,7 +719,7 @@
       var routeStops = [];
       pts.forEach(function(p) {
         var d = getDistanceAlongRoute(p, pts);
-        routeStops.push({ ten: p.ten, lat: p.lat, long: p.long, lyTrinh: p.lyTrinh || "", dist: d, duTru: isMangXong(p) ? (parseFloat(p.duTru) || 0) : 0, isMX: isMangXong(p) });
+        routeStops.push({ ten: p.ten, lat: p.lat, long: p.long, lyTrinh: p.lyTrinh || "", dist: d, duTru: parseFloat(p.duTru) || 0, isMX: isMangXong(p) });
       });
 
       routeStops.sort(function(a, b) { return a.dist - b.dist; });
