@@ -308,7 +308,7 @@
                 <th>STT</th>
                 <th>Tên Điểm</th>
                 <th>Lat, Long</th>
-                <th>Cung Đoạn / STT</th>
+                <th>Cung Đoạn</th>
               </tr>
             </thead>
             <tbody id="debug-table-body">
@@ -474,7 +474,7 @@
         }
 
         if (document.getElementById('cheDoDinhTuyen').value === 'manual' && document.getElementById('selectTuyen').value !== 'ALL') {
-          customManualPoints.push({ ten_diem: "Điểm vẽ " + (customManualPoints.length + 1), lat: e.latlng.lat, long: e.latlng.lng, ly_trinh: "", id_doan_cap: document.getElementById('selectDoanCap').value, id_diem: customManualPoints.length + 1, _parsedStt: customManualPoints.length + 1 });
+          customManualPoints.push({ ten_diem: "Điểm vẽ " + (customManualPoints.length + 1), lat: e.latlng.lat, long: e.latlng.lng, ly_trinh: "", id_doan_cap: document.getElementById('selectDoanCap').value, id_diem: customManualPoints.length + 1, stt: customManualPoints.length + 1 });
           veLaiTuyenAB();
         }
       });
@@ -534,7 +534,6 @@
         if (resLoai.error) throw resLoai.error;
         (resLoai.data || []).forEach(function(l) { cacheLoaiDiem[l.id_loaidiem] = l.ten_loaidiem; });
 
-        // Tải toàn bộ dữ liệu điểm chuẩn hóa từ bảng tuyen_chi_tiet
         var resChiTiet = await supabaseClient.from('tuyen_chi_tiet').select('*');
         if (resChiTiet.error) throw resChiTiet.error;
         cacheDiems = resChiTiet.data || [];
@@ -558,7 +557,6 @@
       }
     }
 
-    // --- CHUẨN HÓA DỮ LIỆU ĐỂ GHI VÀO BẢNG tuyen_chi_tiet ---
     async function chuanHoaVaLuuDuLieu() {
       document.getElementById('optionsModal').style.display = 'none';
       showLoading("Đang xử lý chuẩn hóa và ghi vào bảng tuyen_chi_tiet...");
@@ -605,10 +603,8 @@
           return;
         }
 
-        // Xóa dữ liệu cũ
         await supabaseClient.from('tuyen_chi_tiet').delete().neq('id', 0);
 
-        // Ghi theo lô (batch insert 500 dòng)
         var batchSize = 500;
         for (var i = 0; i < totalRows.length; i += batchSize) {
           var batch = totalRows.slice(i, i + batchSize);
@@ -625,9 +621,7 @@
       }
     }
 
-    function onDaiChange() {
-      capNhatComboTram();
-    }
+    function onDaiChange() { capNhatComboTram(); }
 
     function capNhatComboTram() {
       var daiId = document.getElementById('selectDai').value;
@@ -649,16 +643,12 @@
       capNhatComboTuyen();
     }
 
-    function onTramChange() {
-      capNhatComboTuyen();
-    }
+    function onTramChange() { capNhatComboTuyen(); }
 
     function capNhatComboTuyen() {
-      var tramId = document.getElementById('selectTram').value;
       var selTuyen = document.getElementById('selectTuyen');
       selTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cần hiển thị --</option>';
 
-      // Lọc các tuyến liên quan đến trạm nếu cần, ở đây hiển thị toàn bộ tuyến
       cacheTuyenCap.forEach(function(t) {
         var opt = document.createElement('option');
         opt.value = t.id_tuyen_cap;
@@ -736,7 +726,6 @@
       if (tuyenId === 'ALL') return [];
       if (cheDo === 'manual') return customManualPoints;
 
-      // Lấy danh sách cung đoạn thuộc tuyến & đoạn được chọn
       var targetSegments = cacheDoanCap.filter(function(d) {
         if (tuyenId !== 'ALL' && String(d.id_tuyen) !== String(tuyenId)) return false;
         if (doanId !== 'ALL' && String(d.id_doan_cap) !== String(doanId)) return false;
@@ -746,7 +735,6 @@
       var segmentIds = targetSegments.map(function(d) { return Number(d.id_doan_cap); });
       if (segmentIds.length === 0) return [];
 
-      // Lọc điểm từ cacheDiems (dựa trên bảng tuyen_chi_tiet)
       var pts = [];
       var addedIds = new Set();
 
@@ -755,7 +743,7 @@
           return Number(pt.id_doan_cap) === Number(segId);
         });
 
-        segPts.sort(function(a, b) { return (a.stt || 0) - (b.stt || 0); });
+        segPts.sort(function(a, b) { return (a.id || 0) - (b.id || 0); });
 
         segPts.forEach(function(p) {
           if (!addedIds.has(p.id_diem)) {
@@ -768,7 +756,7 @@
       });
 
       if (pts.length > 0 && !pts.some(function(p) { return Math.abs(p.lat - 21.593365) < 0.00001; })) {
-        pts.unshift({ ten_diem: "Trạm TNN", lat: 21.593365, long: 105.839945, ly_trinh: "", id_diem: -9999, id_loai: 0, _parsedStt: 0 });
+        pts.unshift({ ten_diem: "Trạm TNN", lat: 21.593365, long: 105.839945, ly_trinh: "", id_diem: -9999, id_loai: 0 });
       }
 
       var selectedA = document.getElementById('comboDiemA').value;
@@ -781,7 +769,7 @@
             if (d < minDst) { minDst = d; closestIdx = idx; }
           });
           pts = pts.slice(closestIdx);
-          pts[0] = { ten_diem: mxObj.ten_diem, lat: mxObj.lat, long: mxObj.long, ly_trinh: mxObj.ly_trinh, id_diem: mxObj.id_diem, id_loai: mxObj.id_loai, _parsedStt: 0 };
+          pts[0] = { ten_diem: mxObj.ten_diem, lat: mxObj.lat, long: mxObj.long, ly_trinh: mxObj.ly_trinh, id_diem: mxObj.id_diem, id_loai: mxObj.id_loai };
         }
       }
 
