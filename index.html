@@ -32,7 +32,7 @@
       padding: 15px;
       border-radius: 8px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.25);
-      width: 330px;
+      width: 350px;
       max-height: 92vh;
       overflow-y: auto;
       transition: max-height 0.3s ease, padding 0.3s ease;
@@ -209,16 +209,30 @@
       <div id="statusBadge" class="status-badge"><span>ℹ️</span> Đang kết nối Supabase...</div>
 
       <div class="form-group">
-        <label>1. Chọn mã tuyến cáp (Bắt buộc):</label>
+        <label>1. Chọn Đài VT:</label>
+        <select id="selectDai" onchange="onDaiChange()">
+          <option value="ALL">-- Tất cả Đài VT --</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>2. Chọn Tuyến Cáp:</label>
         <select id="selectTuyen" onchange="onTuyenChange()">
           <option value="ALL">-- Chọn tuyến cần hiển thị --</option>
         </select>
       </div>
 
       <div class="form-group">
-        <label>2. Nguồn điểm đo (Trạm TNN / MX):</label>
+        <label>3. Chọn Cung Đoạn Cáp:</label>
+        <select id="selectDoanCap" onchange="onDoanCapChange()">
+          <option value="ALL">-- Tất cả cung đoạn --</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>4. Nguồn điểm đo (Trạm / Măng xông):</label>
         <select id="comboDiemA" onchange="onDiemAChange()">
-          <option value="DEFAULT">📍 Trạm TNN (21.593365, 105.839945)</option>
+          <option value="DEFAULT">📍 Mặc định ban đầu</option>
         </select>
       </div>
 
@@ -228,12 +242,12 @@
       </div>
 
       <div class="form-group">
-        <label>3. Hệ số chùng cáp (Độ chùng vật lý):</label>
+        <label>5. Hệ số chùng cáp:</label>
         <input type="number" id="txtDoChung" value="1.075" step="0.001">
       </div>
 
       <div class="form-group">
-        <label>4. Khoảng cách đo OTDR (km):</label>
+        <label>6. Khoảng cách đo OTDR (km):</label>
         <input type="number" id="txtKcOtdr" value="3.5" step="0.1" placeholder="Nhập km từ máy đo...">
       </div>
 
@@ -296,9 +310,13 @@
     var polylinesLayer = L.layerGroup();
     var lyTrinhLayer = L.layerGroup();
     
-    var globalRoutesMap = {}; 
-    var globalRoutePoints = {}; 
-    var globalDataPoints = []; 
+    // Global cache tables
+    var cacheDaiVT = [];
+    var cacheTuyenCap = [];
+    var cacheDoanCap = [];
+    var cacheLoaiDiem = {};
+    var cacheHuong = {};
+    var cacheDiems = []; // Dữ liệu thô từ diem_ha_tang
     var customManualPoints = [];
 
     var measureActive = false;
@@ -392,7 +410,7 @@
         }
 
         if (document.getElementById('cheDoDinhTuyen').value === 'manual' && document.getElementById('selectTuyen').value !== 'ALL') {
-          customManualPoints.push({ ten: "Điểm vẽ " + (customManualPoints.length + 1), lat: e.latlng.lat, long: e.latlng.lng, lyTrinh: "", tuyenList: [globalRoutesMap[document.getElementById('selectTuyen').value]], stt: customManualPoints.length + 1 });
+          customManualPoints.push({ ten: "Điểm vẽ " + (customManualPoints.length + 1), lat: e.latlng.lat, long: e.latlng.lng, ly_trinh: "", ds_doan_cap: document.getElementById('selectDoanCap').value, stt: customManualPoints.length + 1 });
           veLaiTuyenAB();
         }
       });
@@ -428,137 +446,173 @@
 
     async function taiLaiDuLieuSupabase() {
       var statusBadge = document.getElementById('statusBadge');
-      showLoading("Đang tải dữ liệu từ cơ sở dữ liệu Supabase...");
-      statusBadge.innerHTML = "<span>ℹ️</span> Đang truy vấn CSDL Supabase...";
+      showLoading("Đang tải dữ liệu toàn diện từ Supabase...");
+      statusBadge.innerHTML = "<span>ℹ️</span> Đang truy vấn các bảng CSDL mới...";
 
       try {
-        var resRoutes = await supabaseClient.from('tuyen_cap').select('id, ma_tuyen, ten_tuyen').order('ma_tuyen');
-        if (resRoutes.error) throw resRoutes.error;
+        // 1. Tải danh mục Đài VT
+        var resDai = await supabaseClient.from('dai_vt').select('*');
+        if (resDai.error) throw resDai.error;
+        cacheDaiVT = resDai.data || [];
 
-        var selectTuyen = document.getElementById('selectTuyen');
-        selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cần hiển thị --</option>';
-        globalRoutesMap = {};
+        // 2. Tải danh mục Tuyến Cáp
+        var resTuyen = await supabaseClient.from('tuyen_cap').select('*');
+        if (resTuyen.error) throw resTuyen.error;
+        cacheTuyenCap = resTuyen.data || [];
 
-        (resRoutes.data || []).forEach(function(rt) {
-          globalRoutesMap[rt.id] = rt.ma_tuyen;
+        // 3. Tải danh mục Cung Đoạn Cáp
+        var resDoan = await supabaseClient.from('doan_cap').select('*');
+        if (resDoan.error) throw resDoan.error;
+        cacheDoanCap = resDoan.data || [];
+
+        // 4. Tải danh mục Loại điểm
+        var resLoai = await supabaseClient.from('loai_diem').select('*');
+        if (resLoai.error) throw resLoai.error;
+        (resLoai.data || []).forEach(function(l) { cacheLoaiDiem[l.id_loaidiem] = l.ten_loaidiem; });
+
+        // 5. Tải danh mục Hướng
+        var resHuong = await supabaseClient.from('huong').select('*');
+        if (resHuong.error) throw resHuong.error;
+        (resHuong.data || []).forEach(function(h) { cacheHuong[h.id_huong] = h.ten_huong; });
+
+        // 6. Tải toàn bộ điểm hạ tầng từ diem_ha_tang
+        var resDiems = await supabaseClient.from('diem_ha_tang').select('*');
+        if (resDiems.error) throw resDiems.error;
+        cacheDiems = resDiems.data || [];
+
+        // Đổ dữ liệu lên Dropdown Đài VT
+        var selDai = document.getElementById('selectDai');
+        selDai.innerHTML = '<option value="ALL">-- Tất cả Đài VT --</option>';
+        cacheDaiVT.forEach(function(d) {
           var opt = document.createElement('option');
-          opt.value = rt.id;
-          opt.textContent = rt.ten_tuyen || rt.ma_tuyen;
-          selectTuyen.appendChild(opt);
+          opt.value = d.id_dai;
+          opt.textContent = d.ten_dai;
+          selDai.appendChild(opt);
         });
 
-        var resPoints = await supabaseClient.from('diem_ha_tang').select('id, ten_diem, loai, lat, long');
-        if (resPoints.error) throw resPoints.error;
-
-        globalDataPoints = (resPoints.data || []).map(function(p) {
-          return {
-            ten: p.ten_diem,
-            lat: parseFloat(p.lat),
-            long: parseFloat(p.long),
-            loai: p.loai,
-            tuyenList: ['Tất cả']
-          };
-        });
-
+        capNhatComboTuyen();
         hideLoading();
-        statusBadge.innerHTML = "<span>✅</span> Đã kết nối và đồng bộ từ Database Supabase thành công.";
+        statusBadge.innerHTML = "<span>✅</span> Đã kết nối và đồng bộ hoàn tất (" + cacheDiems.length + " điểm hạ tầng).";
       } catch (err) {
         hideLoading();
-        showAlert("Lỗi kết nối Supabase: " + err.message);
+        showAlert("Lỗi kết nối CSDL Supabase: " + err.message);
         statusBadge.innerHTML = "<span>❌</span> Lỗi kết nối CSDL.";
       }
     }
 
-    function isMangXong(pt) {
-      if (!pt) return false;
-      var t = (pt.ten || '').toUpperCase(), l = (pt.loai || '').toUpperCase();
-      return l === 'MANG XÔNG' || l === 'MX' || l === 'SC' || t.includes('MX') || t.includes('MANG XÔNG');
+    function onDaiChange() {
+      capNhatComboTuyen();
+      onTuyenChange();
     }
 
-    async function onTuyenChange() {
-      customManualPoints = [];
+    function capNhatComboTuyen() {
+      var daiId = document.getElementById('selectDai').value;
+      var selTuyen = document.getElementById('selectTuyen');
+      selTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cần hiển thị --</option>';
+
+      var filteredTuyen = cacheTuyenCap;
+      // Nếu có liên kết trạm/đài có thể lọc, ở đây hiển thị toàn bộ tuyến hoặc theo quan hệ nếu có
+      filteredTuyen.forEach(function(t) {
+        var opt = document.createElement('option');
+        opt.value = t.id_tuyen_cap;
+        opt.textContent = t.ten_tuyencap || t.ma_tuyencap;
+        selTuyen.appendChild(opt);
+      });
+    }
+
+    function onTuyenChange() {
       var tuyenId = document.getElementById('selectTuyen').value;
-      if (tuyenId === 'ALL') {
-        document.getElementById('comboDiemA').innerHTML = '<option value="DEFAULT">📍 Trạm TNN (21.593365, 105.839945)</option>';
-        markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers(); lyTrinhLayer.clearLayers();
-        return;
+      var selDoan = document.getElementById('selectDoanCap');
+      selDoan.innerHTML = '<option value="ALL">-- Tất cả cung đoạn --</option>';
+
+      var filteredDoan = cacheDoanCap;
+      if (tuyenId !== 'ALL') {
+        filteredDoan = cacheDoanCap.filter(function(d) { return String(d.id_tuyen) === String(tuyenId); });
       }
 
-      showLoading("Đang tải chi tiết tuyến từ Supabase...");
-      try {
-        var res = await supabaseClient
-          .from('tuyen_chi_tiet')
-          .select('stt, ly_trinh, du_tru, do_cach, diem_ha_tang(id, ten_diem, loai, lat, long)')
-          .eq('tuyen_id', parseInt(tuyenId))
-          .order('stt', { ascending: true });
+      filteredDoan.forEach(function(d) {
+        var opt = document.createElement('option');
+        opt.value = d.id_doan_cap;
+        opt.textContent = d.ten_doan_cap || d.ma_doancap;
+        selDoan.appendChild(opt);
+      });
 
-        if (res.error) throw res.error;
-
-        globalRoutePoints[tuyenId] = (res.data || []).map(function(item) {
-          var pt = item.diem_ha_tang || {};
-          return {
-            diem_id: pt.id,
-            ten: pt.ten_diem || "",
-            loai: pt.loai || "Cột",
-            lat: parseFloat(pt.lat) || 0,
-            long: parseFloat(pt.long) || 0,
-            stt: item.stt || 0,
-            lyTrinh: item.ly_trinh || "",
-            duTru: item.du_tru || 0,
-            doCachTnn: item.do_cach || "",
-            tuyenList: [globalRoutesMap[tuyenId]]
-          };
-        });
-
-        capNhatComboDiemA();
-        veLaiTuyenAB();
-        hideLoading();
-      } catch (err) {
-        hideLoading();
-        showAlert("Lỗi truy vấn điểm hạ tầng tuyến: " + err.message);
-      }
+      customManualPoints = [];
+      veLaiTuyenAB();
     }
 
-    function onDiemAChange() { 
-      veLaiTuyenAB(); 
+    function onDoanCapChange() {
+      capNhatComboDiemA();
+      veLaiTuyenAB();
+    }
+
+    function onDiemAChange() {
+      veLaiTuyenAB();
       var pts = getPointsCuaTuyenHienTai();
       if (pts.length > 0) { map.setView([pts[0].lat, pts[0].long], 20, { animate: true }); }
     }
 
     function onCheDoDinhTuyenChange() { veLaiTuyenAB(); }
 
+    function isMangXong(pt) {
+      if (!pt) return false;
+      var tenLoai = (cacheLoaiDiem[pt.id_loaidiem] || '').toUpperCase();
+      var tenDiem = (pt.ten_diem || '').toUpperCase();
+      return tenLoai.includes('MX') || tenLoai.includes('MĂNG XÔNG') || tenDiem.includes('MX') || tenDiem.includes('MĂNG XÔNG');
+    }
+
     function capNhatComboDiemA() {
+      var doanId = document.getElementById('selectDoanCap').value;
       var tuyenId = document.getElementById('selectTuyen').value;
       var combo = document.getElementById('comboDiemA');
-      combo.innerHTML = '<option value="DEFAULT">📍 Trạm TNN (21.593365, 105.839945)</option>';
-      if (tuyenId === 'ALL' || !globalRoutePoints[tuyenId]) return;
+      combo.innerHTML = '<option value="DEFAULT">📍 Trạm mặc định / Trạm TNN</option>';
 
-      globalRoutePoints[tuyenId].forEach(function(pt) {
-        if (isMangXong(pt)) {
-          var opt = document.createElement('option'); 
-          opt.value = pt.ten; 
-          opt.textContent = "🔀 " + pt.ten;
-          combo.appendChild(opt);
-        }
+      if (tuyenId === 'ALL') return;
+
+      var validPoints = cacheDiems.filter(function(pt) {
+        if (doanId !== 'ALL' && String(pt.ds_doan_cap) !== String(doanId)) return false;
+        return isMangXong(pt);
+      });
+
+      validPoints.forEach(function(pt) {
+        var opt = document.createElement('option');
+        opt.value = pt.id_diem;
+        opt.textContent = "🔀 " + pt.ten_diem;
+        combo.appendChild(opt);
       });
     }
 
     function getPointsCuaTuyenHienTai() {
       var cheDo = document.getElementById('cheDoDinhTuyen').value;
       var tuyenId = document.getElementById('selectTuyen').value;
+      var doanId = document.getElementById('selectDoanCap').value;
+
       if (tuyenId === 'ALL') return [];
       if (cheDo === 'manual') return customManualPoints;
 
-      var pts = (globalRoutePoints[tuyenId] || []).slice();
-      pts.sort(function(a, b) { return Number(a.stt) - Number(b.stt); });
+      // Lấy danh sách đoạn cáp thuộc tuyến hiện tại
+      var validDoanIds = cacheDoanCap
+        .filter(function(d) { return tuyenId === 'ALL' || String(d.id_tuyen) === String(tuyenId); })
+        .map(function(d) { return String(d.id_doan_cap); });
 
+      var pts = cacheDiems.filter(function(pt) {
+        if (doanId !== 'ALL') {
+          return String(pt.ds_doan_cap) === String(doanId);
+        }
+        return validDoanIds.includes(String(pt.ds_doan_cap));
+      });
+
+      // Sắp xếp điểm theo thứ tự ID hoặc tên/stt nếu có
+      pts.sort(function(a, b) { return Number(a.id_diem) - Number(b.id_diem); });
+
+      // Thêm Trạm gốc nếu chưa có
       if (!pts.some(function(p) { return Math.abs(p.lat - 21.593365) < 0.00001; })) {
-        pts.unshift({ ten: "Trạm TNN", lat: 21.593365, long: 105.839945, lyTrinh: "", tuyenList: [globalRoutesMap[tuyenId]], stt: -9999, loai: "Trạm" });
+        pts.unshift({ ten_diem: "Trạm TNN", lat: 21.593365, long: 105.839945, ly_trinh: "", id_diem: -9999, id_loaidiem: 0 });
       }
 
       var selectedA = document.getElementById('comboDiemA').value;
       if (selectedA !== 'DEFAULT') {
-        var mxObj = pts.find(function(p) { return p.ten === selectedA && isMangXong(p); });
+        var mxObj = pts.find(function(p) { return String(p.id_diem) === String(selectedA) && isMangXong(p); });
         if (mxObj) {
           var closestIdx = 0, minDst = Infinity;
           pts.forEach(function(p, idx) {
@@ -566,16 +620,13 @@
             if (d < minDst) { minDst = d; closestIdx = idx; }
           });
           pts = pts.slice(closestIdx);
-          pts[0] = { ten: mxObj.ten, lat: mxObj.lat, long: mxObj.long, lyTrinh: mxObj.lyTrinh, tuyenList: mxObj.tuyenList, stt: -999, loai: "Mang xông" };
-        } else {
-          var idx = pts.findIndex(function(p) { return p.ten === selectedA; });
-          if (idx >= 0) pts = pts.slice(idx);
+          pts[0] = { ten_diem: mxObj.ten_diem, lat: mxObj.lat, long: mxObj.long, ly_trinh: mxObj.ly_trinh, id_diem: mxObj.id_diem, id_loaidiem: mxObj.id_loaidiem };
         }
       }
       return document.getElementById('chkNghichHuong').checked ? pts.slice().reverse() : pts;
     }
 
-    function calculateRouteMilestones(pts, sel) {
+    function calculateRouteMilestones(pts, selName) {
       if (!pts || pts.length === 0) return [];
       var nodeDistances = [0], totalGeom = 0;
       for (var i = 0; i < pts.length - 1; i++) {
@@ -585,7 +636,7 @@
 
       var globalSuffix = "", rawAnchors = [];
       pts.forEach(function(p, idx) {
-        var pf = parseLyTrinh(p.lyTrinh);
+        var pf = parseLyTrinh(p.ly_trinh);
         if (pf.suffix && !globalSuffix) globalSuffix = pf.suffix;
         if (pf.meters !== null) {
           rawAnchors.push({ geom: nodeDistances[idx], meters: pf.meters, suffix: pf.suffix });
@@ -599,7 +650,7 @@
       });
 
       var resultMeters = new Array(pts.length), resultSuffixes = new Array(pts.length);
-      var isHNI = sel && sel.toUpperCase().indexOf('HNI') !== -1;
+      var isHNI = selName && selName.toUpperCase().indexOf('HNI') !== -1;
 
       if (anchors.length === 0) {
         for (var i = 0; i < pts.length; i++) {
@@ -622,10 +673,10 @@
       }
 
       return pts.map(function(pt, idx) {
-        var pf = parseLyTrinh(pt.lyTrinh);
-        if (idx === 0 && (pt.stt === -9999 || !pt.lyTrinh || pf.meters === null)) return "";
-        if (pf.meters !== null && pt.lyTrinh) {
-          var currentLt = pt.lyTrinh.toString().trim();
+        var pf = parseLyTrinh(pt.ly_trinh);
+        if (idx === 0 && (pt.id_diem === -9999 || !pt.ly_trinh || pf.meters === null)) return "";
+        if (pf.meters !== null && pt.ly_trinh) {
+          var currentLt = pt.ly_trinh.toString().trim();
           var ptSuffix = pf.suffix ? pf.suffix : resultSuffixes[idx];
           if (ptSuffix && !currentLt.includes(ptSuffix)) currentLt += " " + ptSuffix;
           return currentLt;
@@ -640,7 +691,7 @@
       });
     }
 
-    function interpolateLyTrinhAtDistance(exactPhysDist, pts, calculatedLyTrinhs, sel) {
+    function interpolateLyTrinhAtDistance(exactPhysDist, pts, calculatedLyTrinhs, selName) {
       var nodeDistances = [0], totalGeom = 0;
       for (var i = 0; i < pts.length - 1; i++) {
         totalGeom += calculateHaversine(pts[i].lat, pts[i].long, pts[i+1].lat, pts[i+1].long);
@@ -673,7 +724,9 @@
       
       var tuyenId = document.getElementById('selectTuyen').value;
       if (tuyenId === 'ALL') return;
-      var selName = globalRoutesMap[tuyenId] || "";
+
+      var tuyenObj = cacheTuyenCap.find(function(t) { return String(t.id_tuyen_cap) === String(tuyenId); });
+      var selName = tuyenObj ? (tuyenObj.ten_tuyencap || tuyenObj.ma_tuyencap) : "";
 
       var pts = getPointsCuaTuyenHienTai();
       if (pts.length === 0) return;
@@ -691,9 +744,9 @@
           var ltText = calculatedLyTrinhs[idx];
           var popupRole = idx === 0 ? "<b>📍 Điểm Đo Nguồn (Điểm A)</b><br>" : (idx === pts.length - 1 ? "<b>🏁 Điểm Cuối Tuyến (Điểm B)</b><br>" : "");
           var popupLtStr = ltText ? ltText : "Không có (Điểm gốc)";
+          var loaiDiemName = cacheLoaiDiem[pt.id_loaidiem] || "Hạ tầng cáp";
           
-          var dsTuyenStr = (pt.tuyenList && pt.tuyenList.length > 0) ? pt.tuyenList.join(', ') : selName;
-          marker.bindPopup("<b>Tuyến: " + selName + "</b><br>" + popupRole + "Tên: " + pt.ten + "<br>Loại: " + pt.loai + "<br>Lý trình: <b>" + popupLtStr + "</b><br>Các tuyến đi qua: <i>" + dsTuyenStr + "</i><br><a href='https://www.google.com/maps/search/?api=1&query=" + lat + "," + lng + "' target='_blank' class='gmaps-btn'>🗺️ Google Maps</a>");
+          marker.bindPopup("<b>Tuyến: " + selName + "</b><br>" + popupRole + "Tên: " + pt.ten_diem + "<br>Loại: " + loaiDiemName + "<br>Lý trình: <b>" + popupLtStr + "</b><br><a href='https://www.google.com/maps/search/?api=1&query=" + lat + "," + lng + "' target='_blank' class='gmaps-btn'>🗺️ Google Maps</a>");
           
           markersLayer.addLayer(marker);
           if ((idx === pts.length - 1 || (idx === 0 && ltText)) && ltText) {
@@ -707,9 +760,9 @@
         var lat = parseFloat(mx.lat), lng = parseFloat(mx.long);
         if (!isNaN(lat) && !isNaN(lng)) {
           var mxMarker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [30, 30], iconAnchor: [15, 15] }) });
-          var mxPopup = "<b>" + mx.ten + "</b><br>Tuyến: " + selName + "<br>";
-          if (mx.lyTrinh) mxPopup += "Lý trình: <b>" + mx.lyTrinh + "</b><br>";
-          if (mx.doCachTnn) mxPopup += "⚡ Đo cách TNN: <b>" + mx.doCachTnn + "</b><br>";
+          var mxPopup = "<b>" + mx.ten_diem + "</b><br>Tuyến: " + selName + "<br>";
+          if (mx.ly_trinh) mxPopup += "Lý trình: <b>" + mx.ly_trinh + "</b><br>";
+          if (mx.do_cach_tram) mxPopup += "⚡ Đo cách trạm: <b>" + mx.do_cach_tram + "</b><br>";
           mxPopup += "<a href='https://www.google.com/maps/search/?api=1&query=" + lat + "," + lng + "' target='_blank' class='gmaps-btn'>🗺️ Google Maps</a>";
           mxMarker.bindPopup(mxPopup);
           mxLayer.addLayer(mxMarker);
@@ -728,7 +781,9 @@
 
       if (isNaN(kcOtdr) || kcOtdr <= 0) { showAlert("Vui lòng nhập khoảng cách đo OTDR hợp lệ!"); return; }
       if (tuyenId === 'ALL') { showAlert("Vui lòng chọn tuyến cáp cần phân tích!"); return; }
-      var selName = globalRoutesMap[tuyenId] || "";
+
+      var tuyenObj = cacheTuyenCap.find(function(t) { return String(t.id_tuyen_cap) === String(tuyenId); });
+      var selName = tuyenObj ? (tuyenObj.ten_tuyencap || tuyenObj.ma_tuyencap) : "";
 
       var pts = getPointsCuaTuyenHienTai();
       if (pts.length < 2) { showAlert("Tuyến hiện tại không đủ điểm để tính toán nội suy!"); return; }
@@ -739,7 +794,7 @@
       var routeStops = [];
       pts.forEach(function(p) {
         var d = getDistanceAlongRoute(p, pts);
-        routeStops.push({ ten: p.ten, lat: p.lat, long: p.long, lyTrinh: p.lyTrinh || "", dist: d, duTru: isMangXong(p) ? (parseFloat(p.duTru) || 0) : 0, isMX: isMangXong(p) });
+        routeStops.push({ ten: p.ten_diem, lat: p.lat, long: p.long, ly_trinh: p.ly_trinh || "", dist: d, duTru: isMangXong(p) ? (parseFloat(p.du_tru) || 0) : 0, isMX: isMangXong(p) });
       });
 
       routeStops.sort(function(a, b) { return a.dist - b.dist; });
