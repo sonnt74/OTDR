@@ -310,7 +310,6 @@
     var polylinesLayer = L.layerGroup();
     var lyTrinhLayer = L.layerGroup();
     
-    // Global cache tables
     var cacheDaiVT = [];
     var cacheTuyenCap = [];
     var cacheDoanCap = [];
@@ -450,37 +449,30 @@
       statusBadge.innerHTML = "<span>ℹ️</span> Đang truy vấn các bảng CSDL mới...";
 
       try {
-        // 1. Tải danh mục Đài VT
         var resDai = await supabaseClient.from('dai_vt').select('*').order('id_dai');
         if (resDai.error) throw resDai.error;
         cacheDaiVT = resDai.data || [];
 
-        // 2. Tải danh mục Tuyến Cáp (Sử dụng đúng cột ma_tuyencap, ten_tuyencap)
         var resTuyen = await supabaseClient.from('tuyen_cap').select('*').order('id_tuyen_cap');
         if (resTuyen.error) throw resTuyen.error;
         cacheTuyenCap = resTuyen.data || [];
 
-        // 3. Tải danh mục Cung Đoạn Cáp
         var resDoan = await supabaseClient.from('doan_cap').select('*').order('id_doan_cap');
         if (resDoan.error) throw resDoan.error;
         cacheDoanCap = resDoan.data || [];
 
-        // 4. Tải danh mục Loại điểm
         var resLoai = await supabaseClient.from('loai_diem').select('*');
         if (resLoai.error) throw resLoai.error;
         (resLoai.data || []).forEach(function(l) { cacheLoaiDiem[l.id_loaidiem] = l.ten_loaidiem; });
 
-        // 5. Tải danh mục Hướng
         var resHuong = await supabaseClient.from('huong').select('*');
         if (resHuong.error) throw resHuong.error;
         (resHuong.data || []).forEach(function(h) { cacheHuong[h.id_huong] = h.ten_huong; });
 
-        // 6. Tải toàn bộ điểm hạ tầng từ diem_ha_tang
         var resDiems = await supabaseClient.from('diem_ha_tang').select('*');
         if (resDiems.error) throw resDiems.error;
         cacheDiems = resDiems.data || [];
 
-        // Đổ dữ liệu lên Dropdown Đài VT
         var selDai = document.getElementById('selectDai');
         selDai.innerHTML = '<option value="ALL">-- Tất cả Đài VT --</option>';
         cacheDaiVT.forEach(function(d) {
@@ -566,8 +558,7 @@
 
       if (tuyenId === 'ALL') return;
 
-      var validPoints = cacheDiems.filter(function(pt) {
-        if (doanId !== 'ALL' && String(pt.ds_doan_cap) !== String(doanId)) return false;
+      var validPoints = getPointsCuaTuyenHienTai().filter(function(pt) {
         return isMangXong(pt);
       });
 
@@ -579,6 +570,21 @@
       });
     }
 
+    // --- HÀM TRÍ TUỆ PHÂN TÍCH & PARSE ds_doan_cap ---
+    function parseSttForSegment(dsDoanCapStr, targetSegmentId) {
+      if (!dsDoanCapStr) return null;
+      var parts = dsDoanCapStr.toString().split(',');
+      for (var i = 0; i < parts.length; i++) {
+        var sub = parts[i].trim().split('-');
+        if (sub.length === 2) {
+          if (sub[0].trim() === String(targetSegmentId)) {
+            return parseInt(sub[1].trim()) || 0;
+          }
+        }
+      }
+      return null;
+    }
+
     function getPointsCuaTuyenHienTai() {
       var cheDo = document.getElementById('cheDoDinhTuyen').value;
       var tuyenId = document.getElementById('selectTuyen').value;
@@ -587,20 +593,50 @@
       if (tuyenId === 'ALL') return [];
       if (cheDo === 'manual') return customManualPoints;
 
-      var validDoanIds = cacheDoanCap
-        .filter(function(d) { return tuyenId === 'ALL' || String(d.id_tuyen) === String(tuyenId); })
-        .map(function(d) { return String(d.id_doan_cap); });
+      var pts = [];
 
-      var pts = cacheDiems.filter(function(pt) {
-        if (doanId !== 'ALL') {
-          return String(pt.ds_doan_cap) === String(doanId);
-        }
-        return validDoanIds.includes(String(pt.ds_doan_cap));
-      });
+      if (doanId !== 'ALL') {
+        // Trường hợp chọn một cung đoạn cụ thể
+        cacheDiems.forEach(function(pt) {
+          var stt = parseSttForSegment(pt.ds_doan_cap, doanId);
+          if (stt !== null) {
+            var ptCopy = Object.assign({}, pt);
+            ptCopy._parsedStt = stt;
+            pts.push(ptCopy);
+          }
+        });
+        pts.sort(function(a, b) { return a._parsedStt - b._parsedStt; });
+      } else {
+        // Trường hợp chọn "Tất cả cung đoạn" thuộc tuyến: Duyệt tuần tự từng cung đoạn theo thứ tự
+        var routeSegments = cacheDoanCap.filter(function(d) {
+          return String(d.id_tuyen) === String(tuyenId);
+        });
+        routeSegments.sort(function(a, b) { return Number(a.id_doan_cap) - Number(b.id_doan_cap); });
 
-      pts.sort(function(a, b) { return Number(a.id_diem) - Number(b.id_diem); });
+        var addedIds = new Set();
+        routeSegments.forEach(function(seg) {
+          var segPts = [];
+          cacheDiems.forEach(function(pt) {
+            var stt = parseSttForSegment(pt.ds_doan_cap, seg.id_doan_cap);
+            if (stt !== null) {
+              var ptCopy = Object.assign({}, pt);
+              ptCopy._parsedStt = stt;
+              segPts.push(ptCopy);
+            }
+          });
+          segPts.sort(function(a, b) { return a._parsedStt - b._parsedStt; });
 
-      if (!pts.some(function(p) { return Math.abs(p.lat - 21.593365) < 0.00001; })) {
+          segPts.forEach(function(p) {
+            if (!addedIds.has(p.id_diem)) {
+              addedIds.add(p.id_diem);
+              pts.push(p);
+            }
+          });
+        });
+      }
+
+      // Đảm bảo có điểm Trạm gốc (TNN) ở đầu nếu chưa tồn tại
+      if (pts.length > 0 && !pts.some(function(p) { return Math.abs(p.lat - 21.593365) < 0.00001; })) {
         pts.unshift({ ten_diem: "Trạm TNN", lat: 21.593365, long: 105.839945, ly_trinh: "", id_diem: -9999, id_loai: 0 });
       }
 
@@ -617,6 +653,7 @@
           pts[0] = { ten_diem: mxObj.ten_diem, lat: mxObj.lat, long: mxObj.long, ly_trinh: mxObj.ly_trinh, id_diem: mxObj.id_diem, id_loai: mxObj.id_loai };
         }
       }
+
       return document.getElementById('chkNghichHuong').checked ? pts.slice().reverse() : pts;
     }
 
