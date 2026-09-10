@@ -32,7 +32,7 @@
       padding: 15px;
       border-radius: 8px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.25);
-      width: 350px;
+      width: 380px;
       max-height: 92vh;
       overflow-y: auto;
       transition: max-height 0.3s ease, padding 0.3s ease;
@@ -136,6 +136,41 @@
       border-radius: 4px;
     }
     .checkbox-group input { width: auto; }
+
+    /* BẢNG TẠM DEBUG DỮ LIỆU VẼ */
+    #debug-table-container {
+      margin-top: 15px;
+      border-top: 2px dashed #0d6efd;
+      padding-top: 10px;
+    }
+    #debug-table-container h4 {
+      font-size: 12px;
+      color: #0d6efd;
+      margin: 0 0 6px 0;
+      text-transform: uppercase;
+    }
+    .debug-table-wrapper {
+      max-height: 150px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: #fdfdfd;
+    }
+    table.debug-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+    table.debug-table th, table.debug-table td {
+      border: 1px solid #e0e0e0;
+      padding: 4px 6px;
+      text-align: left;
+    }
+    table.debug-table th {
+      background: #f1f3f5;
+      position: sticky;
+      top: 0;
+    }
 
     #loading-overlay {
       display: none;
@@ -255,6 +290,27 @@
         <button class="btn-action" onclick="timViTriDut()">🔍 PHÂN TÍCH & TÌM VỊ TRÍ SỰ CỐ</button>
         <button class="btn-options-main" onclick="document.getElementById('optionsModal').style.display='flex'">⚙️ TÙY CHỌN NÂNG CAO</button>
       </div>
+
+      <!-- BẢNG TẠM DEBUG DỮ LIỆU ĐỂ KIỂM TRA -->
+      <div id="debug-table-container">
+        <h4>📊 Bảng Tạm Debug Điểm Vẽ (<span id="debug-count">0</span> điểm)</h4>
+        <div class="debug-table-wrapper">
+          <table class="debug-table">
+            <thead>
+              <tr>
+                <th>STT</th>
+                <th>Tên Điểm</th>
+                <th>Lat, Long</th>
+                <th>Đoạn/STT</th>
+              </tr>
+            </thead>
+            <tbody id="debug-table-body">
+              <tr><td colspan="4" style="text-align:center; color:#888;">Chưa có dữ liệu</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -346,7 +402,7 @@
       lyTrinhLayer.addTo(map);
 
       L.control.layers(
-        { "Bản đồ OSM": osm, "Vệ tinh": sat }, 
+        { "Bản đồ OSM": OSM = osm, "Vệ tinh": sat }, 
         { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
         { position: 'topright' }
       ).addTo(map);
@@ -409,7 +465,7 @@
         }
 
         if (document.getElementById('cheDoDinhTuyen').value === 'manual' && document.getElementById('selectTuyen').value !== 'ALL') {
-          customManualPoints.push({ ten_diem: "Điểm vẽ " + (customManualPoints.length + 1), lat: e.latlng.lat, long: e.latlng.lng, ly_trinh: "", ds_doan_cap: document.getElementById('selectDoanCap').value, id_diem: customManualPoints.length + 1 });
+          customManualPoints.push({ ten_diem: "Điểm vẽ " + (customManualPoints.length + 1), lat: e.latlng.lat, long: e.latlng.lng, ly_trinh: "", ds_doan_cap: document.getElementById('selectDoanCap').value, id_diem: customManualPoints.length + 1, _parsedStt: customManualPoints.length + 1 });
           veLaiTuyenAB();
         }
       });
@@ -570,7 +626,6 @@
       });
     }
 
-    // --- HÀM TRÍ TUỆ PHÂN TÍCH & PARSE ds_doan_cap ---
     function parseSttForSegment(dsDoanCapStr, targetSegmentId) {
       if (!dsDoanCapStr) return null;
       var parts = dsDoanCapStr.toString().split(',');
@@ -596,7 +651,6 @@
       var pts = [];
 
       if (doanId !== 'ALL') {
-        // Trường hợp chọn một cung đoạn cụ thể
         cacheDiems.forEach(function(pt) {
           var stt = parseSttForSegment(pt.ds_doan_cap, doanId);
           if (stt !== null) {
@@ -607,7 +661,6 @@
         });
         pts.sort(function(a, b) { return a._parsedStt - b._parsedStt; });
       } else {
-        // Trường hợp chọn "Tất cả cung đoạn" thuộc tuyến: Duyệt tuần tự từng cung đoạn theo thứ tự
         var routeSegments = cacheDoanCap.filter(function(d) {
           return String(d.id_tuyen) === String(tuyenId);
         });
@@ -635,9 +688,8 @@
         });
       }
 
-      // Đảm bảo có điểm Trạm gốc (TNN) ở đầu nếu chưa tồn tại
       if (pts.length > 0 && !pts.some(function(p) { return Math.abs(p.lat - 21.593365) < 0.00001; })) {
-        pts.unshift({ ten_diem: "Trạm TNN", lat: 21.593365, long: 105.839945, ly_trinh: "", id_diem: -9999, id_loai: 0 });
+        pts.unshift({ ten_diem: "Trạm TNN", lat: 21.593365, long: 105.839945, ly_trinh: "", id_diem: -9999, id_loai: 0, ds_doan_cap: "Gốc", _parsedStt: 0 });
       }
 
       var selectedA = document.getElementById('comboDiemA').value;
@@ -650,11 +702,34 @@
             if (d < minDst) { minDst = d; closestIdx = idx; }
           });
           pts = pts.slice(closestIdx);
-          pts[0] = { ten_diem: mxObj.ten_diem, lat: mxObj.lat, long: mxObj.long, ly_trinh: mxObj.ly_trinh, id_diem: mxObj.id_diem, id_loai: mxObj.id_loai };
+          pts[0] = { ten_diem: mxObj.ten_diem, lat: mxObj.lat, long: mxObj.long, ly_trinh: mxObj.ly_trinh, id_diem: mxObj.id_diem, id_loai: mxObj.id_loai, ds_doan_cap: mxObj.ds_doan_cap, _parsedStt: 0 };
         }
       }
 
       return document.getElementById('chkNghichHuong').checked ? pts.slice().reverse() : pts;
+    }
+
+    // --- HÀM CẬP NHẬT BẢNG TẠM DEBUG GIAO DIỆN ---
+    function updateDebugTable(pts) {
+      var tbody = document.getElementById('debug-table-body');
+      var countSpan = document.getElementById('debug-count');
+      countSpan.textContent = pts.length;
+
+      if (!pts || pts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#888;">Không có điểm nào được lọc</td></tr>';
+        return;
+      }
+
+      var html = '';
+      pts.forEach(function(p, idx) {
+        html += '<tr>' +
+          '<td>' + (idx + 1) + '</td>' +
+          '<td><b>' + (p.ten_diem || '') + '</b></td>' +
+          '<td>' + (p.lat || 0).toFixed(5) + ', ' + (p.long || 0).toFixed(5) + '</td>' +
+          '<td><span style="background:#e9ecef; padding:2px 4px; border-radius:3px;">' + (p.ds_doan_cap || 'N/A') + ' (stt: ' + (p._parsedStt !== undefined ? p._parsedStt : '-') + ')</span></td>' +
+          '</tr>';
+      });
+      tbody.innerHTML = html;
     }
 
     function calculateRouteMilestones(pts, selName) {
@@ -754,12 +829,19 @@
       lyTrinhLayer.clearLayers();
       
       var tuyenId = document.getElementById('selectTuyen').value;
-      if (tuyenId === 'ALL') return;
+      if (tuyenId === 'ALL') {
+        updateDebugTable([]);
+        return;
+      }
 
       var tuyenObj = cacheTuyenCap.find(function(t) { return String(t.id_tuyen_cap) === String(tuyenId); });
       var selName = tuyenObj ? (tuyenObj.ten_tuyencap || tuyenObj.ma_tuyencap) : "";
 
       var pts = getPointsCuaTuyenHienTai();
+      
+      // Cập nhật lên bảng tạm debug để anh quan sát trực quan
+      updateDebugTable(pts);
+
       if (pts.length === 0) return;
 
       var calculatedLyTrinhs = calculateRouteMilestones(pts, selName);
@@ -919,6 +1001,7 @@
       polylinesLayer.clearLayers(); 
       lyTrinhLayer.clearLayers();
       document.getElementById('selectTuyen').value = 'ALL';
+      updateDebugTable([]);
       showAlert("Đã làm sạch bản đồ.");
     }
 
