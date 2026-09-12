@@ -32,7 +32,7 @@
       padding: 15px;
       border-radius: 8px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.25);
-      width: 330px;
+      width: 340px;
       max-height: 92vh;
       overflow-y: auto;
       transition: max-height 0.3s ease, padding 0.3s ease;
@@ -194,7 +194,7 @@
 
   <div id="loading-overlay">
     <div class="spinner"></div>
-    <div id="loading-overlay-text">Đang tải dữ liệu từ Supabase (3NF)...</div>
+    <div id="loading-overlay-text">Đang tải cấu trúc Đài - Trạm - Tuyến từ Supabase...</div>
   </div>
 
   <div id="map"></div>
@@ -206,17 +206,31 @@
     </div>
 
     <div class="panel-body-content" id="panelBodyContent">
-      <div id="statusBadge" class="status-badge"><span>⏳</span> Khởi tạo kết nối Supabase...</div>
+      <div id="statusBadge" class="status-badge"><span>⏳</span> Khởi tạo bộ lọc phân cấp...</div>
 
       <div class="form-group">
-        <label>1. Chọn mã tuyến cáp (Bắt buộc):</label>
+        <label>1. Chọn Đài VT:</label>
+        <select id="selectDai" onchange="onDaiChange()">
+          <option value="ALL">-- Tất cả các Đài --</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>2. Chọn Trạm VT:</label>
+        <select id="selectTram" onchange="onTramChange()">
+          <option value="ALL">-- Tất cả các trạm --</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>3. Chọn Mã Tuyến Cáp:</label>
         <select id="selectTuyen" onchange="onTuyenChange()">
           <option value="ALL">-- Chọn tuyến cần hiển thị --</option>
         </select>
       </div>
 
       <div class="form-group">
-        <label>2. Nguồn điểm đo (Trạm TNN / MX):</label>
+        <label>4. Nguồn điểm đo (Trạm / MX):</label>
         <select id="comboDiemA" onchange="onDiemAChange()">
           <option value="DEFAULT">📍 Trạm TNN (21.593365, 105.839945)</option>
         </select>
@@ -228,12 +242,12 @@
       </div>
 
       <div class="form-group">
-        <label>3. Hệ số chùng cáp (Độ chùng vật lý):</label>
+        <label>5. Hệ số chùng cáp (Độ chùng vật lý):</label>
         <input type="number" id="txtDoChung" value="1.075" step="0.001">
       </div>
 
       <div class="form-group">
-        <label>4. Khoảng cách đo OTDR (km):</label>
+        <label>6. Khoảng cách đo OTDR (km):</label>
         <input type="number" id="txtKcOtdr" value="3.5" step="0.1" placeholder="Nhập km từ máy đo...">
       </div>
 
@@ -261,7 +275,7 @@
           </select>
         </div>
         <div class="form-group" style="margin-top: 15px;">
-          <button class="btn-chuanhoa" onclick="taiLaiDuLieu(true)">🔄 TẢI LẠI DỮ LIỆU SUPABASE</button>
+          <button class="btn-chuanhoa" onclick="taiDuLieuSupabase(true)">🔄 TẢI LẠI DỮ LIỆU SUPABASE</button>
         </div>
         <div class="form-group">
           <button class="btn-clear" onclick="xoaTuyenThuCong()">🗑️ LÀM SẠCH BẢN ĐỒ</button>
@@ -285,7 +299,6 @@
   <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 
   <script>
-    // Cấu hình kết nối Supabase
     const SUPABASE_URL = 'https://clddwitzwuewwxawuorv.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_U3tMbsj5oQ9Wub1UAJO5Cw_NXt6Px8E';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -295,6 +308,10 @@
     var mxLayer = L.layerGroup();
     var polylinesLayer = L.layerGroup();
     var lyTrinhLayer = L.layerGroup();
+
+    var rawDaiList = [];
+    var rawTramList = [];
+    var rawTuyenList = [];
     var globalDataPoints = [];
     var customManualPoints = [];
 
@@ -394,7 +411,7 @@
         }
       });
 
-      taiLaiDuLieu(false);
+      taiDuLieuSupabase(false);
     };
 
     function clearMeasure() {
@@ -424,142 +441,165 @@
     }
 
     /**
-     * Tải và đồng bộ dữ liệu từ Supabase dựa trên bảng trung gian doan_cap_diem (Chuẩn 3NF)
+     * Tải dữ liệu phân cấp Đài - Trạm - Tuyến và điểm từ Supabase chuẩn 3NF
      */
-    async function taiLaiDuLieu(forceRefresh = false) {
+    async function taiDuLieuSupabase(forceRefresh = false) {
       var statusBadge = document.getElementById('statusBadge');
       if (!forceRefresh) {
-        var cached = localStorage.getItem('tnn_gis_data_cache_3nf');
+        var cached = localStorage.getItem('tnn_gis_hierarchy_cache_v1');
         if (cached) {
           try {
-            globalDataPoints = JSON.parse(cached);
-            capNhatDanhSachTuyen(globalDataPoints);
+            var parsed = JSON.parse(cached);
+            rawDaiList = parsed.dai;
+            rawTramList = parsed.tram;
+            rawTuyenList = parsed.tuyen;
+            globalDataPoints = parsed.points;
+            khoiTaoComboDai();
             statusBadge.innerHTML = "<span>✓</span> Đã tải dữ liệu từ bộ nhớ thiết bị (" + globalDataPoints.length + " điểm).";
             return;
-          } catch(e) { localStorage.removeItem('tnn_gis_data_cache_3nf'); }
+          } catch(e) { localStorage.removeItem('tnn_gis_hierarchy_cache_v1'); }
         }
       }
 
-      showLoading("Đang truy vấn dữ liệu 3NF từ Supabase...");
-      statusBadge.innerHTML = "<span>⏳</span> Đang truy vấn bảng doan_cap_diem...";
+      showLoading("Đang tải dữ liệu phân cấp từ Supabase...");
+      statusBadge.innerHTML = "<span>⏳</span> Đang đồng bộ Đài, Trạm, Tuyến và Điểm...";
 
       try {
-        // 1. Truy vấn trực tiếp từ bảng doan_cap_diem kết hợp quan hệ 3NF
-        let { data: dcdList, error: dcdErr } = await supabaseClient
-          .from('doan_cap_diem')
-          .select(`
+        let [daiRes, tramRes, tuyenRes, dcdRes] = await Promise.all([
+          supabaseClient.from('dai_vt').select('*'),
+          supabaseClient.from('tram_vt').select('*'),
+          supabaseClient.from('tuyen_cap').select('*'),
+          supabaseClient.from('doan_cap_diem').select(`
             thu_tu,
             diem_ha_tang (
-              id_diem,
-              ten_diem,
-              lat,
-              long,
-              ly_trinh,
-              du_tru,
-              do_cach_tram,
+              id_diem, ten_diem, lat, long, ly_trinh, du_tru, do_cach_tram, id_tram,
               loai_diem ( ten_loaidiem ),
               huong ( ten_huong )
             ),
             doan_cap (
-              id_doan_cap,
-              ma_doancap,
-              ten_doan_cap,
-              tuyen_cap (
-                id_tuyen_cap,
-                ma_tuyencap,
-                ten_tuyencap
-              )
+              id_doan_cap, ma_doancap, ten_doan_cap, id_tuyen,
+              tuyen_cap ( id_tuyen_cap, ma_tuyencap, ten_tuyencap )
             )
-          `)
-          .order('thu_tu', { ascending: true });
+          `).order('thu_tu', { ascending: true })
+        ]);
 
-        if (dcdErr) throw dcdErr;
+        if (daiRes.error) throw daiRes.error;
+        if (tramRes.error) throw tramRes.error;
+        if (tuyenRes.error) throw tuyenRes.error;
+        if (dcdRes.error) throw dcdRes.error;
 
-        // 2. Truy vấn bảng mang_xong
-        let { data: mxList, error: mxErr } = await supabaseClient
-          .from('mang_xong')
-          .select(`
-            id_mx,
-            ten_mx,
-            Lat,
-            Lng,
-            Ly_trinh,
-            Du_tru,
-            do_cach_tram,
-            ds_doan_cap,
-            loai_diem ( ten_loaidiem ),
-            huong ( ten_huong )
-          `);
-
-        if (mxErr) throw mxErr;
+        rawDaiList = daiRes.data || [];
+        rawTramList = tramRes.data || [];
+        rawTuyenList = tuyenRes.data || [];
 
         var allEntries = [];
-
-        // Xử lý dữ liệu từ bảng doan_cap_diem (Chuẩn 3NF)
-        if (dcdList) {
-          dcdList.forEach(item => {
+        if (dcdRes.data) {
+          dcdRes.data.forEach(item => {
             if (!item.diem_ha_tang) return;
             var pt = item.diem_ha_tang;
             var loaiName = pt.loai_diem ? pt.loai_diem.ten_loaidiem : 'Điểm';
             var huongName = pt.huong ? pt.huong.ten_huong : '';
             huongName = huongName.replace(/bên\s+trái/gi, 'Trái').replace(/bên\s+phải/gi, 'Phải');
 
-            var tuyenName = 'Tuyến Chung';
-            if (item.doan_cap && item.doan_cap.tuyen_cap && item.doan_cap.tuyen_cap.ma_tuyencap) {
-              tuyenName = item.doan_cap.tuyen_cap.ma_tuyencap;
+            var tuyenName = 'Tuyến Chung', idTuyen = null;
+            if (item.doan_cap) {
+              idTuyen = item.doan_cap.id_tuyen;
+              if (item.doan_cap.tuyen_cap && item.doan_cap.tuyen_cap.ma_tuyencap) {
+                tuyenName = item.doan_cap.tuyen_cap.ma_tuyencap;
+              }
             }
+
+            var isMx = (loaiName.toLowerCase().includes('măng xông') || pt.ten_diem.toUpperCase().includes('MX'));
 
             allEntries.push({
               ten: pt.ten_diem,
               lat: parseFloat(pt.lat),
-              long: parseFloat(pt.long),
+              lng: parseFloat(pt.long),
               huong: huongName,
               tuyenList: [tuyenName],
+              idTuyen: idTuyen,
+              idTram: pt.id_tram || 2,
               loai: loaiName,
               lyTrinh: pt.ly_trinh || '',
               duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-              stt: item.thu_tu !== undefined ? item.thu_tu : 1
-            });
-          });
-        }
-
-        // Xử lý dữ liệu măng xông
-        if (mxList) {
-          mxList.forEach(mx => {
-            var loaiName = mx.loai_diem ? mx.loai_diem.ten_loaidiem : 'Mang xông';
-            var huongName = mx.huong ? mx.huong.ten_huong : '';
-            huongName = huongName.replace(/bên\s+trái/gi, 'Trái').replace(/bên\s+phải/gi, 'Phải');
-
-            var tuyenList = ['Tất cả'];
-            if (mx.ds_doan_cap) {
-              tuyenList = mx.ds_doan_cap.toString().split(',').map(s => s.trim()).filter(Boolean);
-            }
-
-            allEntries.push({
-              ten: mx.ten_mx || mx.id_mx,
-              lat: parseFloat(mx.Lat),
-              lng: parseFloat(mx.Lng),
-              huong: huongName,
-              tuyenList: tuyenList,
-              loai: loaiName,
-              lyTrinh: mx.Ly_trinh || '',
-              duTru: mx.Du_tru ? parseFloat(mx.Du_tru) : 0,
-              doCachTnn: mx.do_cach_tram || '',
-              stt: 9999
+              doCachTnn: pt.do_cach_tram || '',
+              stt: isMx ? 9999 : (item.thu_tu !== undefined ? item.thu_tu : 1)
             });
           });
         }
 
         globalDataPoints = allEntries;
-        try { localStorage.setItem('tnn_gis_data_cache_3nf', JSON.stringify(globalDataPoints)); } catch(e){}
-        capNhatDanhSachTuyen(globalDataPoints);
+        try {
+          localStorage.setItem('tnn_gis_hierarchy_cache_v1', JSON.stringify({
+            dai: rawDaiList, tram: rawTramList, tuyen: rawTuyenList, points: globalDataPoints
+          }));
+        } catch(e){}
+
+        khoiTaoComboDai();
         hideLoading();
-        statusBadge.innerHTML = "<span>✓</span> Đã tải và đồng bộ thành công chuẩn 3NF (" + globalDataPoints.length + " bản ghi).";
+        statusBadge.innerHTML = "<span>✓</span> Đồng bộ thành công (" + globalDataPoints.length + " điểm).";
 
       } catch(err) {
         hideLoading();
-        showAlert("Lỗi truy vấn Supabase 3NF: " + err.message);
+        showAlert("Lỗi đồng bộ phân cấp Supabase: " + err.message);
       }
+    }
+
+    function khoiTaoComboDai() {
+      var selDai = document.getElementById('selectDai');
+      selDai.innerHTML = '<option value="ALL">-- Tất cả các Đài --</option>';
+      rawDaiList.forEach(function(dai) {
+        var opt = document.createElement('option');
+        opt.value = dai.id_dai;
+        opt.textContent = dai.ten_dai;
+        selDai.appendChild(opt);
+      });
+      onDaiChange();
+    }
+
+    function onDaiChange() {
+      var daiVal = document.getElementById('selectDai').value;
+      var selTram = document.getElementById('selectTram');
+      selTram.innerHTML = '<option value="ALL">-- Tất cả các trạm --</option>';
+
+      var filteredTram = rawTramList;
+      if (daiVal !== 'ALL') {
+        filteredTram = rawTramList.filter(function(t) { return t.id_dai == daiVal; });
+      }
+
+      filteredTram.forEach(function(tram) {
+        var opt = document.createElement('option');
+        opt.value = tram.id_tram;
+        opt.textContent = tram.ten_tram;
+        selTram.appendChild(opt);
+      });
+      onTramChange();
+    }
+
+    function onTramChange() {
+      var tramVal = document.getElementById('selectTram').value;
+      var selTuyen = document.getElementById('selectTuyen');
+      selTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cần hiển thị --</option>';
+
+      var availableTuyenNames = {};
+      globalDataPoints.forEach(function(pt) {
+        if (tramVal === 'ALL' || pt.idTram == tramVal) {
+          parseTuyenList(pt.tuyenList).forEach(function(t) {
+            if (t && t.toLowerCase() !== 'tất cả' && t.toLowerCase() !== 'tuyến chung') {
+              availableTuyenNames[getBaseRouteName(t)] = true;
+            }
+          });
+        }
+      });
+
+      Object.keys(availableTuyenNames).sort().forEach(function(tName) {
+        var opt = document.createElement('option');
+        opt.value = tName;
+        opt.textContent = tName;
+        selTuyen.appendChild(opt);
+      });
+
+      onTuyenChange();
     }
 
     function getBaseRouteName(tName) {
@@ -573,27 +613,11 @@
       return tList.toString().split(',').map(function(s) { return s.trim(); });
     }
 
-    function capNhatDanhSachTuyen(dataPoints) {
-      var selectTuyen = document.getElementById('selectTuyen');
-      var curr = selectTuyen.value;
-      selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cần hiển thị --</option>';
-      var set = {};
-      dataPoints.forEach(function(pt) {
-        if (isMangXong(pt)) return;
-        parseTuyenList(pt.tuyenList).forEach(function(t) {
-          if (t && t.toLowerCase() !== 'tất cả' && t.toLowerCase() !== 'tuyến chung') {
-            set[getBaseRouteName(t)] = true;
-          }
-        });
-      });
-      Object.keys(set).sort().forEach(function(t) {
-        var opt = document.createElement('option'); opt.value = t; opt.textContent = t;
-        selectTuyen.appendChild(opt);
-      });
-      if (set[curr]) selectTuyen.value = curr;
+    function onTuyenChange() { 
+      customManualPoints = []; 
+      capNhatComboDiemA(); 
+      veLaiTuyenAB(); 
     }
-
-    function onTuyenChange() { customManualPoints = []; capNhatComboDiemA(); veLaiTuyenAB(); }
     
     function onDiemAChange() { 
       veLaiTuyenAB(); 
@@ -611,14 +635,20 @@
 
     function capNhatComboDiemA() {
       var sel = document.getElementById('selectTuyen').value;
+      var tramVal = document.getElementById('selectTram').value;
       var combo = document.getElementById('comboDiemA');
       combo.innerHTML = '<option value="DEFAULT">📍 Trạm TNN (21.593365, 105.839945)</option>';
       if (sel === 'ALL') return;
+
       globalDataPoints.filter(function(pt) {
-        return parseTuyenList(pt.tuyenList).some(function(t) { return getBaseRouteName(t).toLowerCase() === sel.toLowerCase(); });
+        var matchTram = (tramVal === 'ALL' || pt.idTram == tramVal);
+        var matchTuyen = parseTuyenList(pt.tuyenList).some(function(t) { return getBaseRouteName(t).toLowerCase() === sel.toLowerCase(); });
+        return matchTram && matchTuyen;
       }).forEach(function(pt) {
         if (isMangXong(pt)) {
-          var opt = document.createElement('option'); opt.value = pt.ten; opt.textContent = "🔀 " + pt.ten;
+          var opt = document.createElement('option'); 
+          opt.value = pt.ten; 
+          opt.textContent = "🔀 " + pt.ten;
           combo.appendChild(opt);
         }
       });
@@ -627,12 +657,15 @@
     function getPointsCuaTuyenHienTai() {
       var cheDo = document.getElementById('cheDoDinhTuyen').value;
       var sel = document.getElementById('selectTuyen').value;
+      var tramVal = document.getElementById('selectTram').value;
       if (sel === 'ALL') return [];
       if (cheDo === 'manual') return customManualPoints;
 
       var pts = globalDataPoints.filter(function(pt) {
         if (isMangXong(pt)) return false;
-        return parseTuyenList(pt.tuyenList).some(function(t) { return getBaseRouteName(t).toLowerCase() === sel.toLowerCase(); });
+        var matchTram = (tramVal === 'ALL' || pt.idTram == tramVal);
+        var matchTuyen = parseTuyenList(pt.tuyenList).some(function(t) { return getBaseRouteName(t).toLowerCase() === sel.toLowerCase(); });
+        return matchTram && matchTuyen;
       });
       pts.sort(function(a, b) { return Number(a.stt) - Number(b.stt); });
 
