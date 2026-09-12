@@ -65,7 +65,7 @@
 
     .menu-item span.icon { font-size: 20px; margin-bottom: 2px; }
 
-    /* Main Workspace - Sửa lỗi flex để bản đồ hiển thị chuẩn 100% */
+    /* Main Workspace */
     #workspace {
       flex: 1;
       position: relative;
@@ -89,6 +89,7 @@
       width: 350px;
       max-height: 92vh;
       overflow-y: auto;
+      transition: all 0.3s ease;
     }
     
     .panel-header {
@@ -156,20 +157,6 @@
       box-shadow: 0 2px 4px rgba(220,53,69,0.3);
     }
     .btn-action:hover { background-color: #bb2d3b; }
-
-    .btn-options-main {
-      background-color: #495057;
-      color: white;
-      border: none;
-      font-weight: bold;
-      cursor: pointer;
-      padding: 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      width: 100%;
-      margin-top: 8px;
-    }
-    .btn-options-main:hover { background-color: #343a40; }
 
     .checkbox-group {
       display: flex;
@@ -243,7 +230,7 @@
 
   <!-- Sidebar Navigation Menu -->
   <div id="sidebar-menu">
-    <div class="menu-item active" onclick="openModal('map')" title="Bản đồ GIS">
+    <div class="menu-item active" onclick="toggleGISPanel()" title="Ẩn/Hiện bảng điều khiển GIS">
       <span class="icon">🗺️</span><span>GIS</span>
     </div>
     <div class="menu-item" onclick="openModal('routeModal')" title="Thông tin Tuyến">
@@ -272,6 +259,7 @@
 
     <div id="map"></div>
 
+    <!-- Control Panel -->
     <div id="control-panel">
       <div class="panel-header" onclick="toggleControlPanel()">
         <span>🗺️ ĐIỀU KHIỂN & PHÂN TÍCH OTDR</span>
@@ -333,7 +321,6 @@
 
         <div class="form-group">
           <button class="btn-action" onclick="timViTriDut()">🔍 PHÂN TÍCH & TÌM VỊ TRÍ SỰ CỐ</button>
-          <button class="btn-options-main" onclick="openModal('configModal')">⚙️ CÀI ĐẶT NÂNG CAO</button>
         </div>
       </div>
     </div>
@@ -347,7 +334,6 @@
         <button onclick="closeModals()" style="background:#dc3545; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">Đóng</button>
       </div>
       <div class="modal-body">
-        <p>Danh sách các tuyến cáp quang trực thuộc đơn vị:</p>
         <table class="table-data" id="routeTable">
           <thead><tr><th>Mã tuyến</th><th>Tên tuyến cáp</th><th>Số đoạn</th></tr></thead>
           <tbody><tr><td colspan="3">Đang tải dữ liệu...</td></tr></tbody>
@@ -383,7 +369,6 @@
         <button onclick="closeModals()" style="background:#dc3545; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">Đóng</button>
       </div>
       <div class="modal-body">
-        <p>Hệ thống phân quyền truy cập hạ tầng mạng lưới:</p>
         <table class="table-data">
           <thead><tr><th>Vai trò (Role)</th><th>Quyền hạn hệ thống</th><th>Phạm vi quản lý</th></tr></thead>
           <tbody>
@@ -422,7 +407,7 @@
     </div>
   </div>
 
-  <!-- Modal: Đăng nhập thực tế qua Supabase Auth -->
+  <!-- Modal: Đăng nhập -->
   <div id="loginModal" class="app-modal">
     <div class="modal-content" style="max-width: 400px;">
       <div class="modal-header">
@@ -469,7 +454,7 @@
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const CACHE_KEY = 'tnn_gis_hierarchy_cache';
-    const CACHE_VERSION = '1.0.4';
+    const CACHE_VERSION = '1.0.5';
 
     var map;
     var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
@@ -496,9 +481,15 @@
     }
     function closeCustomAlert() { document.getElementById('customAlertModal').style.display = 'none'; }
     
+    // Hàm xử lý ẩn/hiện bảng điều khiển khi ấn vào icon GIS trên sidebar
+    function toggleGISPanel() {
+      closeModals();
+      var panel = document.getElementById('control-panel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
     function openModal(modalId) {
-      if (modalId === 'map') { closeModals(); return; }
-      document.querySelectorAll('.app-modal').forEach(m => { if(m.id !== 'customAlertModal') m.style.display = 'none'; });
+      closeModals();
       var target = document.getElementById(modalId);
       if (target) {
         target.style.display = 'flex';
@@ -754,10 +745,12 @@
       onDaiChange();
     }
 
+    // Lọc Trạm VT theo Đài VT đã chọn
     function onDaiChange() {
       var daiVal = document.getElementById('selectDai').value;
       var selTram = document.getElementById('selectTram');
       selTram.innerHTML = '<option value="ALL">-- Tất cả các trạm --</option>';
+      
       var filteredTram = daiVal === 'ALL' ? rawTramList : rawTramList.filter(function(t) { return t.id_dai == daiVal; });
       filteredTram.forEach(function(tram) {
         var opt = document.createElement('option');
@@ -765,19 +758,35 @@
         opt.textContent = tram.ten_tram;
         selTram.appendChild(opt);
       });
-      onTramChange();
+      updateTuyenOptions();
     }
 
+    // Lọc Tuyến cáp chuẩn xác theo sự kết hợp giữa Đài VT và Trạm VT
     function onTramChange() {
+      updateTuyenOptions();
+    }
+
+    function updateTuyenOptions() {
+      var daiVal = document.getElementById('selectDai').value;
       var tramVal = document.getElementById('selectTram').value;
       var selTuyen = document.getElementById('selectTuyen');
       selTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
+
       var availableTuyenIds = {};
       globalDataPoints.forEach(function(pt) {
-        if ((tramVal === 'ALL' || pt.idTram == tramVal) && pt.idTuyen) availableTuyenIds[pt.idTuyen] = true;
+        var tramObj = rawTramList.find(function(t) { return t.id_tram == pt.idTram; });
+        var idDai = tramObj ? tramObj.id_dai : null;
+
+        var matchDai = (daiVal === 'ALL' || idDai == daiVal);
+        var matchTram = (tramVal === 'ALL' || pt.idTram == tramVal);
+
+        if (matchDai && matchTram && pt.idTuyen) {
+          availableTuyenIds[pt.idTuyen] = true;
+        }
       });
+
       rawTuyenList.forEach(function(t) {
-        if (availableTuyenIds[t.id_tuyen_cap] || tramVal === 'ALL') {
+        if (availableTuyenIds[t.id_tuyen_cap] || (daiVal === 'ALL' && tramVal === 'ALL')) {
           var opt = document.createElement('option');
           opt.value = t.id_tuyen_cap;
           opt.textContent = t.ma_tuyencap + (t.ten_tuyencap ? " (" + t.ten_tuyencap + ")" : "");
@@ -1084,7 +1093,7 @@
 
       map.setView([targetLat, targetLng], 21, { animate: true });
       var faultMarker = L.marker([targetLat, targetLng], { icon: L.divIcon({ className: '', html: '<div style="background:#ff3333; color:white; width:32px; height:32px; border-radius:50%; border:3px solid #fff; display:flex; align-items:center; justify-content:center; font-weight:bold; box-shadow:0 0 15px rgba(255,0,0,0.9);">⚡</div>', iconSize: [32, 32], iconAnchor: [16, 16] }) }).addTo(markersLayer);
-      faultMarker.bindPopup("<b>⚠️ VỊ TRÍ SỰ CỐ OTDR</b><br>Khoảng cách: <b>" + kcOtdr + " km</b><br>Lý trình: <b style='color:#fd7e14;'>" + calcLyTrinhStr + "</b><br><a href='https://www.google.com/maps/search/?api=1&query=" + targetLat + "," + targetLng + "' target='_blank' class='gmaps-btn'>🧭 Google Maps</a>").openPopup();
+      faultMarker.bindPopup("<b>⚠️ VỊ TRÍ SỰ CỐ OTDR</b><br>Khoảng cách: <b>" + kcOtdr + " km</b><br>Lý trình: <b style='color:#fd7e14;'>" + calcLyTrinhStr + "</b><br><a href='https://www.google.com/maps/search/?api=1&query=" + targetLat + "," + targetLng + "' target='_blank' class='gmaps-btn'>🧭 Dẫn đường Google Maps</a>").openPopup();
     }
 
     function xoaTuyenThuCong() {
@@ -1120,9 +1129,6 @@
       });
     }
 
-    /**
-     * Tích hợp đăng nhập thực tế qua Supabase Auth
-     */
     async function handleSupabaseLogin() {
       var email = document.getElementById('loginEmail').value;
       var pass = document.getElementById('loginPass').value;
@@ -1138,13 +1144,8 @@
       statusEl.textContent = "Đang xác thực...";
 
       try {
-        const { data, error } = await supabaseClient.auth.signInWithPassword({
-          email: email,
-          password: pass,
-        });
-
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email, password: pass });
         if (error) throw error;
-
         statusEl.style.color = 'green';
         statusEl.textContent = "Đăng nhập thành công: " + data.user.email;
         setTimeout(() => { closeModals(); }, 1500);
