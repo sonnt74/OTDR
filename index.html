@@ -4,7 +4,7 @@
   <base target="_top">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1 (Supabase Pure 3NF)</title>
+  <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1 (Supabase 3NF Full Sync)</title>
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -194,7 +194,7 @@
 
   <div id="loading-overlay">
     <div class="spinner"></div>
-    <div id="loading-overlay-text">Đang đồng bộ cơ sở dữ liệu Supabase chuẩn 3NF...</div>
+    <div id="loading-overlay-text">Đang đồng bộ toàn bộ 100% dữ liệu từ Supabase...</div>
   </div>
 
   <div id="map"></div>
@@ -312,7 +312,7 @@
 
     // Cấu hình Cache tối ưu duy nhất
     const CACHE_KEY = 'tnn_gis_hierarchy_cache';
-    const CACHE_VERSION = '1.0.0'; // Thay đổi số phiên bản này mỗi khi bạn cập nhật code/cấu trúc dữ liệu để tự động xóa cache cũ
+    const CACHE_VERSION = '1.0.1'; // Thay đổi số phiên bản này mỗi khi cập nhật code để tự động xóa cache cũ
 
     var map;
     var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
@@ -453,7 +453,37 @@
     }
 
     /**
-     * Tải dữ liệu từ Supabase với cơ chế kiểm tra phiên bản Cache đơn (Tự động dọn dẹp khi đổi CACHE_VERSION)
+     * Hàm hỗ trợ tải phân trang tự động vượt qua giới hạn 1000 bản ghi mặc định của Supabase
+     */
+    async function fetchAllRows(tableName, selectQuery, orderColumn = null) {
+      let pageSize = 1000;
+      let from = 0;
+      let allData = [];
+      let keepFetching = true;
+
+      while (keepFetching) {
+        let query = supabaseClient.from(tableName).select(selectQuery).range(from, from + pageSize - 1);
+        if (orderColumn) {
+          query = query.order(orderColumn, { ascending: true });
+        }
+        let { data, error } = await query;
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allData = allData.concat(data);
+          if (data.length < pageSize) {
+            keepFetching = false;
+          } else {
+            from += pageSize;
+          }
+        } else {
+          keepFetching = false;
+        }
+      }
+      return allData;
+    }
+
+    /**
+     * Tải toàn bộ dữ liệu chuẩn 3NF từ Supabase (Bao gồm phân trang chống giới hạn 1000 dòng)
      */
     async function taiDuLieuSupabase(forceRefresh = false) {
       var statusBadge = document.getElementById('statusBadge');
@@ -471,10 +501,9 @@
             rawDoanCapList = parsed.doancap;
             globalDataPoints = parsed.points;
             khoiTaoComboDai();
-            statusBadge.innerHTML = "<span>✓</span> Đã tải dữ liệu từ cache (v" + CACHE_VERSION + ") - Tổng " + globalDataPoints.length + " bản ghi.";
+            statusBadge.innerHTML = "<span>✓</span> Đã tải dữ liệu từ cache v" + CACHE_VERSION + " (" + globalDataPoints.length + " bản ghi).";
             return;
           } else {
-            // Phiên bản cache cũ hoặc không khớp -> Xóa toàn bộ cache cũ
             localStorage.removeItem(CACHE_KEY);
             localStorage.removeItem(CACHE_KEY + '_version');
           }
@@ -484,19 +513,19 @@
         }
       }
 
-      showLoading("Đang tải dữ liệu chuẩn 3NF từ Supabase...");
-      statusBadge.innerHTML = "<span>⏳</span> Đang đồng bộ Đài, Trạm, Tuyến, Đoạn cáp và Điểm hạ tầng...";
+      showLoading("Đang tải toàn bộ dữ liệu từ Supabase (Đang phân trang)...");
+      statusBadge.innerHTML = "<span>⏳</span> Đang đồng bộ toàn bộ bảng dữ liệu không giới hạn...";
 
       try {
-        let [daiRes, tramRes, tuyenRes, doanRes, dcdRes] = await Promise.all([
+        let [daiRes, tramRes, tuyenRes, doanRes, dcdData] = await Promise.all([
           supabaseClient.from('dai_vt').select('*'),
           supabaseClient.from('tram_vt').select('*'),
           supabaseClient.from('tuyen_cap').select('*'),
           supabaseClient.from('doan_cap').select('*'),
-          supabaseClient.from('doan_cap_diem').select(`
+          fetchAllRows('doan_cap_diem', `
             id,
-            id_doan_cap,
             thu_tu,
+            id_doan_cap,
             diem_ha_tang (
               id_diem, ten_diem, lat, long, ly_trinh, du_tru, do_cach_tram, id_tram, id_loaidiem,
               loai_diem ( id_loaidiem, ten_loaidiem ),
@@ -506,14 +535,13 @@
               id_doan_cap, ma_doancap, ten_doan_cap, id_tuyen,
               tuyen_cap ( id_tuyen_cap, ma_tuyencap, ten_tuyencap )
             )
-          `).order('id_doan_cap', { ascending: true })
+          `, 'thu_tu')
         ]);
 
         if (daiRes.error) throw daiRes.error;
         if (tramRes.error) throw tramRes.error;
         if (tuyenRes.error) throw tuyenRes.error;
         if (doanRes.error) throw doanRes.error;
-        if (dcdRes.error) throw dcdRes.error;
 
         rawDaiList = daiRes.data || [];
         rawTramList = tramRes.data || [];
@@ -522,8 +550,8 @@
 
         var allEntries = [];
 
-        if (dcdRes.data) {
-          dcdRes.data.forEach(item => {
+        if (dcdData) {
+          dcdData.forEach(item => {
             if (!item.diem_ha_tang || !item.doan_cap) return;
             var pt = item.diem_ha_tang;
             var loaiName = pt.loai_diem ? pt.loai_diem.ten_loaidiem : 'Điểm';
@@ -556,7 +584,6 @@
 
         globalDataPoints = allEntries;
         
-        // Lưu trữ vào cache đơn duy nhất kèm theo version
         try {
           localStorage.setItem(CACHE_KEY, JSON.stringify({
             dai: rawDaiList, tram: rawTramList, tuyen: rawTuyenList, doancap: rawDoanCapList, points: globalDataPoints
@@ -566,7 +593,7 @@
 
         khoiTaoComboDai();
         hideLoading();
-        statusBadge.innerHTML = "<span>✓</span> Đồng bộ thành công và cập nhật cache v" + CACHE_VERSION + " (" + globalDataPoints.length + " bản ghi).";
+        statusBadge.innerHTML = "<span>✓</span> Đồng bộ thành công toàn bộ " + globalDataPoints.length + " bản ghi (Cache v" + CACHE_VERSION + ").";
 
       } catch(err) {
         hideLoading();
