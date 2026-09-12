@@ -4,7 +4,7 @@
   <base target="_top">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1 (Supabase 3NF)</title>
+  <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1 (Supabase Pure 3NF)</title>
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -194,7 +194,7 @@
 
   <div id="loading-overlay">
     <div class="spinner"></div>
-    <div id="loading-overlay-text">Đang đồng bộ cơ sở dữ liệu quan hệ Supabase (3NF)...</div>
+    <div id="loading-overlay-text">Đang đồng bộ cơ sở dữ liệu Supabase chuẩn 3NF...</div>
   </div>
 
   <div id="map"></div>
@@ -230,14 +230,14 @@
       </div>
 
       <div class="form-group">
-        <label>4. Chọn Đoạn Cáp (Chuẩn 3NF):</label>
+        <label>4. Chọn Đoạn Cáp (Theo doan_cap_diem):</label>
         <select id="selectDoanCap" onchange="onDoanCapChange()">
           <option value="ALL">-- Tất cả đoạn tuyến --</option>
         </select>
       </div>
 
       <div class="form-group">
-        <label>5. Nguồn điểm đo (Trạm / Măng xông):</label>
+        <label>5. Nguồn điểm đo (Trạm / Điểm hạ tầng):</label>
         <select id="comboDiemA" onchange="onDiemAChange()">
           <option value="DEFAULT">📍 Trạm TNN (21.593365, 105.839945)</option>
         </select>
@@ -310,6 +310,10 @@
     const SUPABASE_ANON_KEY = 'sb_publishable_U3tMbsj5oQ9Wub1UAJO5Cw_NXt6Px8E';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // Cấu hình Cache tối ưu duy nhất
+    const CACHE_KEY = 'tnn_gis_hierarchy_cache';
+    const CACHE_VERSION = '1.0.0'; // Thay đổi số phiên bản này mỗi khi bạn cập nhật code/cấu trúc dữ liệu để tự động xóa cache cũ
+
     var map;
     var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
     var mxLayer = L.layerGroup();
@@ -352,7 +356,7 @@
 
       L.control.layers(
         { "Bản đồ OSM": osm, "Vệ tinh": sat }, 
-        { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Mang xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
+        { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Điểm đặc biệt (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
         { position: 'topright' }
       ).addTo(map);
 
@@ -449,32 +453,42 @@
     }
 
     /**
-     * Truy vấn trực tiếp hoàn toàn từ cơ sở dữ liệu quan hệ Supabase mới
+     * Tải dữ liệu từ Supabase với cơ chế kiểm tra phiên bản Cache đơn (Tự động dọn dẹp khi đổi CACHE_VERSION)
      */
     async function taiDuLieuSupabase(forceRefresh = false) {
       var statusBadge = document.getElementById('statusBadge');
+      
       if (!forceRefresh) {
-        var cached = localStorage.getItem('tnn_gis_hierarchy_cache_v6');
-        if (cached) {
-          try {
-            var parsed = JSON.parse(cached);
+        try {
+          var savedVersion = localStorage.getItem(CACHE_KEY + '_version');
+          var cachedData = localStorage.getItem(CACHE_KEY);
+
+          if (savedVersion === CACHE_VERSION && cachedData) {
+            var parsed = JSON.parse(cachedData);
             rawDaiList = parsed.dai;
             rawTramList = parsed.tram;
             rawTuyenList = parsed.tuyen;
             rawDoanCapList = parsed.doancap;
             globalDataPoints = parsed.points;
             khoiTaoComboDai();
-            statusBadge.innerHTML = "<span>✓</span> Đã tải dữ liệu chuẩn 3NF từ bộ nhớ (" + globalDataPoints.length + " bản ghi).";
+            statusBadge.innerHTML = "<span>✓</span> Đã tải dữ liệu từ cache (v" + CACHE_VERSION + ") - Tổng " + globalDataPoints.length + " bản ghi.";
             return;
-          } catch(e) { localStorage.removeItem('tnn_gis_hierarchy_cache_v6'); }
+          } else {
+            // Phiên bản cache cũ hoặc không khớp -> Xóa toàn bộ cache cũ
+            localStorage.removeItem(CACHE_KEY);
+            localStorage.removeItem(CACHE_KEY + '_version');
+          }
+        } catch(e) {
+          localStorage.removeItem(CACHE_KEY);
+          localStorage.removeItem(CACHE_KEY + '_version');
         }
       }
 
-      showLoading("Đang tải cơ sở dữ liệu quan hệ từ Supabase...");
-      statusBadge.innerHTML = "<span>⏳</span> Đang đồng bộ các bảng Đài, Trạm, Tuyến, Đoạn cáp và Điểm...";
+      showLoading("Đang tải dữ liệu chuẩn 3NF từ Supabase...");
+      statusBadge.innerHTML = "<span>⏳</span> Đang đồng bộ Đài, Trạm, Tuyến, Đoạn cáp và Điểm hạ tầng...";
 
       try {
-        let [daiRes, tramRes, tuyenRes, doanRes, dcdRes, mxRes, loaiDiemRes] = await Promise.all([
+        let [daiRes, tramRes, tuyenRes, doanRes, dcdRes] = await Promise.all([
           supabaseClient.from('dai_vt').select('*'),
           supabaseClient.from('tram_vt').select('*'),
           supabaseClient.from('tuyen_cap').select('*'),
@@ -492,9 +506,7 @@
               id_doan_cap, ma_doancap, ten_doan_cap, id_tuyen,
               tuyen_cap ( id_tuyen_cap, ma_tuyencap, ten_tuyencap )
             )
-          `).order('thu_tu', { ascending: true }),
-          supabaseClient.from('Mang_xong').select('*'),
-          supabaseClient.from('loai_diem').select('*')
+          `).order('thu_tu', { ascending: true })
         ]);
 
         if (daiRes.error) throw daiRes.error;
@@ -502,7 +514,6 @@
         if (tuyenRes.error) throw tuyenRes.error;
         if (doanRes.error) throw doanRes.error;
         if (dcdRes.error) throw dcdRes.error;
-        if (mxRes.error) throw mxRes.error;
 
         rawDaiList = daiRes.data || [];
         rawTramList = tramRes.data || [];
@@ -511,21 +522,18 @@
 
         var allEntries = [];
 
-        // 1. Đồng bộ điểm hạ tầng qua bảng quan hệ chuẩn doan_cap_diem
         if (dcdRes.data) {
           dcdRes.data.forEach(item => {
-            if (!item.diem_ha_tang) return;
+            if (!item.diem_ha_tang || !item.doan_cap) return;
             var pt = item.diem_ha_tang;
             var loaiName = pt.loai_diem ? pt.loai_diem.ten_loaidiem : 'Điểm';
             var huongName = pt.huong ? pt.huong.ten_huong : '';
 
-            var idTuyen = null, idDoanCap = item.id_doan_cap, maDoanCap = '';
-            if (item.doan_cap) {
-              idTuyen = item.doan_cap.id_tuyen;
-              maDoanCap = item.doan_cap.ma_doancap || '';
-            }
+            var idTuyen = item.doan_cap.id_tuyen;
+            var idDoanCap = item.id_doan_cap;
+            var maDoanCap = item.doan_cap.ma_doancap || '';
 
-            var isMx = (pt.id_loaidiem == 2 || loaiName.toLowerCase().includes('măng xông') || pt.ten_diem.toUpperCase().includes('MX'));
+            var isMx = (pt.id_loaidiem == 2 || loaiName.toLowerCase().includes('măng xông') || loaiName.toLowerCase().includes('mx') || pt.ten_diem.toUpperCase().includes('MX'));
 
             allEntries.push({
               ten: pt.ten_diem,
@@ -546,57 +554,23 @@
           });
         }
 
-        // 2. Đồng bộ danh sách Măng xông từ bảng Mang_xong liên kết chuẩn quan hệ
-        if (mxRes.data) {
-          mxRes.data.forEach(mx => {
-            var lat = parseFloat(mx.Lat || mx.lat);
-            var lng = parseFloat(mx.Lng || mx.lng);
-            if (isNaN(lat) || isNaN(lng)) return;
-
-            var dsDoan = mx.ds_doan_cap ? mx.ds_doan_cap.toString().trim() : '';
-            var matchedTuyenId = null;
-            var matchedDoanCapId = null;
-
-            if (dsDoan) {
-              var foundDoan = rawDoanCapList.find(dc => dc.ma_doancap && dc.ma_doancap.toUpperCase().includes(dsDoan.toUpperCase()));
-              if (foundDoan) {
-                matchedDoanCapId = foundDoan.id_doan_cap;
-                matchedTuyenId = foundDoan.id_tuyen;
-              }
-            }
-
-            allEntries.push({
-              ten: mx.ten_mx || mx.id_MX || 'Mang xông',
-              lat: lat,
-              lng: lng,
-              huong: '',
-              idTuyen: matchedTuyenId,
-              idDoanCap: matchedDoanCapId,
-              idTram: mx.id_tram || 2,
-              idLoaiDiem: mx.id_loaidiem || 2,
-              loai: 'Măng xông',
-              lyTrinh: mx.Ly_trinh || mx.ly_trinh || '',
-              duTru: mx.Du_tru ? parseFloat(mx.Du_tru) : 0,
-              doCachTnn: mx.do_cach_tram || '',
-              stt: 9999
-            });
-          });
-        }
-
         globalDataPoints = allEntries;
+        
+        // Lưu trữ vào cache đơn duy nhất kèm theo version
         try {
-          localStorage.setItem('tnn_gis_hierarchy_cache_v6', JSON.stringify({
+          localStorage.setItem(CACHE_KEY, JSON.stringify({
             dai: rawDaiList, tram: rawTramList, tuyen: rawTuyenList, doancap: rawDoanCapList, points: globalDataPoints
           }));
+          localStorage.setItem(CACHE_KEY + '_version', CACHE_VERSION);
         } catch(e){}
 
         khoiTaoComboDai();
         hideLoading();
-        statusBadge.innerHTML = "<span>✓</span> Đồng bộ thành công cơ sở dữ liệu quan hệ (" + globalDataPoints.length + " bản ghi).";
+        statusBadge.innerHTML = "<span>✓</span> Đồng bộ thành công và cập nhật cache v" + CACHE_VERSION + " (" + globalDataPoints.length + " bản ghi).";
 
       } catch(err) {
         hideLoading();
-        showAlert("Lỗi đồng bộ cơ sở dữ liệu Supabase: " + err.message);
+        showAlert("Lỗi đồng bộ Supabase: " + err.message);
       }
     }
 
@@ -636,7 +610,6 @@
       var selTuyen = document.getElementById('selectTuyen');
       selTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
 
-      // Truy xuất trực tiếp các tuyến cáp thuộc trạm thông qua bảng quan hệ doan_cap & diem
       var availableTuyenIds = {};
       globalDataPoints.forEach(function(pt) {
         if ((tramVal === 'ALL' || pt.idTram == tramVal) && pt.idTuyen) {
@@ -728,7 +701,6 @@
       if (selTuyenId === 'ALL') return [];
       if (cheDo === 'manual') return customManualPoints;
 
-      // Lọc chuẩn quan hệ id_tuyen và id_doan_cap
       var pts = globalDataPoints.filter(function(pt) {
         if (isMangXong(pt)) return false;
         var matchTram = (tramVal === 'ALL' || pt.idTram == tramVal);
