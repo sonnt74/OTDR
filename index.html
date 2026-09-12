@@ -4,7 +4,7 @@
   <base target="_top">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1 (Supabase)</title>
+  <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1 (Supabase 3NF)</title>
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -194,7 +194,7 @@
 
   <div id="loading-overlay">
     <div class="spinner"></div>
-    <div id="loading-overlay-text">Hệ thống đang tải dữ liệu từ Supabase...</div>
+    <div id="loading-overlay-text">Đang tải dữ liệu từ Supabase (3NF)...</div>
   </div>
 
   <div id="map"></div>
@@ -424,50 +424,56 @@
     }
 
     /**
-     * Tải và đồng bộ dữ liệu trực tiếp từ CSDL Supabase chuẩn 3NF
+     * Tải và đồng bộ dữ liệu từ Supabase dựa trên bảng trung gian doan_cap_diem (Chuẩn 3NF)
      */
     async function taiLaiDuLieu(forceRefresh = false) {
       var statusBadge = document.getElementById('statusBadge');
       if (!forceRefresh) {
-        var cached = localStorage.getItem('tnn_gis_data_cache_supabase');
+        var cached = localStorage.getItem('tnn_gis_data_cache_3nf');
         if (cached) {
           try {
             globalDataPoints = JSON.parse(cached);
             capNhatDanhSachTuyen(globalDataPoints);
             statusBadge.innerHTML = "<span>✓</span> Đã tải dữ liệu từ bộ nhớ thiết bị (" + globalDataPoints.length + " điểm).";
             return;
-          } catch(e) { localStorage.removeItem('tnn_gis_data_cache_supabase'); }
+          } catch(e) { localStorage.removeItem('tnn_gis_data_cache_3nf'); }
         }
       }
 
-      showLoading("Đang tải dữ liệu từ CSDL Supabase...");
-      statusBadge.innerHTML = "<span>⏳</span> Đang truy vấn dữ liệu Supabase...";
+      showLoading("Đang truy vấn dữ liệu 3NF từ Supabase...");
+      statusBadge.innerHTML = "<span>⏳</span> Đang truy vấn bảng doan_cap_diem...";
 
       try {
-        // 1. Truy vấn bảng diem_ha_tang kết hợp các bảng liên quan (loai_diem, huong, doan_cap_diem, doan_cap, tuyen_cap)
-        let { data: diemList, error: diemErr } = await supabaseClient
-          .from('diem_ha_tang')
+        // 1. Truy vấn trực tiếp từ bảng doan_cap_diem kết hợp quan hệ 3NF
+        let { data: dcdList, error: dcdErr } = await supabaseClient
+          .from('doan_cap_diem')
           .select(`
-            id_diem,
-            ten_diem,
-            lat,
-            long,
-            ly_trinh,
-            du_tru,
-            do_cach_tram,
-            loai_diem(ten_loaidiem),
-            huong(ten_huong),
-            doan_cap_diem(
-              thu_tu,
-              doan_cap(
-                ma_doancap,
-                ten_doan_cap,
-                tuyen_cap(ma_tuyencap, ten_tuyencap)
+            thu_tu,
+            diem_ha_tang (
+              id_diem,
+              ten_diem,
+              lat,
+              long,
+              ly_trinh,
+              du_tru,
+              do_cach_tram,
+              loai_diem ( ten_loaidiem ),
+              huong ( ten_huong )
+            ),
+            doan_cap (
+              id_doan_cap,
+              ma_doancap,
+              ten_doan_cap,
+              tuyen_cap (
+                id_tuyen_cap,
+                ma_tuyencap,
+                ten_tuyencap
               )
             )
-          `);
+          `)
+          .order('thu_tu', { ascending: true });
 
-        if (diemErr) throw diemErr;
+        if (dcdErr) throw dcdErr;
 
         // 2. Truy vấn bảng mang_xong
         let { data: mxList, error: mxErr } = await supabaseClient
@@ -475,56 +481,44 @@
           .select(`
             id_mx,
             ten_mx,
-            lat,
-            lng,
-            ly_trinh,
-            du_tru,
+            Lat,
+            Lng,
+            Ly_trinh,
+            Du_tru,
             do_cach_tram,
             ds_doan_cap,
-            loai_diem(ten_loaidiem),
-            huong(ten_huong)
+            loai_diem ( ten_loaidiem ),
+            huong ( ten_huong )
           `);
 
         if (mxErr) throw mxErr;
 
         var allEntries = [];
 
-        // Xử lý dữ liệu điểm hạ tầng
-        if (diemList) {
-          diemList.forEach(pt => {
+        // Xử lý dữ liệu từ bảng doan_cap_diem (Chuẩn 3NF)
+        if (dcdList) {
+          dcdList.forEach(item => {
+            if (!item.diem_ha_tang) return;
+            var pt = item.diem_ha_tang;
             var loaiName = pt.loai_diem ? pt.loai_diem.ten_loaidiem : 'Điểm';
             var huongName = pt.huong ? pt.huong.ten_huong : '';
             huongName = huongName.replace(/bên\s+trái/gi, 'Trái').replace(/bên\s+phải/gi, 'Phải');
 
-            var tuyenNames = [];
-            var minStt = 9999;
-
-            if (pt.doan_cap_diem && pt.doan_cap_diem.length > 0) {
-              pt.doan_cap_diem.forEach(dcd => {
-                if (dcd.doan_cap && dcd.doan_cap.tuyen_cap) {
-                  var tCode = dcd.doan_cap.tuyen_cap.ma_tuyencap;
-                  if (tCode && !tuyenNames.includes(tCode)) {
-                    tuyenNames.push(tCode);
-                  }
-                }
-                if (dcd.thu_tu !== undefined && dcd.thu_tu < minStt) {
-                  minStt = dcd.thu_tu;
-                }
-              });
+            var tuyenName = 'Tuyến Chung';
+            if (item.doan_cap && item.doan_cap.tuyen_cap && item.doan_cap.tuyen_cap.ma_tuyencap) {
+              tuyenName = item.doan_cap.tuyen_cap.ma_tuyencap;
             }
-
-            if (tuyenNames.length === 0) tuyenNames = ['Tuyến Chung'];
 
             allEntries.push({
               ten: pt.ten_diem,
               lat: parseFloat(pt.lat),
               long: parseFloat(pt.long),
               huong: huongName,
-              tuyenList: tuyenNames,
+              tuyenList: [tuyenName],
               loai: loaiName,
               lyTrinh: pt.ly_trinh || '',
               duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-              stt: minStt !== 9999 ? minStt : 1
+              stt: item.thu_tu !== undefined ? item.thu_tu : 1
             });
           });
         }
@@ -532,7 +526,7 @@
         // Xử lý dữ liệu măng xông
         if (mxList) {
           mxList.forEach(mx => {
-            var loaiName = 'Mang xông';
+            var loaiName = mx.loai_diem ? mx.loai_diem.ten_loaidiem : 'Mang xông';
             var huongName = mx.huong ? mx.huong.ten_huong : '';
             huongName = huongName.replace(/bên\s+trái/gi, 'Trái').replace(/bên\s+phải/gi, 'Phải');
 
@@ -543,13 +537,13 @@
 
             allEntries.push({
               ten: mx.ten_mx || mx.id_mx,
-              lat: parseFloat(mx.lat),
-              lng: parseFloat(mx.lng),
+              lat: parseFloat(mx.Lat),
+              lng: parseFloat(mx.Lng),
               huong: huongName,
               tuyenList: tuyenList,
               loai: loaiName,
-              lyTrinh: mx.ly_trinh || '',
-              duTru: mx.du_tru ? parseFloat(mx.du_tru) : 0,
+              lyTrinh: mx.Ly_trinh || '',
+              duTru: mx.Du_tru ? parseFloat(mx.Du_tru) : 0,
               doCachTnn: mx.do_cach_tram || '',
               stt: 9999
             });
@@ -557,14 +551,14 @@
         }
 
         globalDataPoints = allEntries;
-        try { localStorage.setItem('tnn_gis_data_cache_supabase', JSON.stringify(globalDataPoints)); } catch(e){}
+        try { localStorage.setItem('tnn_gis_data_cache_3nf', JSON.stringify(globalDataPoints)); } catch(e){}
         capNhatDanhSachTuyen(globalDataPoints);
         hideLoading();
-        statusBadge.innerHTML = "<span>✓</span> Đã tải và đồng bộ thành công từ Supabase (" + globalDataPoints.length + " điểm).";
+        statusBadge.innerHTML = "<span>✓</span> Đã tải và đồng bộ thành công chuẩn 3NF (" + globalDataPoints.length + " bản ghi).";
 
       } catch(err) {
         hideLoading();
-        showAlert("Lỗi kết nối Supabase: " + err.message);
+        showAlert("Lỗi truy vấn Supabase 3NF: " + err.message);
       }
     }
 
