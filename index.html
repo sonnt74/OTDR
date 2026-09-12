@@ -271,7 +271,7 @@
     <div id="control-panel">
       <div class="panel-header" onclick="toggleControlPanel()">
         <span>🗺️ ĐIỀU KHIỂN & PHÂN TÍCH OTDR</span>
-        <span id="panelToggleIcon" style="margin-left: auto; font-size: 12px;">▲ Thu gọn</span>
+        <span id="panelToggleIcon" style="margin-left: auto; font-size: 12px;">▲ </span>
       </div>
 
       <div class="panel-body-content" id="panelBodyContent">
@@ -462,7 +462,7 @@
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const CACHE_KEY = 'tnn_gis_hierarchy_cache';
-    const CACHE_VERSION = '1.0.6';
+    const CACHE_VERSION = '1.0.7';
 
     var map;
     var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
@@ -511,23 +511,24 @@
     function toggleControlPanel() {
       var panel = document.getElementById('control-panel');
       panel.classList.toggle('collapsed');
-      document.getElementById('panelToggleIcon').textContent = panel.classList.contains('collapsed') ? '▼ Mở rộng' : '▲ Thu gọn';
+      document.getElementById('panelToggleIcon').textContent = panel.classList.contains('collapsed') ? '▼' : '▲';
     }
 
     window.onload = function() {
+      // Các lớp bản đồ Esri & OSM hoàn toàn miễn phí, không yêu cầu API Key
+      var esriLight = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ' });
+      var esriDark = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ' });
       var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
       var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 19 });
-      var cartoVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 21, maxNativeZoom: 20, attribution: '© CartoDB' });
-      var cartoDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 21, maxNativeZoom: 20, attribution: '© CartoDB' });
 
-      map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [cartoVoyager] });
+      map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [esriLight] });
       polylinesLayer.addTo(map); 
       markersLayer.addTo(map); 
       mxLayer.addTo(map); 
       lyTrinhLayer.addTo(map);
 
       L.control.layers(
-        { "CartoDB Voyager (Sáng)": cartoVoyager, "CartoDB Dark (Tối)": cartoDark, "Bản đồ OSM": osm, "Vệ tinh": sat }, 
+        { "Esri Light Gray (Nền sáng)": esriLight, "Esri Dark Gray (Nền tối)": esriDark, "Bản đồ OSM": osm, "Vệ tinh": sat }, 
         { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
         { position: 'topright' }
       ).addTo(map);
@@ -1103,10 +1104,9 @@
         calcLyTrinhStr = interpolateLyTrinhAtDistance(s1.dist + dPhysSeg * ratio, pts, calculatedLyTrinhs);
       }
 
-      // Tự động ẩn bảng điều khiển chức năng để xem bản đồ rộng tối đa
+      // Tự động ẩn bảng điều khiển chức năng
       document.getElementById('control-panel').style.display = 'none';
 
-      // Tính khoảng cách đến các Măng xông lân cận
       var stopFiberMap = {}, currF = 0;
       for (var k = 0; k < routeStops.length; k++) {
         if (k > 0) {
