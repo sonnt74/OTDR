@@ -454,7 +454,7 @@
     async function taiDuLieuSupabase(forceRefresh = false) {
       var statusBadge = document.getElementById('statusBadge');
       if (!forceRefresh) {
-        var cached = localStorage.getItem('tnn_gis_hierarchy_cache_v2');
+        var cached = localStorage.getItem('tnn_gis_hierarchy_cache_v3');
         if (cached) {
           try {
             var parsed = JSON.parse(cached);
@@ -466,7 +466,7 @@
             khoiTaoComboDai();
             statusBadge.innerHTML = "<span>✓</span> Đã tải dữ liệu từ bộ nhớ thiết bị (" + globalDataPoints.length + " điểm).";
             return;
-          } catch(e) { localStorage.removeItem('tnn_gis_hierarchy_cache_v2'); }
+          } catch(e) { localStorage.removeItem('tnn_gis_hierarchy_cache_v3'); }
         }
       }
 
@@ -546,7 +546,7 @@
 
         globalDataPoints = allEntries;
         try {
-          localStorage.setItem('tnn_gis_hierarchy_cache_v2', JSON.stringify({
+          localStorage.setItem('tnn_gis_hierarchy_cache_v3', JSON.stringify({
             dai: rawDaiList, tram: rawTramList, tuyen: rawTuyenList, doancap: rawDoanCapList, points: globalDataPoints
           }));
         } catch(e){}
@@ -624,9 +624,7 @@
       selDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn tuyến --</option>';
 
       if (selTuyen !== 'ALL') {
-        // Tìm id của tuyến trong rawTuyenList hoặc lọc doan_cap dựa trên ma_tuyencap
         var matchingDoans = rawDoanCapList.filter(function(dc) {
-          // Kiểm tra xem đoạn cáp có thuộc tuyến được chọn không
           var tuyenObj = rawTuyenList.find(function(t) { return t.id_tuyen_cap == dc.id_tuyen; });
           if (tuyenObj && tuyenObj.ma_tuyencap) {
             return getBaseRouteName(tuyenObj.ma_tuyencap).toLowerCase() === selTuyen.toLowerCase();
@@ -687,7 +685,7 @@
       globalDataPoints.filter(function(pt) {
         var matchTram = (tramVal === 'ALL' || pt.idTram == tramVal);
         var matchTuyen = parseTuyenList(pt.tuyenList).some(function(t) { return getBaseRouteName(t).toLowerCase() === sel.toLowerCase(); });
-        var matchDoan = (doanCapVal === 'ALL' || pt.idDoanCap == doanCapVal);
+        var matchDoan = (doanCapVal === 'ALL' || pt.idDoanCap == doanCapVal || !pt.idDoanCap);
         return matchTram && matchTuyen && matchDoan;
       }).forEach(function(pt) {
         if (isMangXong(pt)) {
@@ -707,6 +705,7 @@
       if (sel === 'ALL') return [];
       if (cheDo === 'manual') return customManualPoints;
 
+      // Lọc điểm theo trạm và tuyến/đoạn cáp
       var pts = globalDataPoints.filter(function(pt) {
         if (isMangXong(pt)) return false;
         var matchTram = (tramVal === 'ALL' || pt.idTram == tramVal);
@@ -714,6 +713,17 @@
         var matchDoan = (doanCapVal === 'ALL' || pt.idDoanCap == doanCapVal);
         return matchTram && matchTuyen && matchDoan;
       });
+
+      // Nếu đoạn cáp cụ thể chưa có dữ liệu trong doan_cap_diem nhưng người dùng chọn, dùng fallback lọc theo tuyến
+      if (pts.length === 0 && doanCapVal !== 'ALL') {
+        pts = globalDataPoints.filter(function(pt) {
+          if (isMangXong(pt)) return false;
+          var matchTram = (tramVal === 'ALL' || pt.idTram == tramVal);
+          var matchTuyen = parseTuyenList(pt.tuyenList).some(function(t) { return getBaseRouteName(t).toLowerCase() === sel.toLowerCase(); });
+          return matchTram && matchTuyen;
+        });
+      }
+
       pts.sort(function(a, b) { return Number(a.stt) - Number(b.stt); });
 
       var unique = [], seen = {};
@@ -895,7 +905,7 @@
         if (!isMangXong(pt)) return false;
         var matchTram = (tramVal === 'ALL' || pt.idTram == tramVal);
         var matchTuyen = parseTuyenList(pt.tuyenList).some(function(t) { return t.toLowerCase() === 'tất cả' || getBaseRouteName(t).toLowerCase() === sel.toLowerCase(); });
-        var matchDoan = (doanCapVal === 'ALL' || pt.idDoanCap == doanCapVal);
+        var matchDoan = (doanCapVal === 'ALL' || pt.idDoanCap == doanCapVal || !pt.idDoanCap);
         return matchTram && matchTuyen && matchDoan;
       });
 
@@ -941,7 +951,7 @@
         if (!isMangXong(pt)) return false;
         var matchTram = (tramVal === 'ALL' || pt.idTram == tramVal);
         var matchTuyen = parseTuyenList(pt.tuyenList).some(function(t) { return getBaseRouteName(t).toLowerCase() === sel.toLowerCase(); });
-        var matchDoan = (doanCapVal === 'ALL' || pt.idDoanCap == doanCapVal);
+        var matchDoan = (doanCapVal === 'ALL' || pt.idDoanCap == doanCapVal || !pt.idDoanCap);
         return matchTram && matchTuyen && matchDoan;
       });
 
