@@ -495,8 +495,8 @@
           supabaseClient.from('doan_cap').select('*'),
           supabaseClient.from('doan_cap_diem').select(`
             id,
-            thu_tu,
             id_doan_cap,
+            thu_tu,
             diem_ha_tang (
               id_diem, ten_diem, lat, long, ly_trinh, du_tru, do_cach_tram, id_tram, id_loaidiem,
               loai_diem ( id_loaidiem, ten_loaidiem ),
@@ -506,7 +506,7 @@
               id_doan_cap, ma_doancap, ten_doan_cap, id_tuyen,
               tuyen_cap ( id_tuyen_cap, ma_tuyencap, ten_tuyencap )
             )
-          `).order('thu_tu', { ascending: true })
+          `).order('id_doan_cap', { ascending: true })
         ]);
 
         if (daiRes.error) throw daiRes.error;
@@ -533,7 +533,7 @@
             var idDoanCap = item.id_doan_cap;
             var maDoanCap = item.doan_cap.ma_doancap || '';
 
-            var isMx = (pt.id_loaidiem == 2 || loaiName.toLowerCase().includes('măng xông') || loaiName.toLowerCase().includes('mx') || pt.ten_diem.toUpperCase().includes('MX'));
+            var isMx = (pt.id_loaidiem == 4 || loaiName.toLowerCase().includes('măng xông') || loaiName.toLowerCase().includes('mx') || pt.ten_diem.toUpperCase().includes('MX'));
 
             allEntries.push({
               ten: pt.ten_diem,
