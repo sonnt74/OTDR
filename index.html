@@ -224,6 +224,14 @@
     .point-a-marker { background: linear-gradient(135deg, #ffc107, #ff9800); color: #000; font-weight: bold; font-size: 12px; text-align: center; line-height: 28px; width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 14px rgba(255,193,7,0.9); }
     .point-b-marker { background: linear-gradient(135deg, #dc3545, #b02a37); color: #fff; font-weight: bold; font-size: 12px; text-align: center; line-height: 28px; width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 14px rgba(220,53,69,0.9); }
     .lytrinh-badge { background: #fd7e14; color: white; font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: bold; white-space: nowrap; }
+
+    /* Responsive Design cho Mobile & Tablet */
+    @media (max-width: 768px) {
+      body { flex-direction: column-reverse; }
+      #sidebar-menu { width: 100%; height: 55px; flex-direction: row; justify-content: space-around; padding-top: 0; }
+      .menu-item { width: 45px; height: 45px; margin-bottom: 0; font-size: 9px; }
+      #control-panel { width: 92% !important; left: 4% !important; top: 10px; max-height: 48vh; }
+    }
   </style>
 </head>
 <body>
@@ -454,7 +462,7 @@
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const CACHE_KEY = 'tnn_gis_hierarchy_cache';
-    const CACHE_VERSION = '1.0.5';
+    const CACHE_VERSION = '1.0.6';
 
     var map;
     var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
@@ -481,7 +489,6 @@
     }
     function closeCustomAlert() { document.getElementById('customAlertModal').style.display = 'none'; }
     
-    // Hàm xử lý ẩn/hiện bảng điều khiển khi ấn vào icon GIS trên sidebar
     function toggleGISPanel() {
       closeModals();
       var panel = document.getElementById('control-panel');
@@ -510,15 +517,17 @@
     window.onload = function() {
       var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
       var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 19 });
+      var cartoVoyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 21, maxNativeZoom: 20, attribution: '© CartoDB' });
+      var cartoDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 21, maxNativeZoom: 20, attribution: '© CartoDB' });
 
-      map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [osm] });
+      map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [cartoVoyager] });
       polylinesLayer.addTo(map); 
       markersLayer.addTo(map); 
       mxLayer.addTo(map); 
       lyTrinhLayer.addTo(map);
 
       L.control.layers(
-        { "Bản đồ OSM": osm, "Vệ tinh": sat }, 
+        { "CartoDB Voyager (Sáng)": cartoVoyager, "CartoDB Dark (Tối)": cartoDark, "Bản đồ OSM": osm, "Vệ tinh": sat }, 
         { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
         { position: 'topright' }
       ).addTo(map);
@@ -710,7 +719,7 @@
               loai: loaiName,
               lyTrinh: pt.ly_trinh || '',
               duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-              doCachTnn: pt.do_cach_tram || '',
+              doCachTram: pt.do_cach_tram || '',
               stt: isMx ? 9999 : (item.thu_tu !== undefined ? item.thu_tu : 1)
             });
           });
@@ -745,7 +754,6 @@
       onDaiChange();
     }
 
-    // Lọc Trạm VT theo Đài VT đã chọn
     function onDaiChange() {
       var daiVal = document.getElementById('selectDai').value;
       var selTram = document.getElementById('selectTram');
@@ -761,7 +769,6 @@
       updateTuyenOptions();
     }
 
-    // Lọc Tuyến cáp chuẩn xác theo sự kết hợp giữa Đài VT và Trạm VT
     function onTramChange() {
       updateTuyenOptions();
     }
@@ -776,7 +783,6 @@
       globalDataPoints.forEach(function(pt) {
         var tramObj = rawTramList.find(function(t) { return t.id_tram == pt.idTram; });
         var idDai = tramObj ? tramObj.id_dai : null;
-
         var matchDai = (daiVal === 'ALL' || idDai == daiVal);
         var matchTram = (tramVal === 'ALL' || pt.idTram == tramVal);
 
@@ -1028,7 +1034,13 @@
         if (!isNaN(lat) && !isNaN(lng)) {
           bounds.push([lat, lng]);
           var mxMarker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [30, 30], iconAnchor: [15, 15] }) });
-          mxMarker.bindPopup("<b>" + mx.ten + "</b><br>Lý trình: <b>" + (mx.lyTrinh || "Không rõ") + "</b><br><a href='https://www.google.com/maps/search/?api=1&query=" + lat + "," + lng + "' target='_blank' class='gmaps-btn'>🗺️ Google Maps</a>");
+          
+          var mxPopup = "<b>" + mx.ten + "</b><br>";
+          if (mx.lyTrinh) mxPopup += "Lý trình: <b>" + mx.lyTrinh + "</b><br>";
+          if (mx.doCachTram) mxPopup += "📏 Đo cách trạm: <b>" + mx.doCachTram + "</b><br>";
+          mxPopup += "<a href='https://www.google.com/maps/search/?api=1&query=" + lat + "," + lng + "' target='_blank' class='gmaps-btn'>🗺️ Google Maps</a>";
+
+          mxMarker.bindPopup(mxPopup);
           mxLayer.addLayer(mxMarker);
         }
       });
@@ -1091,9 +1103,57 @@
         calcLyTrinhStr = interpolateLyTrinhAtDistance(s1.dist + dPhysSeg * ratio, pts, calculatedLyTrinhs);
       }
 
+      // Tự động ẩn bảng điều khiển chức năng để xem bản đồ rộng tối đa
+      document.getElementById('control-panel').style.display = 'none';
+
+      // Tính khoảng cách đến các Măng xông lân cận
+      var stopFiberMap = {}, currF = 0;
+      for (var k = 0; k < routeStops.length; k++) {
+        if (k > 0) {
+          currF += ((routeStops[k].dist - routeStops[k-1].dist) * heSoChung) + (routeStops[k].duTru || 0);
+        }
+        stopFiberMap[routeStops[k].ten] = currF;
+      }
+
+      var mxCandidates = [];
+      routeStops.forEach(function(s) { if (s.isMX) mxCandidates.push({ ten: s.ten, distFromStart: stopFiberMap[s.ten] }); });
+      mxCandidates.sort(function(a, b) { return a.distFromStart - b.distFromStart; });
+
+      var prevMXInfo = "Không xác định", nextMXInfo = "Không xác định";
+      var prevMXs = mxCandidates.filter(function(m) { return m.distFromStart <= targetMeters; });
+      var nextMXs = mxCandidates.filter(function(m) { return m.distFromStart > targetMeters; });
+
+      if (prevMXs.length > 0) {
+        var closestPrev = prevMXs[prevMXs.length - 1];
+        prevMXInfo = closestPrev.ten + " (Cách sự cố ~" + Math.round(targetMeters - closestPrev.distFromStart) + "m)";
+      }
+      if (nextMXs.length > 0) {
+        var closestNext = nextMXs[0];
+        nextMXInfo = closestNext.ten + " (Cách sự cố ~" + Math.round(closestNext.distFromStart - targetMeters) + "m)";
+      }
+
       map.setView([targetLat, targetLng], 21, { animate: true });
       var faultMarker = L.marker([targetLat, targetLng], { icon: L.divIcon({ className: '', html: '<div style="background:#ff3333; color:white; width:32px; height:32px; border-radius:50%; border:3px solid #fff; display:flex; align-items:center; justify-content:center; font-weight:bold; box-shadow:0 0 15px rgba(255,0,0,0.9);">⚡</div>', iconSize: [32, 32], iconAnchor: [16, 16] }) }).addTo(markersLayer);
-      faultMarker.bindPopup("<b>⚠️ VỊ TRÍ SỰ CỐ OTDR</b><br>Khoảng cách: <b>" + kcOtdr + " km</b><br>Lý trình: <b style='color:#fd7e14;'>" + calcLyTrinhStr + "</b><br><a href='https://www.google.com/maps/search/?api=1&query=" + targetLat + "," + targetLng + "' target='_blank' class='gmaps-btn'>🧭 Dẫn đường Google Maps</a>").openPopup();
+
+      var initialPopupHtml = "<b>⚠️ VỊ TRÍ SỰ CỐ OTDR</b><br>" +
+                           "Khoảng cách đo: <b>" + kcOtdr + " km</b><br>" +
+                           "Lý trình thực tế: <b style='color:#fd7e14;'>" + calcLyTrinhStr + "</b><br>" +
+                           "• Măng xông trước: <b>" + prevMXInfo + "</b><br>" +
+                           "• Măng xông sau: <b>" + nextMXInfo + "</b><br>" +
+                           "🏛️ Địa chỉ hành chính: <span id='fault-address' style='color:#0d6efd;'>Đang tra cứu...</span><br>" +
+                           '<a href="https://www.google.com/maps/search/?api=1&query=' + targetLat + ',' + targetLng + '" target="_blank" class="gmaps-btn">🧭 Dẫn đường Google Maps</a>';
+
+      faultMarker.bindPopup(initialPopupHtml).openPopup();
+
+      fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + targetLat + '&lon=' + targetLng + '&accept-language=vi')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          var addr = (data && data.display_name) ? data.display_name : "Không xác định được địa chỉ hành chính";
+          faultMarker.setPopupContent(initialPopupHtml.replace("Đang tra cứu...", addr));
+        })
+        .catch(function(err) {
+          faultMarker.setPopupContent(initialPopupHtml.replace("Đang tra cứu...", "Không thể tải địa chỉ hành chính"));
+        });
     }
 
     function xoaTuyenThuCong() {
