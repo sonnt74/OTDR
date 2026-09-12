@@ -4,7 +4,7 @@
   <base target="_top">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1 (Professional Dashboard)</title>
+  <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1</title>
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -22,7 +22,10 @@
       padding: 0;
       font-family: Arial, sans-serif;
       overflow: hidden;
+    }
+    body {
       display: flex;
+      flex-direction: row;
     }
 
     /* Sidebar Navigation Menu */
@@ -35,6 +38,7 @@
       align-items: center;
       padding-top: 15px;
       z-index: 2000;
+      flex-shrink: 0;
       box-shadow: 2px 0 10px rgba(0,0,0,0.3);
     }
 
@@ -61,16 +65,16 @@
 
     .menu-item span.icon { font-size: 20px; margin-bottom: 2px; }
 
-    /* Main Workspace */
+    /* Main Workspace - Sửa lỗi flex để bản đồ hiển thị chuẩn 100% */
     #workspace {
+      flex: 1;
       position: relative;
-      flex-grow: 1;
       height: 100%;
     }
 
     #map {
-      height: 100%;
       width: 100%;
+      height: 100%;
     }
     
     #control-panel {
@@ -202,7 +206,7 @@
     }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    /* Modals for Management Pages */
+    /* Modals */
     .app-modal {
       display: none;
       position: fixed;
@@ -409,7 +413,7 @@
           </select>
         </div>
         <div class="form-group" style="margin-top: 15px;">
-          <button class="btn-chuanhoa" onclick="taiDuLieuSupabase(true)">🔄 LÀM MỚI & TẢI LẠI CACHE SUPABASE</button>
+          <button class="btn-action" style="background:#6610f2;" onclick="taiDuLieuSupabase(true)">🔄 LÀM MỚI & TẢI LẠI CACHE SUPABASE</button>
         </div>
         <div class="form-group">
           <button class="btn-action" onclick="xoaTuyenThuCong()">🗑️ LÀM SẠCH BẢN ĐỒ HIỆN TẠI</button>
@@ -418,24 +422,27 @@
     </div>
   </div>
 
-  <!-- Modal: Đăng nhập -->
+  <!-- Modal: Đăng nhập thực tế qua Supabase Auth -->
   <div id="loginModal" class="app-modal">
     <div class="modal-content" style="max-width: 400px;">
       <div class="modal-header">
-        <span>👤 Đăng nhập hệ thống GIS</span>
+        <span>👤 Đăng nhập hệ thống Supabase Auth</span>
         <button onclick="closeModals()" style="background:#dc3545; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">Đóng</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label>Tên đăng nhập / Email:</label>
-          <input type="text" id="loginUser" placeholder="Nhập tài khoản kỹ thuật...">
+          <label>Email đăng nhập:</label>
+          <input type="email" id="loginEmail" placeholder="nhap.email@vnpt.vn">
         </div>
         <div class="form-group">
           <label>Mật khẩu:</label>
           <input type="password" id="loginPass" placeholder="••••••••">
         </div>
         <div class="form-group" style="margin-top: 15px;">
-          <button class="btn-action" style="background:#0d6efd;" onclick="handleLogin()">XÁC NHẬN ĐĂNG NHẬP</button>
+          <button class="btn-action" style="background:#0d6efd;" onclick="handleSupabaseLogin()">ĐĂNG NHẬP</button>
+        </div>
+        <div style="text-align: center; margin-top: 10px;">
+          <small id="loginStatus" style="color: #6c757d;"></small>
         </div>
       </div>
     </div>
@@ -462,7 +469,7 @@
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const CACHE_KEY = 'tnn_gis_hierarchy_cache';
-    const CACHE_VERSION = '1.0.3';
+    const CACHE_VERSION = '1.0.4';
 
     var map;
     var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
@@ -490,7 +497,7 @@
     function closeCustomAlert() { document.getElementById('customAlertModal').style.display = 'none'; }
     
     function openModal(modalId) {
-      if (modalId === 'map') return;
+      if (modalId === 'map') { closeModals(); return; }
       document.querySelectorAll('.app-modal').forEach(m => { if(m.id !== 'customAlertModal') m.style.display = 'none'; });
       var target = document.getElementById(modalId);
       if (target) {
@@ -524,6 +531,8 @@
         { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
         { position: 'topright' }
       ).addTo(map);
+
+      setTimeout(() => { map.invalidateSize(); }, 200);
 
       var MeasureControl = L.Control.extend({
         options: { position: 'topright' },
@@ -1111,11 +1120,38 @@
       });
     }
 
-    function handleLogin() {
-      var user = document.getElementById('loginUser').value;
-      if (!user) { showAlert("Vui lòng nhập tài khoản đăng nhập!"); return; }
-      showAlert("Đăng nhập thành công với tài khoản: " + user, "Xác thực");
-      closeModals();
+    /**
+     * Tích hợp đăng nhập thực tế qua Supabase Auth
+     */
+    async function handleSupabaseLogin() {
+      var email = document.getElementById('loginEmail').value;
+      var pass = document.getElementById('loginPass').value;
+      var statusEl = document.getElementById('loginStatus');
+
+      if (!email || !pass) {
+        statusEl.style.color = 'red';
+        statusEl.textContent = "Vui lòng nhập đầy đủ email và mật khẩu!";
+        return;
+      }
+
+      statusEl.style.color = '#0d6efd';
+      statusEl.textContent = "Đang xác thực...";
+
+      try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+          email: email,
+          password: pass,
+        });
+
+        if (error) throw error;
+
+        statusEl.style.color = 'green';
+        statusEl.textContent = "Đăng nhập thành công: " + data.user.email;
+        setTimeout(() => { closeModals(); }, 1500);
+      } catch (err) {
+        statusEl.style.color = 'red';
+        statusEl.textContent = "Lỗi đăng nhập: " + err.message;
+      }
     }
 
     function getDistanceAlongRoute(targetPt, pathPts) {
