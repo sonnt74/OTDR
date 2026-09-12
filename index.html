@@ -4,7 +4,7 @@
   <base target="_top">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1 (Supabase 3NF Full Sync)</title>
+  <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1 (Supabase 3NF)</title>
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -194,7 +194,7 @@
 
   <div id="loading-overlay">
     <div class="spinner"></div>
-    <div id="loading-overlay-text">Đang đồng bộ toàn bộ 100% dữ liệu từ Supabase...</div>
+    <div id="loading-overlay-text">Đang đồng bộ toàn bộ dữ liệu từ Supabase...</div>
   </div>
 
   <div id="map"></div>
@@ -230,14 +230,14 @@
       </div>
 
       <div class="form-group">
-        <label>4. Chọn Đoạn Cáp (Theo doan_cap_diem):</label>
+        <label>4. Chọn Đoạn Cáp:</label>
         <select id="selectDoanCap" onchange="onDoanCapChange()">
           <option value="ALL">-- Tất cả đoạn tuyến --</option>
         </select>
       </div>
 
       <div class="form-group">
-        <label>5. Nguồn điểm đo (Trạm / Điểm hạ tầng):</label>
+        <label>5. Nguồn điểm đo (Trạm / Măng xông):</label>
         <select id="comboDiemA" onchange="onDiemAChange()">
           <option value="DEFAULT">📍 Trạm TNN (21.593365, 105.839945)</option>
         </select>
@@ -310,9 +310,8 @@
     const SUPABASE_ANON_KEY = 'sb_publishable_U3tMbsj5oQ9Wub1UAJO5Cw_NXt6Px8E';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Cấu hình Cache tối ưu duy nhất
     const CACHE_KEY = 'tnn_gis_hierarchy_cache';
-    const CACHE_VERSION = '1.0.1'; // Thay đổi số phiên bản này mỗi khi cập nhật code để tự động xóa cache cũ
+    const CACHE_VERSION = '1.0.2'; // Tăng phiên bản cache để tự động xóa cache cũ
 
     var map;
     var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
@@ -356,7 +355,7 @@
 
       L.control.layers(
         { "Bản đồ OSM": osm, "Vệ tinh": sat }, 
-        { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Điểm đặc biệt (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
+        { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
         { position: 'topright' }
       ).addTo(map);
 
@@ -453,7 +452,7 @@
     }
 
     /**
-     * Hàm hỗ trợ tải phân trang tự động vượt qua giới hạn 1000 bản ghi mặc định của Supabase
+     * Hàm phân trang tự động vượt giới hạn 1000 bản ghi của Supabase
      */
     async function fetchAllRows(tableName, selectQuery, orderColumn = null) {
       let pageSize = 1000;
@@ -482,9 +481,6 @@
       return allData;
     }
 
-    /**
-     * Tải toàn bộ dữ liệu chuẩn 3NF từ Supabase (Bao gồm phân trang chống giới hạn 1000 dòng)
-     */
     async function taiDuLieuSupabase(forceRefresh = false) {
       var statusBadge = document.getElementById('statusBadge');
       
@@ -513,7 +509,7 @@
         }
       }
 
-      showLoading("Đang tải toàn bộ dữ liệu từ Supabase (Đang phân trang)...");
+      showLoading("Đang tải toàn bộ dữ liệu chuẩn 3NF từ Supabase...");
       statusBadge.innerHTML = "<span>⏳</span> Đang đồng bộ toàn bộ bảng dữ liệu không giới hạn...";
 
       try {
@@ -561,7 +557,8 @@
             var idDoanCap = item.id_doan_cap;
             var maDoanCap = item.doan_cap.ma_doancap || '';
 
-            var isMx = (pt.id_loaidiem == 4 || loaiName.toLowerCase().includes('măng xông') || loaiName.toLowerCase().includes('mx') || pt.ten_diem.toUpperCase().includes('MX'));
+            // Măng xông được nhận diện chính xác theo id_loaidiem = 4 hoặc tên loại
+            var isMx = (Number(pt.id_loaidiem) === 4 || loaiName.toLowerCase().includes('măng xông') || loaiName.toLowerCase().includes('mx'));
 
             allEntries.push({
               ten: pt.ten_diem,
@@ -691,11 +688,14 @@
 
     function onCheDoDinhTuyenChange() { veLaiTuyenAB(); }
 
+    /**
+     * Nhận diện chính xác Măng xông theo id_loaidiem = 4
+     */
     function isMangXong(pt) {
       if (!pt) return false;
       var l = (pt.loai || '').toUpperCase();
       var t = (pt.ten || '').toUpperCase();
-      return pt.idLoaiDiem == 2 || l.includes('MĂNG XÔNG') || l.includes('MX') || l.includes('SC') || t.includes('MX') || t.includes('MĂNG XÔNG');
+      return Number(pt.idLoaiDiem) === 4 || l.includes('MĂNG XÔNG') || l.includes('MX') || t.includes('MX');
     }
 
     function capNhatComboDiemA() {
@@ -736,7 +736,13 @@
         return matchTram && matchTuyen && matchDoan;
       });
 
-      pts.sort(function(a, b) { return Number(a.stt) - Number(b.stt); });
+      // Sắp xếp theo id_doan_cap trước, sau đó theo stt (thu_tu) để tránh xung đột giữa các đoạn cáp
+      pts.sort(function(a, b) {
+        if (a.idDoanCap !== b.idDoanCap) {
+          return Number(a.idDoanCap) - Number(b.idDoanCap);
+        }
+        return Number(a.stt) - Number(b.stt);
+      });
 
       var unique = [], seen = {};
       pts.forEach(function(p) {
@@ -901,7 +907,6 @@
           var marker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: html, iconSize: [30, 30], iconAnchor: [15, 15] }) });
           
           var ltText = calculatedLyTrinhs[idx];
-          var popupRole = idx === 0 ? "<b>📍 Điểm Đo Nguồn (Điểm A)</b><br>" : (idx === pts.length - 1 ? "<b>📍 Điểm Cuối Tuyến (Điểm B)</b><br>" : "");
           var popupLtStr = ltText ? ltText : "Không có (Điểm gốc)";
           marker.bindPopup("Tên: " + pt.ten + "<br>Lý trình: <b>" + popupLtStr + "</b><br><a href='https://www.google.com/maps/search/?api=1&query=" + lat + "," + lng + "' target='_blank' class='gmaps-btn'>🗺️ Google Maps</a>");
           
