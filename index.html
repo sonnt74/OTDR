@@ -36,6 +36,7 @@
     .btn-action:hover { opacity: 0.9; }
     .btn-success { background-color: #198754; }
     .btn-warning { background-color: #ffc107; color: #000; }
+    .btn-info { background-color: #0dcaf0; color: #000; }
     .checkbox-group { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 6px; background: #f8f9fa; padding: 5px; border-radius: 4px; }
 
     #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.7); z-index: 999999; justify-content: center; align-items: center; color: #fff; font-size: 16px; flex-direction: column; }
@@ -57,6 +58,10 @@
     .lytrinh-badge { background: #fd7e14; color: white; font-size: 9px; padding: 2px 5px; border-radius: 3px; font-weight: bold; white-space: nowrap; }
     .btn-small { background: #0d6efd; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; margin-right: 3px; }
     .btn-small.del { background: #dc3545; }
+
+    /* Nút định vị GPS trên bản đồ */
+    #gps-btn { position: absolute; bottom: 30px; right: 10px; z-index: 1000; background: white; border: 2px solid rgba(0,0,0,0.2); border-radius: 4px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; box-shadow: 0 1px 5px rgba(0,0,0,0.4); }
+    #gps-btn:hover { background: #f4f4f4; }
   </style>
 </head>
 <body>
@@ -77,6 +82,7 @@
 
   <div id="workspace">
     <div id="map"></div>
+    <div id="gps-btn" onclick="triggerUserLocation()" title="Định vị vị trí của tôi">📍</div>
 
     <div id="control-panel">
       <div class="panel-header" onclick="toggleGISPanel()"><span>🗺️ ĐIỀU KHIỂN & PHÂN TÍCH OTDR</span></div>
@@ -102,18 +108,20 @@
     </div>
   </div>
 
+  <!-- Modal Đăng Nhập -->
   <div id="loginModal" class="app-modal" style="display: flex;">
     <div class="modal-content" style="max-width: 360px;">
       <div class="modal-header"><span>👤 Đăng nhập Hệ Thống TNN NET1</span></div>
       <div class="modal-body">
-        <div class="form-group"><label>Email:</label><input type="email" id="loginEmail" placeholder="nhanvien@vnpt.vn"></div>
+        <div class="form-group"><label>Email:</label><input type="email" id="loginEmail" placeholder="admin@tnn.vn"></div>
         <div class="form-group"><label>Mật khẩu:</label><input type="password" id="loginPass" placeholder="••••••••"></div>
-        <div class="form-group" style="margin-top: 12px;"><button class="btn-action" style="background:#0d6efd;" onclick="handleSupabaseLogin()">ĐĂNG NHẬP</button></div>
+        <div class="form-group" style="margin-top: 12px;"><button class="btn-action" style="background:#0d6efd;" onclick="handleCustomLogin()">ĐĂNG NHẬP</button></div>
         <div style="text-align: center; margin-top: 8px;"><small id="loginStatus" style="color: #6c757d;"></small></div>
       </div>
     </div>
   </div>
 
+  <!-- Modal Tuyến Cáp -->
   <div id="routeModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header"><span>🛤️ Quản lý & Thông tin Tuyến cáp</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -126,6 +134,7 @@
     </div>
   </div>
 
+  <!-- Modal Trạm & Đài -->
   <div id="stationModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header"><span>🏢 Thông tin Đài VT & Trạm VT</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -141,6 +150,7 @@
     </div>
   </div>
 
+  <!-- Modal Phân Quyền -->
   <div id="permissionModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header"><span>🔐 Phân cấp & Phân quyền (RBAC)</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -148,15 +158,17 @@
         <table class="table-data">
           <thead><tr><th>Vai trò (Role)</th><th>Quyền hạn hệ thống</th><th>Phạm vi quản lý</th></tr></thead>
           <tbody>
-            <tr><td><b>Admin hệ thống</b></td><td>Toàn quyền (Đọc, Ghi, Sửa, Xóa cấu trúc)</td><td>Toàn mạng lưới TNN NET1</td></tr>
-            <tr><td><b>Kỹ thuật viên Đài</b></td><td>Đọc dữ liệu, chạy định vị OTDR sự cố</td><td>Đài VT quản lý</td></tr>
-            <tr><td><b>Đội ứng cứu tuyến</b></td><td>Tra cứu tọa độ, xem lý trình tuyến</td><td>Tuyến cáp phân công</td></tr>
+            <tr><td><b>sys_admin</b></td><td>Toàn quyền (Đọc, Ghi, Sửa, Xóa cấu trúc)</td><td>Toàn mạng lưới TNN NET1</td></tr>
+            <tr><td><b>dai_admin</b></td><td>Đọc dữ liệu, định vị, quản lý tài khoản Đài</td><td>Đài VT quản lý</td></tr>
+            <tr><td><b>tram_admin</b></td><td>Đọc dữ liệu, phân tích tuyến Trạm</td><td>Trạm VT quản lý</td></tr>
+            <tr><td><b>member</b></td><td>Chỉ đọc dữ liệu và tra cứu tuyến</td><td>Phạm vi phân công</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 
+  <!-- Modal Cài đặt hệ thống -->
   <div id="configModal" class="app-modal">
     <div class="modal-content" style="max-width: 300px;">
       <div class="modal-header"><span>⚙️ Thiết lập hệ thống</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -166,14 +178,15 @@
         <div class="form-group" style="margin-top: 6px;"><button class="btn-action btn-danger" onclick="xoaTuyenThuCong()">🗑️ LÀM SẠCH BẢN ĐỒ</button></div>
         
         <div id="adminMenuSection" style="display: none; border-top: 1px dashed #ccc; margin-top: 10px; padding-top: 8px;">
-          <label style="font-size: 9px; font-weight: bold; margin-bottom: 4px; display:block;">Quyền Quản trị viên:</label>
-          <button class="btn-action btn-success" onclick="moModalQuanLyThanhVien()" style="margin-bottom: 4px;">👥 Quản lý tài khoản</button>
+          <label style="font-size: 9px; font-weight: bold; margin-bottom: 4px; display:block;">Quản lý hệ thống tài khoản:</label>
+          <button class="btn-action btn-success" onclick="moModalQuanLyThanhVien()" style="margin-bottom: 4px;">👥 Danh sách tài khoản</button>
           <button class="btn-action btn-warning" onclick="chuanBiFormThemThanhVien()">+ Thêm tài khoản mới</button>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Modal CRUD Đối tượng hạ tầng -->
   <div id="crudModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header"><span id="crudTitle">📝 Thông tin Đối tượng</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -190,30 +203,38 @@
     </div>
   </div>
 
+  <!-- Modal Quản lý Danh sách Thành viên -->
   <div id="manageMembersModal" class="app-modal">
-    <div class="modal-content" style="max-width: 550px;">
-      <div class="modal-header"><span>👥 Quản Lý Danh Sách</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header"><span>👥 Quản Lý Tài Khoản Hệ Thống</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
       <div class="modal-body">
         <table class="table-data">
-          <thead><tr><th>Email</th><th>Vai trò</th><th>Thao tác</th></tr></thead>
+          <thead><tr><th>Email</th><th>Vai trò</th><th>Đài / Trạm</th><th>Thao tác</th></tr></thead>
           <tbody id="memberTableBody"></tbody>
         </table>
       </div>
     </div>
   </div>
 
+  <!-- Modal Thêm/Sửa Tài Khoản -->
   <div id="addMemberModal" class="app-modal">
     <div class="modal-content" style="max-width: 360px;">
-      <div class="modal-header"><span>👥 Thêm Mới Tài Khoản</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
+      <div class="modal-header"><span id="accountModalTitle">👥 Thêm Mới Tài Khoản</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
       <div class="modal-body">
+        <input type="hidden" id="editingAccountId">
         <div class="form-group"><label>Email:</label><input type="email" id="newMemberEmail" placeholder="nhanvien@vnpt.vn"></div>
-        <div class="form-group"><label>Mật khẩu:</label><input type="password" id="newMemberPass"></div>
-        <div class="form-group"><label>Quyền:</label>
-          <select id="newMemberRole"><option value="member">Thành viên</option><option value="tram_admin">Admin Trạm</option><option value="dai_admin">Admin Đài</option><option value="sys_admin">Admin Hệ thống</option></select>
+        <div class="form-group"><label>Mật khẩu:</label><input type="text" id="newMemberPass" placeholder="Mật khẩu tài khoản"></div>
+        <div class="form-group"><label>Phân quyền (Role):</label>
+          <select id="newMemberRole">
+            <option value="member">Thành viên (Member)</option>
+            <option value="tram_admin">Admin Trạm</option>
+            <option value="dai_admin">Admin Đài</option>
+            <option value="sys_admin">Admin Hệ thống (sys_admin)</option>
+          </select>
         </div>
-        <div class="form-group"><label>Đài:</label><select id="newMemberDai"><option value="">-- Tất cả --</option></select></div>
-        <div class="form-group"><label>Trạm:</label><select id="newMemberTram"><option value="">-- Tất cả --</option></select></div>
-        <div class="form-group" style="margin-top: 12px;"><button class="btn-action btn-success" onclick="handleCreateMember()">TẠO TÀI KHOẢN</button></div>
+        <div class="form-group"><label>Đài trực thuộc (id_dai):</label><select id="newMemberDai"><option value="">-- Tất cả --</option></select></div>
+        <div class="form-group"><label>Trạm trực thuộc (id_tram):</label><select id="newMemberTram"><option value="">-- Tất cả --</option></select></div>
+        <div class="form-group" style="margin-top: 12px;"><button class="btn-action btn-success" onclick="saveAccountAction()">LƯU TÀI KHOẢN</button></div>
         <small id="createMemberStatus" style="display:block; text-align:center; margin-top:6px;"></small>
       </div>
     </div>
@@ -221,7 +242,6 @@
 
   <!-- LEAFLET & MARKERCLUSTER JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- Đã sửa lại đúng tên tệp script của MarkerCluster bên dưới -->
   <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 
   <script>
@@ -236,6 +256,7 @@
     var mxLayer = L.layerGroup();
     var polylinesLayer = L.layerGroup();
     var lyTrinhLayer = L.layerGroup();
+    var userLocationLayer = L.layerGroup();
     var foundMarkerLayer = null, foundMarkerTimer = null;
 
     var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], globalDataPoints = [];
@@ -260,22 +281,16 @@
     function showLoading(msg) { document.getElementById('loading-overlay-text').innerText = msg; document.getElementById('loading-overlay').style.display = 'flex'; }
     function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
 
-    async function handleSupabaseLogin() {
+    // HÀM 1: ĐĂNG NHẬP HỆ THỐNG BẰNG BẢNG TÙY CHỈNH public.tai_khoan
+    async function handleCustomLogin() {
       var email = document.getElementById('loginEmail').value.trim();
       var pass = document.getElementById('loginPass').value;
       var statusEl = document.getElementById('loginStatus');
 
-      if (!email || !pass) { 
-        statusEl.style.color = 'red'; 
-        statusEl.textContent = "Nhập đủ email và mật khẩu!"; 
-        return; 
-      }
-      
-      statusEl.style.color = '#0d6efd'; 
-      statusEl.textContent = "Đang kiểm tra thông tin...";
+      if (!email || !pass) { statusEl.style.color = 'red'; statusEl.textContent = "Nhập đủ email và mật khẩu!"; return; }
+      statusEl.style.color = '#0d6efd'; statusEl.textContent = "Đang xác thực thông tin...";
 
       try {
-        // Truy vấn trực tiếp vào bảng public.tai_khoan thay vì gọi auth hệ thống
         const { data, error } = await supabaseClient
           .from('tai_khoan')
           .select('*')
@@ -283,31 +298,20 @@
           .eq('password', pass)
           .single();
 
-        if (error || !data) {
-          throw new Error("Sai email hoặc mật khẩu!");
-        }
+        if (error || !data) throw new Error("Sai tài khoản hoặc mật khẩu!");
 
-        // Thiết lập thông tin người dùng hiện tại dựa trên dữ liệu lấy được
-        currentUser = { 
-          isLoggedIn: true, 
-          role: data.role || 'member', 
-          idDai: data.id_dai, 
-          idTram: data.id_tram 
-        };
+        currentUser = { isLoggedIn: true, role: data.role || 'member', idDai: data.id_dai, idTram: data.id_tram };
 
-        statusEl.style.color = 'green'; 
-        statusEl.textContent = "Đăng nhập thành công!";
-        
-        // Ẩn bảng đăng nhập, hiện giao diện làm việc
+        statusEl.style.color = 'green'; statusEl.textContent = "Đăng nhập thành công!";
         document.getElementById('loginModal').style.display = 'none';
+        
         document.getElementById('sidebar-menu').style.display = 'flex';
         document.getElementById('control-panel').style.display = 'block';
 
-        if (currentUser.role === 'sys_admin') {
+        if (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin') {
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
-        // Khởi tạo bản đồ và tải dữ liệu hệ thống
         khoiTaoBanDoLeaflet();
 
         setTimeout(async () => {
@@ -315,13 +319,11 @@
         }, 100);
 
       } catch (err) {
-        statusEl.style.color = 'red'; 
-        statusEl.textContent = "Lỗi: " + err.message;
+        statusEl.style.color = 'red'; statusEl.textContent = "Lỗi: " + err.message;
       }
     }
 
     async function handleLogout() {
-      await supabaseClient.auth.signOut();
       currentUser.isLoggedIn = false;
       if (map !== null) { map.remove(); map = null; }
       document.getElementById('sidebar-menu').style.display = 'none';
@@ -346,63 +348,90 @@
       markersLayer.addTo(map); 
       mxLayer.addTo(map); 
       lyTrinhLayer.addTo(map);
+      userLocationLayer.addTo(map);
 
-      L.control.layers({ "Bản đồ OSM": osm, "Vệ tinh Esri": sat }, { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, { position: 'topright' }).addTo(map);
+      L.control.layers({ "Bản đồ OSM": osm, "Vệ tinh Esri": sat }, { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer, "Vị trí của tôi": userLocationLayer }, { position: 'topright' }).addTo(map);
 
       map.on('contextmenu', function(e) {
-        if (!currentUser.isLoggedIn) { alert("Vui lòng đăng nhập để thao tác."); return; }
-        if (currentUser.role === 'member') { alert("⚠️ Tài khoản Thành viên không có quyền Thêm Điểm mới."); return; }
+        if (!currentUser.isLoggedIn) { alert("Vui lòng đăng nhập."); return; }
+        if (currentUser.role === 'member') { alert("⚠️ Tài khoản Thành viên không có quyền Thêm Điểm."); return; }
         moFormCrud('ADD', null, '', e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6));
       });
 
       map.invalidateSize();
     }
 
-    async function fetchAllRows(tableName, selectQuery, orderColumn = null) {
+    // HÀM BỔ SUNG 4: ĐỊNH VỊ VỊ TRÍ GPS CỦA NGƯỜI DÙNG TRÊN BẢN ĐỒ
+    function triggerUserLocation() {
+      if (!navigator.geolocation) {
+        alert("Trình duyệt của bạn không hỗ trợ định vị GPS.");
+        return;
+      }
+      showLoading("Đang xác định vị trí hiện tại của bạn...");
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          hideLoading();
+          var lat = position.coords.latitude;
+          var lng = position.coords.longitude;
+          var accuracy = position.coords.accuracy;
+
+          userLocationLayer.clearLayers();
+          var userMarker = L.marker([lat, lng], {
+            icon: L.divIcon({ className: '', html: '<div style="background:#0d6efd; color:white; width:22px; height:22px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 10px rgba(13,110,253,0.8); display:flex; align-items:center; justify-content:center; font-size:10px;">📍</div>', iconSize: [22, 22], iconAnchor: [11, 11] })
+          }).bindPopup("<b>Vị trí của bạn</b><br>Độ chính xác: ~" + Math.round(accuracy) + " mét");
+
+          var accuracyCircle = L.circle([lat, lng], { radius: accuracy, color: '#0d6efd', fillColor: '#0d6efd', fillOpacity: 0.15, weight: 1 });
+          
+          userLocationLayer.addLayer(userMarker);
+          userLocationLayer.addLayer(accuracyCircle);
+
+          map.setView([lat, lng], 18, { animate: true });
+          userMarker.openPopup();
+        },
+        function(error) {
+          hideLoading();
+          alert("Không thể lấy được vị trí GPS: " + error.message);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
+
+    // HÀM 1: QUÉT TOÀN BỘ DỮ LIỆU KHÔNG BỊ GIỚI HẠN 1000 DÒNG (PAGINATION)
+    async function fetchAllRowsSafe(tableName) {
       let pageSize = 1000, from = 0, allData = [], keepFetching = true;
       while (keepFetching) {
-        let query = supabaseClient.from(tableName).select(selectQuery).range(from, from + pageSize - 1);
-        if (orderColumn) query = query.order(orderColumn, { ascending: true });
-        let { data, error } = await query;
+        let { data, error } = await supabaseClient.from(tableName).select('*').range(from, from + pageSize - 1);
         if (error) throw error;
         if (data && data.length > 0) {
           allData = allData.concat(data);
           if (data.length < pageSize) keepFetching = false;
           else from += pageSize;
-        } else { keepFetching = false; }
+        } else {
+          keepFetching = false;
+        }
       }
       return allData;
     }
 
     async function taiDuLieuSupabase(forceRefresh = false) {
-      showLoading("Đang tải dữ liệu từ máy chủ...");
+      showLoading("Đang nạp toàn bộ dữ liệu hệ thống...");
       try {
-        // Tải từng bảng độc lập và bắt lỗi riêng biệt để dễ chẩn đoán
-        let daiRes = await supabaseClient.from('dai_vt').select('*');
-        if (daiRes.error) console.error("Lỗi bảng dai_vt:", daiRes.error.message);
-
-        let tramRes = await supabaseClient.from('tram_vt').select('*');
-        if (tramRes.error) console.error("Lỗi bảng tram_vt:", tramRes.error.message);
-
-        let tuyenRes = await supabaseClient.from('tuyen_cap').select('*');
-        if (tuyenRes.error) console.error("Lỗi bảng tuyen_cap:", tuyenRes.error.message);
-
-        let doanRes = await supabaseClient.from('doan_cap').select('*');
-        if (doanRes.error) console.error("Lỗi bảng doan_cap:", doanRes.error.message);
-
-        let diemRes = await supabaseClient.from('diem_ha_tang').select('*');
-        if (diemRes.error) console.error("Lỗi bảng diem_ha_tang:", diemRes.error.message);
-
-        let dcdRes = await supabaseClient.from('doan_cap_diem').select('*');
-        if (dcdRes.error) console.error("Lỗi bảng doan_cap_diem:", dcdRes.error.message);
+        let [daiRes, tramRes, tuyenRes, doanRes, diemRes, dcdRes] = await Promise.all([
+          supabaseClient.from('dai_vt').select('*'),
+          supabaseClient.from('tram_vt').select('*'),
+          supabaseClient.from('tuyen_cap').select('*'),
+          supabaseClient.from('doan_cap').select('*'),
+          fetchAllRowsSafe('diem_ha_tang'),
+          fetchAllRowsSafe('doan_cap_diem')
+        ]);
 
         rawDaiList = daiRes.data || [];
         rawTramList = tramRes.data || [];
         rawTuyenList = tuyenRes.data || [];
         rawDoanCapList = doanRes.data || [];
         
-        var rawDiemList = diemRes.data || [];
-        var rawDoanCapDiemList = dcdRes.data || [];
+        var rawDiemList = diemRes || [];
+        var rawDoanCapDiemList = dcdRes || [];
 
         var diemMap = {};
         rawDiemList.forEach(d => { 
@@ -715,6 +744,7 @@
       return calculatedLyTrinhs[calculatedLyTrinhs.length - 1] || "Km 0+000";
     }
 
+    // HÀM 3: KHÔI PHỤC TOÀN BỘ LAYER ĐO ĐẠC & VẼ TRÊN BẢN ĐỒ
     function veLaiTuyenAB() {
       if(!map) return;
       if(markersLayer) markersLayer.clearLayers(); 
@@ -984,6 +1014,122 @@
       }
     }
 
+    // HÀM 2: QUẢN LÝ TÀI KHOẢN & PHÂN QUYỀN RBAC TRÊN BẢNG public.tai_khoan
+    async function moModalQuanLyThanhVien() {
+      openModal('manageMembersModal');
+      var tbody = document.getElementById('memberTableBody');
+      tbody.innerHTML = '<tr><td colspan="4">Đang nạp danh sách tài khoản...</td></tr>';
+      try {
+        const { data, error } = await supabaseClient.from('tai_khoan').select('*');
+        if (error) throw error;
+        tbody.innerHTML = '';
+        if(!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="4">Chưa có tài khoản nào.</td></tr>'; return; }
+        
+        data.forEach(acc => {
+          var daiObj = rawDaiList.find(d => d.id_dai == acc.id_dai);
+          var tramObj = rawTramList.find(t => t.id_tram == acc.id_tram);
+          var scopeText = (daiObj ? daiObj.ten_dai : "Toàn mạng") + (tramObj ? " / " + tramObj.ten_tram : "");
+
+          var tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><b>${acc.email}</b></td>
+            <td><span style="background:#e7f5ff; color:#0d6efd; padding:2px 6px; border-radius:4px; font-weight:bold;">${acc.role}</span></td>
+            <td>${scopeText}</td>
+            <td>
+              <button class="btn-small" onclick="moFormSuaTaiKhoan(${acc.id}, '${acc.email}', '${acc.role}', ${acc.id_dai || 'null'}, ${acc.id_tram || 'null'})">✏️ Sửa</button>
+              <button class="btn-small del" onclick="xoaTaiKhoan(${acc.id}, '${acc.email}')">🗑️ Xóa</button>
+            </td>`;
+          tbody.appendChild(tr);
+        });
+      } catch(err) { tbody.innerHTML = `<tr><td colspan="4" style="color:red;">Lỗi tải: ${err.message}</td></tr>`; }
+    }
+
+    function chuanBiFormThemThanhVien() {
+      document.getElementById('editingAccountId').value = '';
+      document.getElementById('accountModalTitle').textContent = "👥 Thêm Mới Tài Khoản";
+      document.getElementById('newMemberEmail').value = '';
+      document.getElementById('newMemberPass').value = '';
+      document.getElementById('newMemberRole').value = 'member';
+      
+      dienComboDaiTramChoModal(null, null);
+      openModal('addMemberModal');
+    }
+
+    function moFormSuaTaiKhoan(id, email, role, idDai, idTram) {
+      document.getElementById('editingAccountId').value = id;
+      document.getElementById('accountModalTitle').textContent = "✏️ Sửa Thông Tin Tài Khoản";
+      document.getElementById('newMemberEmail').value = email;
+      document.getElementById('newMemberPass').value = ''; // Để trống nếu không muốn đổi pass
+      document.getElementById('newMemberRole').value = role;
+
+      dienComboDaiTramChoModal(idDai, idTram);
+      openModal('addMemberModal');
+    }
+
+    function dienComboDaiTramChoModal(selectedDai, selectedTram) {
+      var selDai = document.getElementById('newMemberDai');
+      selDai.innerHTML = '<option value="">-- Tất cả Đài --</option>';
+      rawDaiList.forEach(d => {
+        selDai.innerHTML += `<option value="${d.id_dai}" ${d.id_dai == selectedDai ? 'selected' : ''}>${d.ten_dai}</option>`;
+      });
+
+      var selTram = document.getElementById('newMemberTram');
+      selTram.innerHTML = '<option value="">-- Tất cả Trạm --</option>';
+      rawTramList.forEach(t => {
+        selTram.innerHTML += `<option value="${t.id_tram}" ${t.id_tram == selectedTram ? 'selected' : ''}>${t.ten_tram}</option>`;
+      });
+    }
+
+    async function saveAccountAction() {
+      var editingId = document.getElementById('editingAccountId').value;
+      var email = document.getElementById('newMemberEmail').value.trim();
+      var pass = document.getElementById('newMemberPass').value;
+      var role = document.getElementById('newMemberRole').value;
+      var idDai = document.getElementById('newMemberDai').value ? parseInt(document.getElementById('newMemberDai').value) : null;
+      var idTram = document.getElementById('newMemberTram').value ? parseInt(document.getElementById('newMemberTram').value) : null;
+      var statusEl = document.getElementById('createMemberStatus');
+
+      if (!email) { statusEl.style.color = 'red'; statusEl.textContent = "Vui lòng nhập email!"; return; }
+      statusEl.style.color = '#0d6efd'; statusEl.textContent = "Đang xử lý dữ liệu...";
+
+      try {
+        if (!editingId) {
+          // Thêm mới tài khoản
+          if (!pass) { statusEl.style.color = 'red'; statusEl.textContent = "Vui lòng nhập mật khẩu cho tài khoản mới!"; return; }
+          const { error } = await supabaseClient.from('tai_khoan').insert([{ email: email, password: pass, role: role, id_dai: idDai, id_tram: idTram }]);
+          if (error) throw error;
+        } else {
+          // Cập nhật tài khoản
+          var updatePayload = { email: email, role: role, id_dai: idDai, id_tram: idTram };
+          if (pass) updatePayload.password = pass; // Chỉ cập nhật mật khẩu nếu có nhập mới
+
+          const { error } = await supabaseClient.from('tai_khoan').update(updatePayload).eq('id', editingId);
+          if (error) throw error;
+        }
+
+        statusEl.style.color = 'green'; statusEl.textContent = "Lưu tài khoản thành công!";
+        setTimeout(() => {
+          closeModals();
+          moModalQuanLyThanhVien();
+        }, 1000);
+
+      } catch (err) {
+        statusEl.style.color = 'red'; statusEl.textContent = "Lỗi: " + err.message;
+      }
+    }
+
+    async function xoaTaiKhoan(id, email) {
+      if (!confirm(`Bạn có chắc chắn muốn xóa tài khoản ${email}?`)) return;
+      try {
+        const { error } = await supabaseClient.from('tai_khoan').delete().eq('id', id);
+        if (error) throw error;
+        alert("Xóa tài khoản thành công!");
+        moModalQuanLyThanhVien();
+      } catch (err) {
+        alert("Lỗi khi xóa tài khoản: " + err.message);
+      }
+    }
+
     function timLyTrinhBanDo() {
       var txt = document.getElementById('txtTimLyTrinh').value.trim();
       if(!txt) return alert("Nhập lý trình cần tìm!");
@@ -1022,59 +1168,6 @@
       } else {
         alert("Không tìm thấy điểm nào gần phạm vi lý trình này.");
       }
-    }
-
-    function chuanBiFormThemThanhVien() {
-      var selDai = document.getElementById('newMemberDai'); selDai.innerHTML = '<option value="">-- Tất cả --</option>';
-      rawDaiList.forEach(d => selDai.innerHTML += `<option value="${d.id_dai}">${d.ten_dai}</option>`);
-      var selTram = document.getElementById('newMemberTram'); selTram.innerHTML = '<option value="">-- Tất cả --</option>';
-      rawTramList.forEach(t => selTram.innerHTML += `<option value="${t.id_tram}">${t.ten_tram}</option>`);
-      openModal('addMemberModal');
-    }
-
-    async function handleCreateMember() {
-      var email = document.getElementById('newMemberEmail').value.trim(), password = document.getElementById('newMemberPass').value, role = document.getElementById('newMemberRole').value;
-      var idDai = document.getElementById('newMemberDai').value || null, idTram = document.getElementById('newMemberTram').value || null;
-      var statusEl = document.getElementById('createMemberStatus');
-
-      if (!email || !password) { statusEl.style.color = 'red'; statusEl.textContent = "Nhập đủ email và mật khẩu!"; return; }
-      statusEl.style.color = '#0d6efd'; statusEl.textContent = "Đang tạo tài khoản...";
-
-      try {
-        const { error } = await supabaseClient.rpc('create_new_user', { user_email: email, user_password: password, user_role: role, target_id_dai: idDai ? parseInt(idDai) : null, target_id_tram: idTram ? parseInt(idTram) : null });
-        if (error) throw error;
-        statusEl.style.color = 'green'; statusEl.textContent = "Tạo thành công!";
-        setTimeout(() => { closeModals(); document.getElementById('newMemberEmail').value = ''; document.getElementById('newMemberPass').value = ''; statusEl.textContent = ''; }, 1500);
-      } catch (err) {
-        statusEl.style.color = 'red'; statusEl.textContent = "Lỗi: " + err.message;
-      }
-    }
-
-    async function moModalQuanLyThanhVien() {
-      openModal('manageMembersModal');
-      var tbody = document.getElementById('memberTableBody');
-      tbody.innerHTML = '<tr><td colspan="3">Đang nạp danh sách...</td></tr>';
-      try {
-        const { data, error } = await supabaseClient.from('user_roles').select('*');
-        if (error) throw error;
-        tbody.innerHTML = '';
-        if(!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="3">Chưa có thành viên.</td></tr>'; return; }
-        
-        data.forEach(user => {
-          var tr = document.createElement('tr');
-          tr.innerHTML = `<td>${user.email}</td><td><b>${user.role}</b></td><td><button class="btn-small del" onclick="xoaTaiKhoan('${user.id}', '${user.email}')">Xóa</button></td>`;
-          tbody.appendChild(tr);
-        });
-      } catch(err) { tbody.innerHTML = `<tr><td colspan="3" style="color:red;">Lỗi tải: ${err.message}</td></tr>`; }
-    }
-
-    async function xoaTaiKhoan(userId, email) {
-      if(!confirm(`Xóa tài khoản ${email}?`)) return;
-      try {
-        const { error } = await supabaseClient.rpc('delete_user_account', { target_user_id: userId });
-        if(error) throw error;
-        alert("Xóa thành công!"); moModalQuanLyThanhVien();
-      } catch(err) { alert("Lỗi xóa: " + err.message); }
     }
 
     function getDistanceAlongRoute(targetPt, pathPts) {
