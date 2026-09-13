@@ -35,6 +35,7 @@
     .btn-action { background-color: #dc3545; color: white; border: none; font-weight: bold; cursor: pointer; padding: 7px; border-radius: 4px; font-size: 11px; width: 100%; margin-top: 2px; }
     .btn-action:hover { opacity: 0.9; }
     .btn-success { background-color: #198754; }
+    .btn-info { background-color: #0dcaf0; color: #000; border: none; font-weight: bold; padding: 5px; border-radius: 3px; cursor: pointer; font-size: 10px; text-decoration: none; display: inline-block; margin-top: 4px; margin-right: 4px; }
     .checkbox-group { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 6px; background: #f8f9fa; padding: 5px; border-radius: 4px; }
 
     /* ---------------- UI PHỤ TRỢ (LOADING, MODAL) ---------------- */
@@ -43,7 +44,7 @@
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
     .app-modal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 99999; justify-content: center; align-items: center; }
-    .modal-content { background: white; width: 92%; max-width: 700px; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.4); max-height: 88vh; overflow-y: auto; box-sizing: border-box; }
+    .modal-content { background: white; width: 95%; max-width: 800px; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.4); max-height: 88vh; overflow-y: auto; box-sizing: border-box; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0d6efd; padding-bottom: 8px; margin-bottom: 10px; font-weight: bold; color: #0d6efd; font-size: 14px; }
     
     .table-data { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
@@ -90,8 +91,9 @@
   <!-- Khu vực làm việc chính (Bản đồ & Bảng điều khiển) -->
   <div id="workspace">
     <div id="map"></div>
+    <!-- Nút Công cụ GPS và Đo khoảng cách -->
     <div id="gps-btn" class="map-tool-btn" onclick="triggerUserLocation()" title="Định vị">📍</div>
-    <div id="measure-btn" class="map-tool-btn" onclick="toggleMeasureTool()" title="Đo khoảng cách">📏</div>
+    <div id="measure-btn" class="map-tool-btn" onclick="toggleMeasureTool()" title="Đo khoảng cách thủ công">📏</div>
 
     <div id="control-panel">
       <div class="panel-header" onclick="toggleGISPanel()"><span>🗺️ ĐIỀU KHIỂN & PHÂN TÍCH OTDR</span></div>
@@ -146,16 +148,27 @@
           <button class="tab-btn" onclick="switchAdminTab('tab-doan')">🔗 Đoạn Tuyến</button>
         </div>
 
+        <!-- TAB TÀI KHOẢN -->
         <div id="tab-accounts" class="tab-pane active">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="font-size:11px;">Tài khoản:</b><button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien()">+ Thêm</button>
           </div>
           <table class="table-data">
-            <thead><tr><th>Email</th><th>Vai trò</th><th>Map?</th><th>Thao tác</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Vai trò</th>
+                <th>Đài quản lý</th>
+                <th>Trạm quản lý</th>
+                <th>Map?</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
             <tbody id="masterAccountTableBody"></tbody>
           </table>
         </div>
         
+        <!-- CÁC TAB KHÁC (GIỮ NGUYÊN) -->
         <div id="tab-dai" class="tab-pane">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <b style="font-size:11px;">Đài VT:</b><button class="btn-small btn-success" onclick="moFormThemDai()">+ Thêm</button>
@@ -227,7 +240,7 @@
     </div>
   </div>
 
-  <!-- Modal Dùng Chung Để Thêm Danh Mục (Đài, Trạm, Tuyến, Đoạn) -->
+  <!-- Modal Dùng Chung Để Thêm Danh Mục -->
   <div id="genericAuxModal" class="app-modal">
     <div class="modal-content" style="max-width: 350px;">
       <div class="modal-header"><span id="auxModalTitle">📝 Thêm/Sửa Danh Mục</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -278,6 +291,7 @@
     var measureLayer = L.layerGroup();
     var foundMarkerLayer = null;
     
+    // Biến cho chức năng Đo khoảng cách (Measure)
     var isMeasuring = false;
     var measurePoints = [];
     
@@ -294,17 +308,13 @@
       var savedSession = localStorage.getItem('tnn_user');
       if (savedSession) {
         currentUser = JSON.parse(savedSession);
-        
-        // Ẩn form đăng nhập và hiện giao diện chính
         document.getElementById('loginModal').style.display = 'none';
         document.getElementById('sidebar-menu').style.display = 'flex';
         document.getElementById('control-panel').style.display = 'block';
         
-        // Hiển thị nút Quản trị nếu có quyền
         if (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin') {
           document.getElementById('adminMenuIcon').style.display = 'flex';
         }
-        
         khoiTaoBanDoLeaflet();
         taiDuLieuSupabase();
       }
@@ -313,17 +323,12 @@
     // ---------------- HÀM TIỆN ÍCH GIAO DIỆN ----------------
     function toggleGISPanel() {
       var panel = document.getElementById('control-panel');
-      if (panel.style.display === 'none' || panel.style.display === '') {
-        panel.style.display = 'block';
-      } else {
-        panel.style.display = 'none';
-      }
+      panel.style.display = (panel.style.display === 'none' || panel.style.display === '') ? 'block' : 'none';
     }
 
     function closeModals() {
       var modals = document.querySelectorAll('.app-modal');
       modals.forEach(function(modal) {
-        // Không đóng modal Đăng nhập nếu chưa đăng nhập
         if (modal.id !== 'loginModal' || !currentUser.isLoggedIn) {
           modal.style.display = 'none';
         }
@@ -340,12 +345,8 @@
     }
 
     function switchAdminTab(tabId) {
-      document.querySelectorAll('.tab-pane').forEach(function(pane) {
-        pane.classList.remove('active');
-      });
-      document.querySelectorAll('.tab-btn').forEach(function(btn) {
-        btn.classList.remove('active');
-      });
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.getElementById(tabId).classList.add('active');
       event.target.classList.add('active');
     }
@@ -363,11 +364,7 @@
     async function handleCustomLogin() {
       var email = document.getElementById('loginEmail').value.trim();
       var pass = document.getElementById('loginPass').value;
-      
-      if (!email || !pass) {
-        alert("Vui lòng nhập đủ email và mật khẩu!");
-        return;
-      }
+      if (!email || !pass) { alert("Vui lòng nhập đủ email và mật khẩu!"); return; }
       
       showLoading("Đang xác thực thông tin...");
       try {
@@ -388,20 +385,17 @@
           canEditMap: data.can_edit_map === true
         };
         
-        // Lưu phiên làm việc vào trình duyệt
-        localStorage.setItem('tnn_user', JSON.stringify(currentUser));
+        localStorage.setItem('tnn_user', JSON.stringify(currentUser)); // Lưu phiên làm việc
         
         document.getElementById('loginModal').style.display = 'none';
         document.getElementById('sidebar-menu').style.display = 'flex';
         document.getElementById('control-panel').style.display = 'block';
-        
         if (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin') {
           document.getElementById('adminMenuIcon').style.display = 'flex';
         }
         
         khoiTaoBanDoLeaflet();
         await taiDuLieuSupabase();
-        
       } catch (err) {
         alert("Lỗi: " + err.message);
         hideLoading();
@@ -410,24 +404,111 @@
 
     function handleLogout() {
       localStorage.removeItem('tnn_user');
-      location.reload(); // Tải lại trang để xóa sạch bộ nhớ
+      location.reload(); 
+    }
+
+    // ---------------- CÁC CÔNG CỤ BẢN ĐỒ (GPS VÀ ĐO KHOẢNG CÁCH) ----------------
+    
+    // 3. Khôi phục chức năng Đo khoảng cách và GPS
+    function triggerUserLocation() {
+      if (!navigator.geolocation) {
+        alert("Trình duyệt của bạn không hỗ trợ định vị GPS.");
+        return;
+      }
+      
+      showLoading("Đang xác định vị trí của bạn qua vệ tinh GPS...");
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          hideLoading();
+          var lat = position.coords.latitude;
+          var lng = position.coords.longitude;
+          var acc = position.coords.accuracy;
+          
+          userLocationLayer.clearLayers();
+          
+          var iconHtml = '<div style="background:#0d6efd; color:white; width:22px; height:22px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 10px rgba(13,110,253,0.8); display:flex; align-items:center; justify-content:center; font-size:10px;">📍</div>';
+          var marker = L.marker([lat, lng], { 
+            icon: L.divIcon({ className: '', html: iconHtml, iconSize: [22, 22], iconAnchor: [11, 11] }) 
+          }).bindPopup(`<b>Vị trí của bạn</b><br>Độ chính xác: ~${Math.round(acc)} mét`);
+          
+          var circle = L.circle([lat, lng], { radius: acc, color: '#0d6efd', fillColor: '#0d6efd', fillOpacity: 0.15, weight: 1 });
+          
+          userLocationLayer.addLayer(marker);
+          userLocationLayer.addLayer(circle);
+          
+          map.setView([lat, lng], 18, { animate: true });
+          marker.openPopup();
+        },
+        function(error) {
+          hideLoading();
+          alert("Không thể lấy vị trí GPS: " + error.message);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
+
+    function toggleMeasureTool() {
+      isMeasuring = !isMeasuring;
+      var btn = document.getElementById('measure-btn');
+      
+      if (isMeasuring) {
+        btn.style.background = '#0d6efd';
+        btn.style.color = 'white';
+        measurePoints = [];
+        measureLayer.clearLayers();
+        alert("Đã BẬT chức năng đo khoảng cách.\nClick các điểm trên bản đồ để đo khoảng cách thực tế.");
+      } else {
+        btn.style.background = 'white';
+        btn.style.color = 'black';
+        measureLayer.clearLayers();
+        measurePoints = [];
+        alert("Đã TẮT chức năng đo khoảng cách.");
+      }
+    }
+
+    function redrawMeasureLayer() {
+      measureLayer.clearLayers();
+      if (measurePoints.length === 0) return;
+
+      var totalDist = 0;
+      for (var i = 0; i < measurePoints.length; i++) {
+        var pt = measurePoints[i];
+        
+        // Vẽ điểm marker nhỏ
+        L.circleMarker(pt, { radius: 5, color: '#dc3545', fillColor: '#fff', fillOpacity: 1, weight: 2 }).addTo(measureLayer);
+        
+        // Tính khoảng cách và vẽ đường nối
+        if (i > 0) {
+          var p1 = measurePoints[i-1];
+          var p2 = measurePoints[i];
+          var d = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
+          totalDist += d;
+          
+          L.polyline([p1, p2], { color: '#dc3545', weight: 3, dashArray: '5,5' }).addTo(measureLayer);
+        }
+      }
+      
+      // Hiển thị tổng khoảng cách ở điểm cuối
+      var lastPt = measurePoints[measurePoints.length - 1];
+      var distStr = (totalDist >= 1000) ? (totalDist/1000).toFixed(2) + ' km' : Math.round(totalDist) + ' mét';
+      var textIcon = L.divIcon({ 
+        className: '', 
+        html: `<div style="background:#dc3545; color:white; padding:2px 6px; border-radius:3px; font-size:10px; font-weight:bold; white-space:nowrap; box-shadow:0 0 5px rgba(0,0,0,0.5);">📏 ${distStr}</div>`,
+        iconSize: [80, 20], 
+        iconAnchor: [-10, 10] 
+      });
+      L.marker(lastPt, { icon: textIcon }).addTo(measureLayer);
     }
 
     // ---------------- KHỞI TẠO BẢN ĐỒ ----------------
     function khoiTaoBanDoLeaflet() {
-      if (map) return; // Nếu đã tạo rồi thì bỏ qua
+      if (map) return;
       
       var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
       var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 19 });
       
-      map = L.map('map', {
-        center: [21.5942, 105.8481], // Thái Nguyên
-        zoom: 13,
-        maxZoom: 21,
-        layers: [osmLayer]
-      });
+      map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [osmLayer] });
       
-      // Thêm các lớp vào bản đồ
       polylinesLayer.addTo(map);
       markersLayer.addTo(map);
       mxLayer.addTo(map);
@@ -440,7 +521,7 @@
         { position: 'topright' }
       ).addTo(map);
       
-      // Sự kiện click chuột phải để thêm điểm mới
+      // Chuột phải thêm điểm
       map.on('contextmenu', function(e) {
         if (currentUser.canEditMap || currentUser.role === 'sys_admin') {
           moFormCrud('ADD', null, '', e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6));
@@ -448,25 +529,25 @@
           alert("Tài khoản của bạn không có quyền thêm điểm trên bản đồ.");
         }
       });
+
+      // Lắng nghe click để Đo khoảng cách
+      map.on('click', function(e) {
+        if (!isMeasuring) return;
+        measurePoints.push(e.latlng);
+        redrawMeasureLayer();
+      });
     }
 
     // ---------------- TẢI DỮ LIỆU TỪ SUPABASE ----------------
     async function fetchAllRowsSafe(tableName) {
-      let size = 1000;
-      let from = 0;
-      let allData = [];
-      let keepFetching = true;
-      
+      let size = 1000, from = 0, allData = [], keepFetching = true;
       while (keepFetching) {
         let { data, error } = await supabaseClient.from(tableName).select('*').range(from, from + size - 1);
         if (error) throw error;
         if (data && data.length > 0) {
           allData = allData.concat(data);
-          if (data.length < size) {
-            keepFetching = false;
-          } else {
-            from += size;
-          }
+          if (data.length < size) keepFetching = false;
+          else from += size;
         } else {
           keepFetching = false;
         }
@@ -493,23 +574,11 @@
         rawDoanCapList = doanRes.data || [];
         rawLoaiDiemList = loaiRes.data || [];
         
-        // Tạo bảng băm (Hash map) để truy xuất nhanh
-        var diemMap = {};
-        diemRes.forEach(function(d) {
-          diemMap[d.id_diem || d.id] = d;
-        });
-        
-        var doanCapMap = {};
-        rawDoanCapList.forEach(function(dc) {
-          doanCapMap[dc.id_doan_cap || dc.id] = dc;
-        });
-        
-        var loaiDiemMap = {};
-        rawLoaiDiemList.forEach(function(l) {
-          loaiDiemMap[l.id_loaidiem || l.id] = l.ten_loaidiem;
-        });
+        var diemMap = {}, doanCapMap = {}, loaiDiemMap = {};
+        diemRes.forEach(d => diemMap[d.id_diem || d.id] = d);
+        rawDoanCapList.forEach(dc => doanCapMap[dc.id_doan_cap || dc.id] = dc);
+        rawLoaiDiemList.forEach(l => loaiDiemMap[l.id_loaidiem || l.id] = l.ten_loaidiem);
 
-        // Hợp nhất dữ liệu điểm và đoạn cáp
         globalDataPoints = [];
         dcdRes.forEach(function(item) {
           var pt = diemMap[item.id_diem || item.diem_id];
@@ -519,10 +588,7 @@
           
           var idLoai = pt.id_loaidiem || 1;
           var loaiName = loaiDiemMap[idLoai] || 'Điểm';
-          
-          // Ưu tiên cho măng xông xếp cuối (stt = 9999) để rẽ nhánh riêng
           var isMx = (Number(idLoai) === 4 || loaiName.toLowerCase().includes('mx'));
-          var sttVal = isMx ? 9999 : (item.thu_tu || 1);
           
           globalDataPoints.push({
             id: pt.id_diem || pt.id,
@@ -537,15 +603,12 @@
             loai: loaiName,
             lyTrinh: pt.ly_trinh || '',
             duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-            stt: sttVal
+            stt: isMx ? 9999 : (item.thu_tu || 1)
           });
         });
 
         khoiTaoComboDaiTheoPhanCap();
-        
-        if (forceRefresh) {
-          alert("Đã làm mới dữ liệu từ máy chủ thành công!");
-        }
+        if (forceRefresh) alert("Đã làm mới dữ liệu từ máy chủ thành công!");
       } catch (err) {
         alert("Lỗi khi tải dữ liệu: " + err.message);
       } finally {
@@ -558,11 +621,7 @@
     function khoiTaoComboDaiTheoPhanCap() {
       var selectDai = document.getElementById('selectDai');
       selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
-      
-      rawDaiList.forEach(function(dai) {
-        selectDai.innerHTML += `<option value="${dai.id_dai}">${dai.ten_dai}</option>`;
-      });
-      
+      rawDaiList.forEach(dai => selectDai.innerHTML += `<option value="${dai.id_dai}">${dai.ten_dai}</option>`);
       if (currentUser.role === 'dai_admin' && currentUser.idDai) {
         selectDai.value = currentUser.idDai;
         selectDai.disabled = true;
@@ -574,33 +633,20 @@
       var daiVal = document.getElementById('selectDai').value;
       var selectTram = document.getElementById('selectTram');
       selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
-      
-      var filteredTram = rawTramList.filter(function(tram) {
-        return daiVal === 'ALL' || tram.id_dai == daiVal;
-      });
-      
-      filteredTram.forEach(function(tram) {
-        selectTram.innerHTML += `<option value="${tram.id_tram}">${tram.ten_tram}</option>`;
-      });
-      
+      rawTramList.filter(tram => daiVal === 'ALL' || tram.id_dai == daiVal)
+                 .forEach(tram => selectTram.innerHTML += `<option value="${tram.id_tram}">${tram.ten_tram}</option>`);
       if (currentUser.role === 'tram_admin' && currentUser.idTram) {
         selectTram.value = currentUser.idTram;
         selectTram.disabled = true;
       }
       updateTuyenOptions();
     }
-
-    function onTramChange() {
-      updateTuyenOptions();
-    }
+    function onTramChange() { updateTuyenOptions(); }
 
     function updateTuyenOptions() {
       var selectTuyen = document.getElementById('selectTuyen');
       selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
-      
-      rawTuyenList.forEach(function(tuyen) {
-        selectTuyen.innerHTML += `<option value="${tuyen.id_tuyen_cap}">${tuyen.ma_tuyencap}</option>`;
-      });
+      rawTuyenList.forEach(tuyen => selectTuyen.innerHTML += `<option value="${tuyen.id_tuyen_cap}">${tuyen.ma_tuyencap}</option>`);
       onTuyenChange();
     }
 
@@ -608,25 +654,14 @@
       var tuyenVal = document.getElementById('selectTuyen').value;
       var selectDoanCap = document.getElementById('selectDoanCap');
       selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
-      
       if (tuyenVal !== 'ALL') {
-        var filteredDoan = rawDoanCapList.filter(function(doan) {
-          return doan.id_tuyen == tuyenVal;
-        });
-        filteredDoan.forEach(function(doan) {
-          selectDoanCap.innerHTML += `<option value="${doan.id_doan_cap}">${doan.ma_doancap}</option>`;
-        });
+        rawDoanCapList.filter(doan => doan.id_tuyen == tuyenVal)
+                      .forEach(doan => selectDoanCap.innerHTML += `<option value="${doan.id_doan_cap}">${doan.ma_doancap}</option>`);
       }
       veLaiTuyenAB();
     }
-
-    function onDoanCapChange() {
-      veLaiTuyenAB();
-    }
-
-    function onDiemAChange() {
-      veLaiTuyenAB();
-    }
+    function onDoanCapChange() { veLaiTuyenAB(); }
+    function onDiemAChange() { veLaiTuyenAB(); }
     
     // ---------------- VẼ TUYẾN VÀ KÉO THẢ TỌA ĐỘ ----------------
     function isMangXong(pt) {
@@ -641,43 +676,27 @@
       if (tuyenVal === 'ALL') return [];
       
       var filteredPts = globalDataPoints.filter(function(pt) {
-        if (isMangXong(pt)) return false; // Loại măng xông ra khỏi đường chính
+        if (isMangXong(pt)) return false;
         return pt.idTuyen == tuyenVal &&
                (tramVal === 'ALL' || pt.idTram == tramVal) &&
                (doanVal === 'ALL' || pt.idDoanCap == doanVal);
       });
       
-      // Sắp xếp theo số thứ tự
-      filteredPts.sort(function(a, b) {
-        return a.stt - b.stt;
-      });
+      filteredPts.sort((a, b) => a.stt - b.stt);
       
-      // Bổ sung điểm gốc nếu chưa có (ví dụ Trạm TNN)
       if (filteredPts.length > 0) {
-        var hasBase = filteredPts.some(function(p) {
-          return Math.abs(p.lat - 21.593365) < 0.0001;
-        });
+        var hasBase = filteredPts.some(p => Math.abs(p.lat - 21.593365) < 0.0001);
         if (!hasBase) {
           filteredPts.unshift({
-            ten: "Trạm TNN",
-            lat: 21.593365,
-            lng: 105.839945,
-            lyTrinh: "",
-            idTuyen: tuyenVal,
-            stt: -9999,
-            loai: "Trạm"
+            ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, lyTrinh: "", idTuyen: tuyenVal, stt: -9999, loai: "Trạm"
           });
         }
       }
-      
-      var chkNghich = document.getElementById('chkNghichHuong').checked;
-      return chkNghich ? filteredPts.slice().reverse() : filteredPts;
+      return document.getElementById('chkNghichHuong').checked ? filteredPts.slice().reverse() : filteredPts;
     }
 
     function veLaiTuyenAB() {
       if (!map) return;
-      
-      // Xóa các lớp cũ
       markersLayer.clearLayers();
       mxLayer.clearLayers();
       polylinesLayer.clearLayers();
@@ -689,11 +708,8 @@
       var tuyenVal = document.getElementById('selectTuyen').value;
       var tramVal = document.getElementById('selectTram').value;
       var doanVal = document.getElementById('selectDoanCap').value;
-      
-      // Quyền kéo thả để sửa tọa độ
       var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
 
-      // Tạo chuỗi nút bấm phân quyền
       function taoNutHanhDong(id, ten, lat, lng) {
         if (isDraggable) {
           return `<hr style="margin:4px 0;">
@@ -703,159 +719,118 @@
         return '';
       }
 
-      // Xử lý sự kiện sau khi kéo thả Marker
+      // 4. Sửa lỗi lưu kéo thả tọa độ đối tượng (Fix Update Payload)
       async function handleDragEnd(e, ptObj) {
         var newPos = e.target.getLatLng();
-        var confirmMsg = `Bạn có chắc chắn muốn lưu tọa độ mới cho đối tượng [${ptObj.ten}] không?`;
+        var confirmMsg = `Bạn có chắc chắn muốn lưu tọa độ mới cho [${ptObj.ten}] không?`;
         
         if (confirm(confirmMsg)) {
           showLoading("Đang lưu tọa độ mới vào cơ sở dữ liệu...");
           try {
-            await supabaseClient
+            // Chú ý: Trường trong DB có thể là 'long' hoặc 'lng'. Ở đây ta bọc lại cẩn thận.
+            const updatePayload = {
+              lat: newPos.lat,
+              long: newPos.lng
+            };
+            
+            const { error } = await supabaseClient
               .from('diem_ha_tang')
-              .update({ lat: newPos.lat, long: newPos.lng })
-              .eq('id_diem', ptObj.id);
+              .update(updatePayload)
+              .eq('id_diem', ptObj.id); // ptObj.id map với id_diem trong DB
+              
+            if (error) throw error;
+            
             hideLoading();
-            taiDuLieuSupabase(); // Tải lại để làm mới
+            // Lấy lại dữ liệu cho chắc chắn
+            taiDuLieuSupabase(); 
           } catch (error) {
-            alert("Lỗi khi lưu tọa độ: " + error.message);
+            alert("Lỗi khi lưu tọa độ: " + error.message + "\nHệ thống sẽ khôi phục tọa độ cũ.");
             hideLoading();
-            e.target.setLatLng([ptObj.lat, ptObj.lng]); // Hoàn tác
+            e.target.setLatLng([ptObj.lat, ptObj.lng]); // Hoàn tác về vị trí cũ nếu lỗi
           }
         } else {
-          // Nếu người dùng hủy, trả Marker về vị trí cũ
           e.target.setLatLng([ptObj.lat, ptObj.lng]);
         }
       }
 
-      // 1. Vẽ các điểm mốc chính (Cột, Bể cáp, Trạm)
+      // Vẽ Cột/Mốc
       pts.forEach(function(pt, index) {
         bounds.push([pt.lat, pt.lng]);
-        
-        var iconHtml = '<div class="standard-marker"></div>';
-        if (index === 0) iconHtml = '<div class="point-a-marker">A</div>';
-        if (index === pts.length - 1) iconHtml = '<div class="point-b-marker">B</div>';
-        
+        var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : ((index === pts.length - 1) ? '<div class="point-b-marker">B</div>' : '<div class="standard-marker"></div>');
         var marker = L.marker([pt.lat, pt.lng], {
           icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }),
           draggable: isDraggable
         });
         
-        var popupContent = `<b>${pt.ten}</b><br>
-                            Loại: ${pt.loai}<br>
-                            Lý trình: ${pt.lyTrinh || 'Không có'}` + taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng);
-                            
+        var popupContent = `<b>${pt.ten}</b><br>Loại: ${pt.loai}<br>Lý trình: ${pt.lyTrinh || 'Không có'}` + taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng);
         marker.bindPopup(popupContent);
         marker.on('dragend', function(e) { handleDragEnd(e, pt); });
         markersLayer.addLayer(marker);
       });
 
-      // 2. Vẽ các điểm măng xông (Tính thêm khoảng cách về gốc và Ghi chú)
-      var mxList = globalDataPoints.filter(function(p) {
-        return isMangXong(p) &&
-               p.idTuyen == tuyenVal &&
-               (tramVal === 'ALL' || p.idTram == tramVal) &&
-               (doanVal === 'ALL' || p.idDoanCap == doanVal);
-      });
-
-      mxList.forEach(function(mx) {
+      // Vẽ Măng xông
+      globalDataPoints.filter(function(p) {
+        return isMangXong(p) && p.idTuyen == tuyenVal && (tramVal === 'ALL' || p.idTram == tramVal) && (doanVal === 'ALL' || p.idDoanCap == doanVal);
+      }).forEach(function(mx) {
         bounds.push([mx.lat, mx.lng]);
-        
         var mxMarker = L.marker([mx.lat, mx.lng], {
           icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }),
           draggable: isDraggable
         });
         
-        // Tính khoảng cách cáp từ Trạm A tới măng xông này
         var distToA = getDistanceAlongRoute(mx, pts);
         var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " mét";
-        
-        // Nút Ghi chú
         var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}')">📝 Ghi chú</button>`;
 
-        var popupContent = `<b>${mx.ten}</b><br>
-                            Lý trình: ${mx.lyTrinh || 'Không có'}<br>
-                            📏 Cách Trạm gốc: <b>${distStr}</b><br>`
-                            + taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng)
-                            + ghiChuBtn;
+        var popupContent = `<b>${mx.ten}</b><br>Lý trình: ${mx.lyTrinh || 'Không có'}<br>📏 Cách Trạm gốc: <b>${distStr}</b><br>`
+                            + taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng) + ghiChuBtn;
                             
         mxMarker.bindPopup(popupContent);
         mxMarker.on('dragend', function(e) { handleDragEnd(e, mx); });
         mxLayer.addLayer(mxMarker);
       });
 
-      // 3. Vẽ đường nối (Polyline)
-      var lineCoordinates = pts.map(function(p) { return [p.lat, p.lng]; });
+      var lineCoordinates = pts.map(p => [p.lat, p.lng]);
       if (lineCoordinates.length > 1) {
         polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: '#0d6efd', weight: 3 }));
       }
-      
-      // Zoom vừa màn hình
-      if (bounds.length > 0) {
-        map.fitBounds(bounds, { padding: [40, 40] });
-      }
+      if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
     }
 
-    // Hàm cập nhật Ghi chú bằng prompt (Nhanh, gọn nhẹ)
     async function suaGhiChu(id, oldGhiChu) {
       if (!currentUser.canEditMap && currentUser.role !== 'sys_admin') {
-        alert("Bạn không có quyền sửa ghi chú!");
-        return;
+        alert("Bạn không có quyền sửa ghi chú!"); return;
       }
-      
       var currentVal = (oldGhiChu === 'undefined' || oldGhiChu === 'null') ? '' : oldGhiChu;
       var newVal = prompt("Nhập nội dung ghi chú cho Măng xông này:", currentVal);
-      
       if (newVal !== null) {
         showLoading("Đang lưu ghi chú...");
         try {
-          await supabaseClient
-            .from('diem_ha_tang')
-            .update({ ghi_chu: newVal })
-            .eq('id_diem', id);
+          await supabaseClient.from('diem_ha_tang').update({ ghi_chu: newVal }).eq('id_diem', id);
           alert("Đã lưu ghi chú thành công!");
           taiDuLieuSupabase();
-        } catch (error) {
-          alert("Lỗi: " + error.message);
-          hideLoading();
-        }
+        } catch (error) { alert("Lỗi: " + error.message); hideLoading(); }
       }
     }
 
     // ---------------- THUẬT TOÁN TÍNH KHOẢNG CÁCH (HAVERSINE) ----------------
     function calculateHaversine(lat1, lon1, lat2, lon2) {
-      var R = 6371000; // Bán kính trái đất tính bằng mét
+      var R = 6371000; 
       var dLat = (lat2 - lat1) * Math.PI / 180;
       var dLon = (lon2 - lon1) * Math.PI / 180;
-      var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
+      var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     function getDistanceAlongRoute(targetPt, pathPts) {
-      var bestDist = 0;
-      var currentDist = 0;
-      var minDst = Infinity;
-      
+      var bestDist = 0, currentDist = 0, minDst = Infinity;
       for (var i = 0; i < pathPts.length - 1; i++) {
-        var p1 = pathPts[i];
-        var p2 = pathPts[i+1];
+        var p1 = pathPts[i], p2 = pathPts[i+1];
         var segLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
-        
         if (segLen === 0) continue;
-        
-        var dx = p2.lng - p1.lng;
-        var dy = p2.lat - p1.lat;
-        var lenSq = dx * dx + dy * dy;
-        
+        var dx = p2.lng - p1.lng, dy = p2.lat - p1.lat, lenSq = dx * dx + dy * dy;
         var t = Math.max(0, Math.min(1, ((targetPt.lng - p1.lng) * dx + (targetPt.lat - p1.lat) * dy) / lenSq));
-        var projLat = p1.lat + t * dy;
-        var projLng = p1.lng + t * dx;
-        
-        var distToProj = calculateHaversine(targetPt.lat, targetPt.lng, projLat, projLng);
-        
+        var distToProj = calculateHaversine(targetPt.lat, targetPt.lng, p1.lat + t * dy, p1.lng + t * dx);
         if (distToProj < minDst) {
           minDst = distToProj;
           bestDist = currentDist + (t * segLen);
@@ -865,55 +840,54 @@
       return bestDist;
     }
 
-    // ---------------- TÌM ĐIỂM SỰ CỐ (OTDR) ----------------
+    // ---------------- 6. TÌM ĐIỂM SỰ CỐ (Đã thay từ "Đứt cáp") ----------------
+    // 2. Chức năng chia sẻ thông tin sự cố qua ứng dụng ngoài
+    function chiaSeSuCo(lat, lng, khoangCachKm, prevMX, nextMX, shareType) {
+      // Nội dung thông báo sự cố
+      var message = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n- Tọa độ: ${lat}, ${lng}\n- Cự ly đo OTDR: ${khoangCachKm} km\n- Vị trí măng xông: Nằm giữa [${prevMX}] và [${nextMX}]\n- Bản đồ: https://maps.google.com/?q=${lat},${lng}`;
+      var encodedMessage = encodeURIComponent(message);
+      
+      if (shareType === 'copy') {
+        navigator.clipboard.writeText(message).then(function() {
+          alert("Đã sao chép nội dung sự cố vào khay nhớ tạm!");
+        }).catch(function(err) {
+          alert("Lỗi sao chép: " + err);
+        });
+      } else if (shareType === 'sms') {
+        // Mở ứng dụng tin nhắn SMS mặc định
+        window.open(`sms:?&body=${encodedMessage}`, '_blank');
+      } else if (shareType === 'viber') {
+        // Mở ứng dụng Viber (Yêu cầu thiết bị đã cài ứng dụng)
+        window.open(`viber://forward?text=${encodedMessage}`, '_blank');
+      }
+    }
+
     function timViTriDut() {
       var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value);
       var kcOtdrMeters = kcOtdrKm * 1000; 
       var heSo = parseFloat(document.getElementById('txtDoChung').value) || 1.05;
       
-      if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) {
-        alert("Vui lòng nhập cự ly đo hợp lệ!");
-        return;
-      }
+      if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { alert("Vui lòng nhập cự ly đo hợp lệ!"); return; }
       
       var pts = getPointsCuaTuyenHienTai();
-      if (pts.length < 2) {
-        alert("Tuyến cáp chưa có đủ dữ liệu (cần ít nhất 2 điểm) để phân tích!");
-        return;
-      }
+      if (pts.length < 2) { alert("Tuyến cáp chưa có đủ dữ liệu để phân tích!"); return; }
 
       var tuyenVal = document.getElementById('selectTuyen').value;
-      var mxList = globalDataPoints.filter(function(p) {
-        return isMangXong(p) && p.idTuyen == tuyenVal;
-      });
+      var mxList = globalDataPoints.filter(function(p) { return isMangXong(p) && p.idTuyen == tuyenVal; });
       
-      // Tạo danh sách các trạm dừng (Route Stops) bao gồm cả cột và măng xông
       var routeStops = [];
-      pts.forEach(function(p) {
-        routeStops.push({ pt: p, dist: getDistanceAlongRoute(p, pts), duTru: 0, isMX: false });
-      });
-      mxList.forEach(function(m) {
-        routeStops.push({ pt: m, dist: getDistanceAlongRoute(m, pts), duTru: m.duTru || 0, isMX: true });
-      });
-      
-      // Sắp xếp các điểm dừng theo khoảng cách vật lý từ Trạm A
-      routeStops.sort(function(a, b) {
-        return a.dist - b.dist;
-      });
+      pts.forEach(function(p) { routeStops.push({ pt: p, dist: getDistanceAlongRoute(p, pts), duTru: 0, isMX: false }); });
+      mxList.forEach(function(m) { routeStops.push({ pt: m, dist: getDistanceAlongRoute(m, pts), duTru: m.duTru || 0, isMX: true }); });
+      routeStops.sort((a, b) => a.dist - b.dist);
 
-      var cumDist = 0;
-      var targetLat = pts[pts.length - 1].lat;
-      var targetLng = pts[pts.length - 1].lng;
-      var closestPrevMX = "Chưa xác định";
-      var closestNextMX = "Chưa xác định";
+      var cumDist = 0, targetLat = pts[pts.length - 1].lat, targetLng = pts[pts.length - 1].lng;
+      var closestPrevMX = "Chưa xác định", closestNextMX = "Chưa xác định";
 
       for (var i = 0; i < routeStops.length - 1; i++) {
-        if (routeStops[i].isMX) {
-          closestPrevMX = routeStops[i].pt.ten;
-        }
+        if (routeStops[i].isMX) closestPrevMX = routeStops[i].pt.ten;
         
         var physSeg = routeStops[i+1].dist - routeStops[i].dist;
-        var opticalSeg = (physSeg * heSo) + routeStops[i+1].duTru; // Chiều dài quang học
+        var opticalSeg = (physSeg * heSo) + routeStops[i+1].duTru; 
         
         if (cumDist + opticalSeg >= kcOtdrMeters) {
           var remainingDist = kcOtdrMeters - cumDist;
@@ -922,61 +896,50 @@
           targetLat = routeStops[i].pt.lat + ratio * (routeStops[i+1].pt.lat - routeStops[i].pt.lat);
           targetLng = routeStops[i].pt.lng + ratio * (routeStops[i+1].pt.lng - routeStops[i].pt.lng);
           
-          // Tìm măng xông tiếp theo
           for (var j = i + 1; j < routeStops.length; j++) {
-            if (routeStops[j].isMX) {
-              closestNextMX = routeStops[j].pt.ten;
-              break;
-            }
+            if (routeStops[j].isMX) { closestNextMX = routeStops[j].pt.ten; break; }
           }
           break;
         }
         cumDist += opticalSeg;
       }
 
-      // Vẽ Marker báo đứt
-      if (foundMarkerLayer) {
-        map.removeLayer(foundMarkerLayer);
-      }
-      
+      if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
       map.setView([targetLat, targetLng], 19, { animate: true });
       
-      var faultIcon = L.divIcon({
-        html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>',
-        iconSize: [28, 28]
-      });
-      
+      var faultIcon = L.divIcon({ html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>', iconSize: [28, 28] });
       var faultMarker = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
       foundMarkerLayer = faultMarker;
 
-      var popupHtml = `<b>⚡ VỊ TRÍ ĐỨT CÁP OTDR</b><br>
+      // HTML cho các nút chia sẻ (Yêu cầu 2)
+      var shareButtons = `<div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">
+                            <b>Chia sẻ sự cố:</b><br>
+                            <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'copy')">📋 Copy</button>
+                            <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'sms')" style="background:#28a745; color:white;">📩 SMS</button>
+                            <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'viber')" style="background:#6f42c1; color:white;">📱 Viber</button>
+                          </div>`;
+
+      var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>
                        Khoảng cách đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>
                        Măng xông liền trước: <b>${closestPrevMX}</b><br>
                        Măng xông liền sau: <b>${closestNextMX}</b><br>
                        🏛️ Địa chỉ: <span id='fault-addr'>Đang tra cứu...</span><br>
-                       <a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>`;
+                       <a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>
+                       ${shareButtons}`;
                        
       faultMarker.bindPopup(popupHtml).openPopup();
 
-      // Gọi API tra cứu tên hành chính (Reverse Geocoding)
       fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${targetLat}&lon=${targetLng}&accept-language=vi`)
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-          faultMarker.setPopupContent(popupHtml.replace("Đang tra cứu...", data.display_name || "Ngoại ô/Không xác định"));
-        })
-        .catch(function() {
-          faultMarker.setPopupContent(popupHtml.replace("Đang tra cứu...", "Lỗi mạng khi lấy địa chỉ"));
-        });
+        .then(res => res.json())
+        .then(data => faultMarker.setPopupContent(popupHtml.replace("Đang tra cứu...", data.display_name || "Ngoại ô/Không xác định")))
+        .catch(() => faultMarker.setPopupContent(popupHtml.replace("Đang tra cứu...", "Lỗi mạng khi lấy địa chỉ")));
     }
 
-    // ---------------- TÌM NHANH LÝ TRÌNH (QL) ----------------
+    // ---------------- 5. TÌM NHANH LÝ TRÌNH (Thuật toán nội suy thông minh) ----------------
     function parseLyTrinh(str) {
       if (!str) return null;
       var match = str.match(/(?:km\s*)?(\d+)\s*\+\s*(\d+)/i);
-      if (match) {
-        return parseInt(match[1]) * 1000 + parseInt(match[2]);
-      }
-      return null;
+      return match ? (parseInt(match[1]) * 1000 + parseInt(match[2])) : null;
     }
 
     function timLyTrinhBanDo() {
@@ -994,54 +957,59 @@
         return;
       }
 
+      var heSo = parseFloat(document.getElementById('txtDoChung').value) || 1.05;
+      
+      // Bước 1: Tìm mốc lý trình gốc đầu tiên có dữ liệu (thường là Điểm A)
+      var refPoint = pts.find(p => parseLyTrinh(p.lyTrinh) !== null);
+      var refMilestoneMeters = refPoint ? parseLyTrinh(refPoint.lyTrinh) : 0; // Nếu cả tuyến không nhập thì mặc định Trạm A là 0
+      
       var bestPt = null;
       var minDiff = Infinity;
       
+      // Bước 2: Nội suy lý trình cho TOÀN BỘ các điểm (kể cả không có dữ liệu)
       pts.forEach(function(p) {
-        var meters = parseLyTrinh(p.lyTrinh);
-        if (meters !== null) {
-          var diff = Math.abs(meters - targetMeters);
-          if (diff < minDiff) {
-            minDiff = diff;
-            bestPt = p;
-          }
+        var opticalDistToA = getDistanceAlongRoute(p, pts) * heSo; // Khoảng cách quang từ gốc
+        
+        // Lý trình ước lượng = (Mốc gốc) +/- (Khoảng cách quang)
+        // Lưu ý: Tùy hướng cáp, giả định số lý trình tăng dần từ điểm A
+        var estimatedMilestone = refMilestoneMeters + opticalDistToA; 
+        
+        // Tính độ lệch giữa đích và mốc ước lượng
+        var diff = Math.abs(estimatedMilestone - targetMeters);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestPt = p;
         }
       });
       
       if (!bestPt) {
-        alert("Không tìm thấy lý trình tương đối phù hợp trên bản đồ!");
+        alert("Không thể ước lượng lý trình trên tuyến này!");
         return;
       }
 
-      // Tính khoảng cách cáp về Trạm A
-      var heSo = parseFloat(document.getElementById('txtDoChung').value) || 1.05;
+      // Thông tin khoảng cách để hiển thị
       var distToA = getDistanceAlongRoute(bestPt, pts) * heSo;
       var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " mét";
 
-      if (foundMarkerLayer) {
-        map.removeLayer(foundMarkerLayer);
-      }
-      
+      if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
       map.setView([bestPt.lat, bestPt.lng], 19, { animate: true });
       
       var markerIcon = L.divIcon({ html: '<div style="background:#fd7e14; font-size:24px;">📍</div>', className: '' });
       foundMarkerLayer = L.marker([bestPt.lat, bestPt.lng], { icon: markerIcon }).addTo(map);
       
-      var popupContent = `<b>Vị trí lý trình: ${txt}</b><br>
+      var popupContent = `<b>Vị trí ước lượng theo Lý trình: ${txt}</b><br>
                           Cột/Điểm mốc gần nhất: ${bestPt.ten}<br>
-                          📏 Chiều dài cáp quang tới Trạm A: <b>${distStr}</b><br>
+                          📏 Cự ly cáp quang tới gốc: <b>${distStr}</b><br>
                           🏛️ <span id='lt-addr'>Đang tra cứu địa chỉ...</span>`;
                           
       foundMarkerLayer.bindPopup(popupContent).openPopup();
       
       fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${bestPt.lat}&lon=${bestPt.lng}&accept-language=vi`)
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          foundMarkerLayer.setPopupContent(popupContent.replace("Đang tra cứu địa chỉ...", data.display_name || "Ngoại ô/Không xác định"));
-        });
+        .then(r => r.json())
+        .then(data => foundMarkerLayer.setPopupContent(popupContent.replace("Đang tra cứu địa chỉ...", data.display_name || "Ngoại ô/Không xác định")));
     }
 
-    // ---------------- QUẢN TRỊ HỆ THỐNG VÀ DANH MỤC ----------------
+    // ---------------- 1. QUẢN TRỊ HỆ THỐNG & TÀI KHOẢN (Hiển thị Đài/Trạm) ----------------
     async function loadAdminMasterData() {
       if (currentUser.role !== 'sys_admin' && currentUser.role !== 'dai_admin') return;
       
@@ -1052,62 +1020,61 @@
       
       const { data: accs } = await query;
       
-      // 1. Tải bảng Tài khoản
+      // 1. Tải bảng Tài khoản (Thêm hiển thị Tên Đài / Trạm)
       var accHtml = '';
       (accs || []).forEach(function(a) {
         var isMap = a.can_edit_map ? '✅' : '❌';
+        
+        // Truy xuất tên Đài và Trạm từ cache (rawDaiList, rawTramList)
+        var daiObj = rawDaiList.find(d => d.id_dai == a.id_dai);
+        var tramObj = rawTramList.find(t => t.id_tram == a.id_tram);
+        
+        var tenDai = daiObj ? daiObj.ten_dai : '<span style="color:#6c757d;">Toàn mạng</span>';
+        var tenTram = tramObj ? tramObj.ten_tram : '<span style="color:#6c757d;">Tất cả</span>';
+
         accHtml += `<tr>
-                      <td>${a.email}</td>
+                      <td><b>${a.email}</b></td>
                       <td>${a.role}</td>
+                      <td>${tenDai}</td>
+                      <td>${tenTram}</td>
                       <td>${isMap}</td>
                       <td>
                         <button class="btn-small" onclick="moFormSuaTaiKhoan(${a.id},'${a.email}','${a.role}',${a.id_dai || 'null'},${a.id_tram || 'null'},${a.can_edit_map})">✏️</button> 
-                        <button class="btn-small del" onclick="xoaTaiKhoan(${a.id})">🗑️</button>
+                        ${currentUser.role === 'sys_admin' ? `<button class="btn-small del" onclick="xoaTaiKhoan(${a.id})">🗑️</button>` : ''}
                       </td>
                     </tr>`;
       });
       document.getElementById('masterAccountTableBody').innerHTML = accHtml;
       
-      // Nút xóa chỉ dành cho sys_admin
       function taoNutXoa(tbl, col, val) {
-        if (currentUser.role === 'sys_admin') {
-          return `<button class="btn-small del" onclick="xoaAuxRecord('${tbl}','${col}',${val})">🗑️</button>`;
-        }
-        return '⛔';
+        return currentUser.role === 'sys_admin' ? `<button class="btn-small del" onclick="xoaAuxRecord('${tbl}','${col}',${val})">🗑️</button>` : '⛔';
       }
       
-      // 2. Tải bảng Đài
+      // Cập nhật các bảng Đài, Trạm, Tuyến, Đoạn (giữ nguyên logic)
       var daiHtml = '';
-      rawDaiList.forEach(function(d) {
-        daiHtml += `<tr><td>${d.id_dai}</td><td>${d.ten_dai}</td><td>${taoNutXoa('dai_vt','id_dai',d.id_dai)}</td></tr>`;
-      });
+      rawDaiList.forEach(d => daiHtml += `<tr><td>${d.id_dai}</td><td>${d.ten_dai}</td><td>${taoNutXoa('dai_vt','id_dai',d.id_dai)}</td></tr>`);
       document.getElementById('masterDaiTableBody').innerHTML = daiHtml;
       
-      // 3. Tải bảng Trạm
       var tramHtml = '';
-      rawTramList.forEach(function(t) {
-        var d = rawDaiList.find(function(x) { return x.id_dai == t.id_dai; });
+      rawTramList.forEach(t => {
+        var d = rawDaiList.find(x => x.id_dai == t.id_dai);
         tramHtml += `<tr><td>${t.id_tram}</td><td>${t.ten_tram}</td><td>${d ? d.ten_dai : '-'}</td><td>${taoNutXoa('tram_vt','id_tram',t.id_tram)}</td></tr>`;
       });
       document.getElementById('masterTramTableBody').innerHTML = tramHtml;
       
-      // 4. Tải bảng Tuyến
       var tuyenHtml = '';
-      rawTuyenList.forEach(function(t) {
-        tuyenHtml += `<tr><td>${t.id_tuyen_cap}</td><td>${t.ma_tuyencap}</td><td>${t.ten_tuyencap || ''}</td><td>${taoNutXoa('tuyen_cap','id_tuyen_cap',t.id_tuyen_cap)}</td></tr>`;
-      });
+      rawTuyenList.forEach(t => tuyenHtml += `<tr><td>${t.id_tuyen_cap}</td><td>${t.ma_tuyencap}</td><td>${t.ten_tuyencap || ''}</td><td>${taoNutXoa('tuyen_cap','id_tuyen_cap',t.id_tuyen_cap)}</td></tr>`);
       document.getElementById('masterTuyenTableBody').innerHTML = tuyenHtml;
       
-      // 5. Tải bảng Đoạn cáp
       var doanHtml = '';
-      rawDoanCapList.forEach(function(d) {
-        var ty = rawTuyenList.find(function(x) { return x.id_tuyen_cap == d.id_tuyen; });
+      rawDoanCapList.forEach(d => {
+        var ty = rawTuyenList.find(x => x.id_tuyen_cap == d.id_tuyen);
         doanHtml += `<tr><td>${d.id_doan_cap}</td><td>${d.ma_doancap}</td><td>${ty ? ty.ma_tuyencap : '-'}</td><td>${taoNutXoa('doan_cap','id_doan_cap',d.id_doan_cap)}</td></tr>`;
       });
       document.getElementById('masterDoanTableBody').innerHTML = doanHtml;
     }
 
-    // Hàm tạo các tùy chọn cho thẻ <select>
+    // Các hàm Helper Modal (Tài khoản, Danh mục)
     function populateDropdown(selId, list, idProp, nameProp, selectedVal) {
       var sel = document.getElementById(selId);
       sel.innerHTML = '<option value="">-- Chọn --</option>';
@@ -1147,32 +1114,16 @@
       var dai = document.getElementById('newMemberDai').value;
       var tram = document.getElementById('newMemberTram').value;
       
-      var payload = {
-        email: email,
-        role: role,
-        can_edit_map: canMap,
-        id_dai: dai ? parseInt(dai) : null,
-        id_tram: tram ? parseInt(tram) : null
-      };
-      
-      if (pass) {
-        payload.password = pass;
-      }
+      var payload = { email: email, role: role, can_edit_map: canMap, id_dai: dai ? parseInt(dai) : null, id_tram: tram ? parseInt(tram) : null };
+      if (pass) payload.password = pass;
       
       showLoading("Đang lưu tài khoản...");
       try {
-        if (!id) {
-          await supabaseClient.from('tai_khoan').insert([payload]);
-        } else {
-          await supabaseClient.from('tai_khoan').update(payload).eq('id', id);
-        }
+        if (!id) await supabaseClient.from('tai_khoan').insert([payload]);
+        else await supabaseClient.from('tai_khoan').update(payload).eq('id', id);
         alert("Lưu tài khoản thành công!");
         openModal('adminMasterModal', 'tab-accounts');
-      } catch (err) {
-        alert("Lỗi: " + err.message);
-      } finally {
-        hideLoading();
-      }
+      } catch (err) { alert("Lỗi: " + err.message); } finally { hideLoading(); }
     }
 
     async function xoaTaiKhoan(id) {
@@ -1188,20 +1139,17 @@
       document.getElementById('auxFormFields').innerHTML = '<label>Tên đài:</label><input type="text" id="auxName" class="form-group">';
       openModal('genericAuxModal');
     }
-
     function moFormThemTram() {
       document.getElementById('auxTableType').value = 'tram_vt';
       document.getElementById('auxFormFields').innerHTML = '<label>Tên trạm:</label><input type="text" id="auxName" class="form-group"><label>Thuộc Đài:</label><select id="auxRefId" class="form-group"></select>';
       populateDropdown('auxRefId', rawDaiList, 'id_dai', 'ten_dai', null);
       openModal('genericAuxModal');
     }
-
     function moFormThemTuyen() {
       document.getElementById('auxTableType').value = 'tuyen_cap';
       document.getElementById('auxFormFields').innerHTML = '<label>Mã Tuyến:</label><input type="text" id="auxName" class="form-group">';
       openModal('genericAuxModal');
     }
-
     function moFormThemDoan() {
       document.getElementById('auxTableType').value = 'doan_cap';
       document.getElementById('auxFormFields').innerHTML = '<label>Mã Đoạn:</label><input type="text" id="auxName" class="form-group"><label>Thuộc Tuyến:</label><select id="auxRefId" class="form-group"></select>';
@@ -1210,39 +1158,22 @@
     }
     
     async function saveAuxRecord() {
-      var tbl = document.getElementById('auxTableType').value;
-      var nameVal = document.getElementById('auxName').value;
-      
+      var tbl = document.getElementById('auxTableType').value, nameVal = document.getElementById('auxName').value;
       showLoading("Đang lưu dữ liệu...");
       try {
-        if (tbl === 'dai_vt') {
-          await supabaseClient.from('dai_vt').insert([{ ten_dai: nameVal }]);
-        } else if (tbl === 'tram_vt') {
-          var idDai = parseInt(document.getElementById('auxRefId').value);
-          await supabaseClient.from('tram_vt').insert([{ ten_tram: nameVal, id_dai: idDai }]);
-        } else if (tbl === 'tuyen_cap') {
-          await supabaseClient.from('tuyen_cap').insert([{ ma_tuyencap: nameVal }]);
-        } else if (tbl === 'doan_cap') {
-          var idTuyen = parseInt(document.getElementById('auxRefId').value);
-          await supabaseClient.from('doan_cap').insert([{ ma_doancap: nameVal, id_tuyen: idTuyen }]);
-        }
-        
+        if (tbl === 'dai_vt') await supabaseClient.from('dai_vt').insert([{ ten_dai: nameVal }]);
+        else if (tbl === 'tram_vt') await supabaseClient.from('tram_vt').insert([{ ten_tram: nameVal, id_dai: parseInt(document.getElementById('auxRefId').value) }]);
+        else if (tbl === 'tuyen_cap') await supabaseClient.from('tuyen_cap').insert([{ ma_tuyencap: nameVal }]);
+        else if (tbl === 'doan_cap') await supabaseClient.from('doan_cap').insert([{ ma_doancap: nameVal, id_tuyen: parseInt(document.getElementById('auxRefId').value) }]);
         alert("Lưu dữ liệu thành công!");
-        closeModals();
-        taiDuLieuSupabase();
-        openModal('adminMasterModal');
-      } catch (err) {
-        alert("Lỗi: " + err.message);
-      } finally {
-        hideLoading();
-      }
+        closeModals(); taiDuLieuSupabase(); openModal('adminMasterModal');
+      } catch (err) { alert("Lỗi: " + err.message); } finally { hideLoading(); }
     }
 
     async function xoaAuxRecord(tbl, col, val) {
       if (confirm("CẢNH BÁO: Bạn có chắc chắn muốn xóa mục này khỏi cơ sở dữ liệu?")) {
         await supabaseClient.from(tbl).delete().eq(col, val);
-        loadAdminMasterData();
-        taiDuLieuSupabase();
+        loadAdminMasterData(); taiDuLieuSupabase();
       }
     }
 
@@ -1253,7 +1184,6 @@
       document.getElementById('crudObjectName').value = name || '';
       document.getElementById('crudObjectLat').value = lat;
       document.getElementById('crudObjectLng').value = lng;
-      
       populateDropdown('crudObjectLoai', rawLoaiDiemList, 'id_loaidiem', 'ten_loaidiem', null);
       
       if (act === 'EDIT' && id) {
@@ -1262,34 +1192,20 @@
           document.getElementById('crudObjectLyTrinh').value = pt.lyTrinh || '';
           document.getElementById('crudObjectLoai').value = pt.idLoaiDiem;
         }
-      } else {
-        document.getElementById('crudObjectLyTrinh').value = '';
-      }
+      } else { document.getElementById('crudObjectLyTrinh').value = ''; }
       
       var btn = document.getElementById('btnConfirmCrud');
-      if (act === 'DELETE') {
-        btn.innerHTML = 'XÁC NHẬN XÓA';
-        btn.style.backgroundColor = '#dc3545';
-      } else {
-        btn.innerHTML = 'XÁC NHẬN LƯU';
-        btn.style.backgroundColor = '#198754';
-      }
-      
+      if (act === 'DELETE') { btn.innerHTML = 'XÁC NHẬN XÓA'; btn.style.backgroundColor = '#dc3545'; }
+      else { btn.innerHTML = 'XÁC NHẬN LƯU'; btn.style.backgroundColor = '#198754'; }
       openModal('crudModal');
     }
 
     async function executeCrudAction() {
-      var act = document.getElementById('crudActionType').value;
-      var id = document.getElementById('crudObjectId').value;
-      
-      var ten = document.getElementById('crudObjectName').value.trim();
-      var loai = parseInt(document.getElementById('crudObjectLoai').value);
-      var lyTrinh = document.getElementById('crudObjectLyTrinh').value;
-      
+      var act = document.getElementById('crudActionType').value, id = document.getElementById('crudObjectId').value;
       var payload = {
-        ten_diem: ten,
-        id_loaidiem: loai,
-        ly_trinh: lyTrinh
+        ten_diem: document.getElementById('crudObjectName').value.trim(),
+        id_loaidiem: parseInt(document.getElementById('crudObjectLoai').value),
+        ly_trinh: document.getElementById('crudObjectLyTrinh').value
       };
       
       showLoading("Đang thực hiện...");
@@ -1297,12 +1213,8 @@
         if (act === 'ADD') {
           payload.lat = parseFloat(document.getElementById('crudObjectLat').value);
           payload.long = parseFloat(document.getElementById('crudObjectLng').value);
-          
           var tuyenHienTai = document.getElementById('selectTuyen').value;
-          if (tuyenHienTai !== 'ALL') {
-            payload.id_tuyen_cap = parseInt(tuyenHienTai);
-          }
-          
+          if (tuyenHienTai !== 'ALL') payload.id_tuyen_cap = parseInt(tuyenHienTai);
           await supabaseClient.from('diem_ha_tang').insert([payload]);
         } else if (act === 'EDIT') {
           await supabaseClient.from('diem_ha_tang').update(payload).eq('id_diem', id);
@@ -1311,13 +1223,8 @@
         }
         
         alert("Cập nhật bản đồ thành công!");
-        closeModals();
-        taiDuLieuSupabase();
-      } catch (error) {
-        alert("Lỗi: " + error.message);
-      } finally {
-        hideLoading();
-      }
+        closeModals(); taiDuLieuSupabase();
+      } catch (error) { alert("Lỗi: " + error.message); } finally { hideLoading(); }
     }
   </script>
 </body>
