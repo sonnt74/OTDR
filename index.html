@@ -15,20 +15,16 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    /* Khóa cuộn trang hoàn toàn (No Scroll) */
     html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Arial, sans-serif; overflow: hidden; display: flex; flex-direction: row; background: #f0f2f5; }
     
-    /* Menu Bar bên trái */
     #sidebar-menu { width: 65px; height: 100vh; background-color: #212529; color: white; display: none; flex-direction: column; align-items: center; padding-top: 10px; z-index: 3000; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
     .menu-item { width: 45px; height: 45px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 6px; margin-bottom: 8px; color: #adb5bd; cursor: pointer; font-size: 9px; transition: all 0.2s; text-decoration: none; }
     .menu-item:hover, .menu-item.active { background-color: #0d6efd; color: white; }
     .menu-item span.icon { font-size: 18px; margin-bottom: 1px; }
 
-    /* Vùng Bản đồ & Bảng điều khiển */
     #workspace { flex: 1; position: relative; height: 100vh; overflow: hidden; }
     #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
     
-    /* Bảng điều khiển */
     #control-panel { position: absolute; top: 10px; left: 10px; z-index: 2000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 290px; display: none; max-height: calc(100vh - 20px); overflow-y: auto; box-sizing: border-box; }
     .panel-header { background-color: #0d6efd; color: white; padding: 6px 8px; font-weight: bold; font-size: 12px; border-radius: 4px; margin-bottom: 6px; text-align: center; }
     .form-group { margin-bottom: 6px; }
@@ -42,12 +38,10 @@
     .btn-warning { background-color: #ffc107; color: #000; }
     .checkbox-group { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 6px; background: #f8f9fa; padding: 5px; border-radius: 4px; }
 
-    /* Lớp mờ tải dữ liệu */
     #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.7); z-index: 999999; justify-content: center; align-items: center; color: #fff; font-size: 16px; flex-direction: column; }
     .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #0d6efd; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 10px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    /* Modals */
     .app-modal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 99999; justify-content: center; align-items: center; }
     .modal-content { background: white; width: 90%; max-width: 500px; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.4); max-height: 85vh; overflow-y: auto; box-sizing: border-box; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0d6efd; padding-bottom: 8px; margin-bottom: 10px; font-weight: bold; color: #0d6efd; font-size: 14px; }
@@ -55,7 +49,6 @@
     .table-data th, .table-data td { border: 1px solid #dee2e6; padding: 6px; text-align: left; }
     .table-data th { background-color: #f8f9fa; }
 
-    /* Thành phần bản đồ */
     .gmaps-btn { background: #4285F4; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-top: 4px; font-weight: bold; display: inline-flex; text-decoration: none; }
     .mx-marker { width: 12px; height: 12px; background-color: #198754; border: 2px solid #fff; transform: rotate(45deg); box-shadow: 0 0 5px rgba(0,0,0,0.4); }
     .standard-marker { width: 10px; height: 10px; background-color: #0d6efd; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.4); }
@@ -75,13 +68,11 @@
 </head>
 <body>
 
-  <!-- LOADING OVERLAY -->
   <div id="loading-overlay">
     <div class="spinner"></div>
     <div id="loading-overlay-text">Đang đồng bộ dữ liệu hệ thống...</div>
   </div>
 
-  <!-- MENU BAR -->
   <div id="sidebar-menu">
     <div class="menu-item active" onclick="toggleGISPanel()" title="Ẩn/Hiện Bảng Điều Khiển"><span class="icon">🗺️</span><span>GIS</span></div>
     <div class="menu-item" onclick="openModal('routeModal')" title="Thông tin Tuyến"><span class="icon">🛤️</span><span>Tuyến</span></div>
@@ -91,11 +82,9 @@
     <div class="menu-item" onclick="handleLogout()" title="Đăng xuất" style="margin-top: auto;"><span class="icon">🚪</span><span>Thoát</span></div>
   </div>
 
-  <!-- WORKSPACE -->
   <div id="workspace">
     <div id="map"></div>
 
-    <!-- Bảng Điều Khiển -->
     <div id="control-panel">
       <div class="panel-header"><span>🗺️ ĐIỀU KHIỂN & PHÂN TÍCH OTDR</span></div>
       
@@ -120,7 +109,7 @@
     </div>
   </div>
 
-  <!-- MODAL ĐĂNG NHẬP -->
+  <!-- MODAL ĐĂNG NHẬP (Mở sẵn khi vừa tải trang) -->
   <div id="loginModal" class="app-modal" style="display: flex;">
     <div class="modal-content" style="max-width: 360px;">
       <div class="modal-header"><span>👤 Đăng nhập Hệ Thống TNN NET1</span></div>
@@ -133,7 +122,6 @@
     </div>
   </div>
 
-  <!-- MODAL TUYẾN CÁP -->
   <div id="routeModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header"><span>🛤️ Quản lý & Thông tin Tuyến cáp</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -146,7 +134,6 @@
     </div>
   </div>
 
-  <!-- MODAL TRẠM & ĐÀI -->
   <div id="stationModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header"><span>🏢 Thông tin Đài VT & Trạm VT</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -162,7 +149,6 @@
     </div>
   </div>
 
-  <!-- MODAL PHÂN QUYỀN -->
   <div id="permissionModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header"><span>🔐 Phân cấp & Phân quyền (RBAC)</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -179,7 +165,6 @@
     </div>
   </div>
 
-  <!-- MODAL CÀI ĐẶT -->
   <div id="configModal" class="app-modal">
     <div class="modal-content" style="max-width: 300px;">
       <div class="modal-header"><span>⚙️ Thiết lập hệ thống</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -197,7 +182,6 @@
     </div>
   </div>
 
-  <!-- MODAL CRUD -->
   <div id="crudModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header"><span id="crudTitle">📝 Thông tin Đối tượng</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -214,7 +198,6 @@
     </div>
   </div>
 
-  <!-- MODAL QUẢN LÝ THÀNH VIÊN -->
   <div id="manageMembersModal" class="app-modal">
     <div class="modal-content" style="max-width: 550px;">
       <div class="modal-header"><span>👥 Quản Lý Danh Sách</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -227,7 +210,6 @@
     </div>
   </div>
 
-  <!-- MODAL THÊM TÀI KHOẢN -->
   <div id="addMemberModal" class="app-modal">
     <div class="modal-content" style="max-width: 360px;">
       <div class="modal-header"><span>👥 Thêm Mới Tài Khoản</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -250,12 +232,10 @@
   <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.js"></script>
 
   <script>
-    // --- 1. CẤU HÌNH SUPABASE ---
     const SUPABASE_URL = 'https://clddwitzwuewwxawuorv.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_U3tMbsj5oQ9Wub1UAJO5Cw_NXt6Px8E';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
-    // --- 2. BIẾN TOÀN CỤC ---
     var currentUser = { isLoggedIn: false, role: 'member', idDai: null, idTram: null };
     var map = null;
     var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
@@ -271,12 +251,11 @@
 
     var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], globalDataPoints = [];
 
-    // Khởi tạo bản đồ ngay khi tải trang
+    // KHÔNG gọi khoiTaoBanDoLeaflet() ở window.onload nữa để tránh lỗi render khi modal đăng nhập đang che khuất
     window.onload = function() {
-      khoiTaoBanDoLeaflet();
+      // Chỉ để trống hoặc làm tác vụ nền nhẹ nếu cần
     };
 
-    // --- 3. HÀM TIỆN ÍCH GIAO DIỆN ---
     function toggleGISPanel() { 
       var p = document.getElementById('control-panel'); 
       p.style.display = (p.style.display === 'none' || p.style.display === '') ? 'block' : 'none'; 
@@ -295,7 +274,7 @@
     function showLoading(msg) { document.getElementById('loading-overlay-text').innerText = msg; document.getElementById('loading-overlay').style.display = 'flex'; }
     function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
 
-    // --- 4. XÁC THỰC & PHÂN QUYỀN (RBAC) ---
+    // --- XÁC THỰC & KHỞI TẠO BẢN ĐỒ SAU KHI ĐĂNG NHẬP ---
     async function handleSupabaseLogin() {
       var email = document.getElementById('loginEmail').value.trim();
       var pass = document.getElementById('loginPass').value;
@@ -318,9 +297,11 @@
         }
 
         statusEl.style.color = 'green'; statusEl.textContent = "Đăng nhập thành công!";
+        
+        // 1. Ẩn modal đăng nhập hoàn toàn khỏi layout
         document.getElementById('loginModal').style.display = 'none';
         
-        // Hiển thị menu chức năng và bảng điều khiển
+        // 2. Hiển thị menu chức năng và bảng điều khiển
         document.getElementById('sidebar-menu').style.display = 'flex';
         document.getElementById('control-panel').style.display = 'block';
 
@@ -328,12 +309,11 @@
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
-        setTimeout(() => { 
-          if(map) {
-            map.invalidateSize();
-          }
+        // 3. Khởi tạo bản đồ ngay sau khi modal đã đóng (lúc này div#map đã có kích thước thực tế chính xác 100%)
+        setTimeout(() => {
+          khoiTaoBanDoLeaflet();
           taiDuLieuSupabase();
-        }, 150);
+        }, 100);
 
       } catch (err) {
         statusEl.style.color = 'red'; statusEl.textContent = "Lỗi: " + err.message;
@@ -343,6 +323,10 @@
     async function handleLogout() {
       await supabaseClient.auth.signOut();
       currentUser.isLoggedIn = false;
+      if (map !== null) {
+        map.remove();
+        map = null;
+      }
       document.getElementById('sidebar-menu').style.display = 'none';
       document.getElementById('control-panel').style.display = 'none';
       document.getElementById('adminMenuSection').style.display = 'none';
@@ -350,7 +334,6 @@
       document.getElementById('loginPass').value = '';
     }
 
-    // --- 5. BẢN ĐỒ LEAFLET & QUẢN LÝ LỚP HIỂN THỊ (Sử dụng CartoDB thay thế OSM bị chặn) ---
     function khoiTaoBanDoLeaflet() {
       if (map !== null) return;
 
@@ -434,7 +417,7 @@
         }
       });
 
-      setTimeout(() => { map.invalidateSize(); }, 100);
+      map.invalidateSize();
     }
 
     function clearMeasure() {
@@ -444,7 +427,6 @@
       measureMarkers = [];
     }
 
-    // --- 6. TẢI DỮ LIỆU TỪ SUPABASE ---
     async function fetchAllRows(tableName, selectQuery, orderColumn = null) {
       let pageSize = 1000, from = 0, allData = [], keepFetching = true;
       while (keepFetching) {
@@ -518,7 +500,6 @@
       }
     }
 
-    // --- 7. COMBO BOX LIÊN HOÀN (CÓ RBAC) ---
     function khoiTaoComboDai() {
       var selDai = document.getElementById('selectDai');
       selDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
@@ -776,7 +757,6 @@
       return calculatedLyTrinhs[calculatedLyTrinhs.length - 1] || "Km 0+000";
     }
 
-    // --- 8. VẼ BẢN ĐỒ VÀ PHÂN TÍCH OTDR ---
     function veLaiTuyenAB() {
       if(!map) return;
       if (markersLayer) markersLayer.clearLayers(); 
@@ -979,7 +959,6 @@
       });
     }
 
-    // --- 9. CRUD ĐIỂM HẠ TẦNG ---
     function moFormCrud(action, id, name, lat, lng) {
       document.getElementById('crudActionType').value = action;
       document.getElementById('crudObjectId').value = id || '';
@@ -1047,7 +1026,6 @@
       }
     }
 
-    // --- 10. TÌM LÝ TRÌNH ---
     function timLyTrinhBanDo() {
       var txt = document.getElementById('txtTimLyTrinh').value.trim();
       if(!txt) return alert("Nhập lý trình cần tìm!");
@@ -1088,7 +1066,6 @@
       }
     }
 
-    // --- 11. QUẢN LÝ TÀI KHOẢN (sys_admin) ---
     function chuanBiFormThemThanhVien() {
       var selDai = document.getElementById('newMemberDai'); selDai.innerHTML = '<option value="">-- Tất cả --</option>';
       (rawDaiList || []).forEach(d => selDai.innerHTML += `<option value="${d.id_dai}">${d.ten_dai}</option>`);
