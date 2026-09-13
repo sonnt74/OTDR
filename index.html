@@ -271,6 +271,7 @@
     function showLoading(msg) { document.getElementById('loading-overlay-text').innerText = msg; document.getElementById('loading-overlay').style.display = 'flex'; }
     function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
 
+    // --- ĐÚNG THỨ TỰ: KHỞI TẠO BẢN ĐỒ TRƯỚC, TẢI DỮ LIỆU VÀ VẼ SAU ---
     async function handleSupabaseLogin() {
       var email = document.getElementById('loginEmail').value.trim();
       var pass = document.getElementById('loginPass').value;
@@ -302,10 +303,13 @@
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
+        // Bước 1: Khởi tạo khung bản đồ Leaflet ngay khi modal biến mất
+        khoiTaoBanDoLeaflet();
+
+        // Bước 2: Tải dữ liệu và tự động vẽ lớp cáp/mốc cọc lên bản đồ
         setTimeout(() => {
-          khoiTaoBanDoLeaflet();
           taiDuLieuSupabase();
-        }, 100);
+        }, 150);
 
       } catch (err) {
         statusEl.style.color = 'red'; statusEl.textContent = "Lỗi: " + err.message;
@@ -493,10 +497,8 @@
         }
         globalDataPoints = allEntries;
         
-        // Kích hoạt nạp dữ liệu liên hoàn cho combo và tự động vẽ tuyến đầu tiên
         khoiTaoComboDai();
         
-        // Tự động chọn tuyến đầu tiên nếu danh sách tuyến có sẵn để vẽ luôn lên bản đồ
         var selTuyen = document.getElementById('selectTuyen');
         if (selTuyen.options.length > 1) {
           selTuyen.selectedIndex = 1;
