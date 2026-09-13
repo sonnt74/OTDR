@@ -230,10 +230,12 @@
     
     var currentUser = { isLoggedIn: false, role: 'member', idDai: null, idTram: null };
     var map = null;
-    var markersLayer = null;
-    var mxLayer = null;
-    var polylinesLayer = null;
-    var lyTrinhLayer = null;
+    
+    // Khởi tạo trước các Layer toàn cục để chống lỗi null
+    var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
+    var mxLayer = L.layerGroup();
+    var polylinesLayer = L.layerGroup();
+    var lyTrinhLayer = L.layerGroup();
     var foundMarkerLayer = null, foundMarkerTimer = null;
 
     var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], globalDataPoints = [];
@@ -288,10 +290,10 @@
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
-        // 1. Khởi tạo bản đồ ngay sau khi đăng nhập thành công
+        // 1. Khởi tạo bản đồ ngay sau đăng nhập
         khoiTaoBanDoLeaflet();
 
-        // 2. Gọi tải dữ liệu và vẽ tuyến
+        // 2. Tải dữ liệu CSDL
         setTimeout(() => {
           taiDuLieuSupabase();
         }, 150);
@@ -322,11 +324,6 @@
       var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 19, attribution: '&copy; Esri' });
 
       map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [osm] });
-      
-      markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
-      mxLayer = L.layerGroup();
-      polylinesLayer = L.layerGroup();
-      lyTrinhLayer = L.layerGroup();
 
       polylinesLayer.addTo(map); 
       markersLayer.addTo(map); 
@@ -379,12 +376,6 @@
         rawTramList = tramRes.data || [];
         rawTuyenList = tuyenRes.data || [];
         rawDoanCapList = doanRes.data || [];
-
-        // Debug log để kiểm tra F12
-        console.log("Dữ liệu Đài:", rawDaiList);
-        console.log("Dữ liệu Trạm:", rawTramList);
-        console.log("Dữ liệu Tuyến:", rawTuyenList);
-        console.log("Dữ liệu Đoạn-Điểm:", dcdData);
 
         var allEntries = [];
         if (dcdData) {
@@ -668,13 +659,15 @@
 
     function veLaiTuyenAB() {
       if(!map) return;
-      markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers(); lyTrinhLayer.clearLayers();
+      if(markersLayer) markersLayer.clearLayers(); 
+      if(mxLayer) mxLayer.clearLayers(); 
+      if(polylinesLayer) polylinesLayer.clearLayers(); 
+      if(lyTrinhLayer) lyTrinhLayer.clearLayers();
       
       var selTuyenId = document.getElementById('selectTuyen').value;
       if (selTuyenId === 'ALL') return;
 
       var pts = getPointsCuaTuyenHienTai();
-      console.log("Điểm vẽ tuyến hiện tại:", pts);
       if (pts.length === 0) return;
 
       var calculatedLyTrinhs = calculateRouteMilestones(pts, selTuyenId);
@@ -688,9 +681,9 @@
           var marker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: html, iconSize: [26, 26], iconAnchor: [13, 13] }) });
           var ltText = calculatedLyTrinhs[idx];
           marker.bindPopup("Tên: " + pt.ten + "<br>Lý trình: <b>" + (ltText || "Gốc") + "</b><br><a href='https://www.google.com/maps/search/?api=1&query=" + lat + "," + lng + "' target='_blank' class='gmaps-btn'>🗺️ Google Maps</a>");
-          markersLayer.addLayer(marker);
+          if(markersLayer) markersLayer.addLayer(marker);
           if ((idx === pts.length - 1 || (idx === 0 && ltText)) && ltText) {
-            lyTrinhLayer.addLayer(L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="lytrinh-badge">' + ltText + '</div>', iconSize: [100, 18], iconAnchor: [-8, 8] }), interactive: false }));
+            if(lyTrinhLayer) lyTrinhLayer.addLayer(L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="lytrinh-badge">' + ltText + '</div>', iconSize: [100, 18], iconAnchor: [-8, 8] }), interactive: false }));
           }
         }
       });
@@ -718,12 +711,12 @@
           }
 
           mxMarker.bindPopup(mxPopup);
-          mxLayer.addLayer(mxMarker);
+          if(mxLayer) mxLayer.addLayer(mxMarker);
         }
       });
 
       var line = pts.map(p => [parseFloat(p.lat), parseFloat(p.lng)]);
-      if (line.length > 1) polylinesLayer.addLayer(L.polyline(line, { color: '#0d6efd', weight: 3.5 }));
+      if (line.length > 1 && polylinesLayer) polylinesLayer.addLayer(L.polyline(line, { color: '#0d6efd', weight: 3.5 }));
       if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
     }
 
