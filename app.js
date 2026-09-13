@@ -439,53 +439,105 @@ function parseLyTrinh(str) {
   return match ? (parseInt(match[1]) * 1000 + parseInt(match[2])) : null;
 }
 
+// Hàm chuyển đổi chuỗi lý trình (VD: "54+100" hoặc "km 54+100") thành số mét tính từ mốc gốc
+function parseLyTrinh(str) {
+  if (!str) return null;
+  var cleanStr = str.toString().trim();
+  var match = cleanStr.match(/(?:km\s*)?(\d+)\s*\+\s*(\d+)/i);
+  if (match) {
+    return parseInt(match[1]) * 1000 + parseInt(match[2]);
+  }
+  // Trường hợp nhập số mét trực tiếp hoặc dạng khác
+  var num = parseFloat(cleanStr);
+  return isNaN(num) ? null : num;
+}
+
+// Hàm tìm và định vị lý trình nhanh trên bản đồ
 function timLyTrinhBanDo() {
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var targetMeters = parseLyTrinh(txt);
-  if (targetMeters === null) { alert("Sai định dạng lý trình (VD: 54+100)"); return; }
+  
+  if (targetMeters === null) {
+    alert("Sai định dạng lý trình! Vui lòng nhập theo mẫu: 54+100 hoặc km 54+100");
+    return;
+  }
   
   var pts = getPointsCuaTuyenHienTai();
-  if (pts.length === 0) { alert("Không có dữ liệu tuyến."); return; }
+  if (pts.length === 0) {
+    alert("Vui lòng chọn tuyến cáp ở bảng điều khiển bên trái trước khi tìm kiếm lý trình!");
+    return;
+  }
 
-  var heSo = parseFloat(document.getElementById('txtDoChung').value) || 1.05;
+  var heSo = parseFloat(document.getElementById('txtDoChung').value) || 1.075;
   var bestPt = null;
   var minDiff = Infinity;
 
+  // Bước 1: Ưu tiên tìm trong danh sách các điểm hạ tầng đã có sẵn lý trình
   pts.forEach(p => {
     var pMeters = parseLyTrinh(p.lyTrinh);
     if (pMeters !== null) {
       var diff = Math.abs(pMeters - targetMeters);
-      if (diff < minDiff) { minDiff = diff; bestPt = p; }
+      if (diff < minDiff) {
+        minDiff = diff;
+        bestPt = p;
+      }
     }
   });
 
-  if (!bestPt || minDiff > 5000) {
+  // Bước 2: Nếu không khớp điểm nào gần, tiến hành nội suy khoảng cách quang học dọc theo tuyến
+  if (!bestPt || minDiff > 10000) {
     var baseMeters = 0;
-    pts.forEach(p => { let m = parseLyTrinh(p.lyTrinh); if (m !== null && baseMeters === 0) baseMeters = m; });
+    pts.forEach(p => { 
+      let m = parseLyTrinh(p.lyTrinh); 
+      if (m !== null && baseMeters === 0) baseMeters = m; 
+    });
+    
     minDiff = Infinity;
     pts.forEach(p => {
       var distToA = getDistanceAlongRoute(p, pts) * heSo;
-      var estimated = baseMeters + distToA;
-      var diff = Math.abs(estimated - targetMeters);
-      if (diff < minDiff) { minDiff = diff; bestPt = p; }
+      var estimatedMeters = baseMeters + distToA;
+      var diff = Math.abs(estimatedMeters - targetMeters);
+      if (diff < minDiff) {
+        minDiff = diff;
+        bestPt = p;
+      }
     });
   }
 
-  if (!bestPt) { alert("Không tìm thấy lý trình phù hợp!"); return; }
+  if (!bestPt) {
+    alert("Không tìm thấy vị trí phù hợp với lý trình " + txt + " trên tuyến này!");
+    return;
+  }
 
+  // Tính toán cự ly thực tế từ trạm gốc đến điểm tìm được
   var distToA = getDistanceAlongRoute(bestPt, pts) * heSo;
   var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
 
+  // Hiển thị marker vị trí tìm thấy trên bản đồ
   if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
   map.setView([bestPt.lat, bestPt.lng], 19, { animate: true });
   
-  foundMarkerLayer = L.marker([bestPt.lat, bestPt.lng], { icon: L.divIcon({ html: '<div style="background:#fd7e14; font-size:24px;">📍</div>', className: '' }) }).addTo(map);
+  var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
+  foundMarkerLayer = L.marker([bestPt.lat, bestPt.lng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
   
-  var popupContent = `<b>Lý trình tìm kiếm: ${txt}</b><br>Điểm mốc: ${bestPt.ten} (LT: ${bestPt.lyTrinh||'Chưa nhập'})<br>📏 Cự ly cáp quang tới Trạm A: <b>${distStr}</b><br>🏛️ <span id='lt-addr'>Đang tra cứu...</span>`;
+  var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
+                     `- Điểm mốc gần nhất: <b>${bestPt.ten}</b><br>` +
+                     `- Lý trình gốc: ${bestPt.lyTrinh || 'Chưa cập nhật'}<br>` +
+                     `- Cự ly cáp quang tới Trạm A: <b>${distStr}</b><br>` +
+                     `🏛️ Địa chỉ: <span id='lt-addr'>Đang tra cứu tọa độ...</span>`;
+                     
   foundMarkerLayer.bindPopup(popupContent).openPopup();
   
+  // Tra cứu tên địa danh thực tế qua hệ thống Nominatim (OpenStreetMap)
   fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${bestPt.lat}&lon=${bestPt.lng}&accept-language=vi`)
-    .then(r => r.json()).then(data => foundMarkerLayer.setPopupContent(popupContent.replace("Đang tra cứu...", data.display_name || "Không rõ")));
+    .then(r => r.json())
+    .then(data => {
+      var addressText = data.display_name || "Không rõ địa chỉ chi tiết";
+      foundMarkerLayer.setPopupContent(popupContent.replace("Đang tra cứu tọa độ...", addressText));
+    })
+    .catch(() => {
+      foundMarkerLayer.setPopupContent(popupContent.replace("Đang tra cứu tọa độ...", "Không thể kết nối dịch vụ địa danh"));
+    });
 }
 
 // ---------------- QUẢN TRỊ HỆ THỐNG & DANH MỤC ----------------
