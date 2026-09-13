@@ -95,7 +95,7 @@
   <div id="workspace">
     <div id="map"></div>
 
-    <!-- Bảng Điều Khiển (Ẩn trước khi đăng nhập) -->
+    <!-- Bảng Điều Khiển -->
     <div id="control-panel">
       <div class="panel-header"><span>🗺️ ĐIỀU KHIỂN & PHÂN TÍCH OTDR</span></div>
       
@@ -271,7 +271,7 @@
 
     var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], globalDataPoints = [];
 
-    // Khởi tạo bản đồ ngay khi trang tải xong để thẻ div #map nhận diện đúng kích thước và lớp hiển thị
+    // Khởi tạo bản đồ ngay khi trang tải xong và gọi lại invalidateSize() để Leaflet nhận diện đúng diện tích hiển thị
     window.onload = function() {
       khoiTaoBanDoLeaflet();
     };
@@ -329,7 +329,9 @@
         }
 
         setTimeout(() => { 
-          if(map) map.invalidateSize();
+          if(map) {
+            map.invalidateSize();
+          }
           taiDuLieuSupabase();
         }, 150);
 
@@ -348,7 +350,7 @@
       document.getElementById('loginPass').value = '';
     }
 
-    // --- 5. BẢN ĐỒ LEAFLET ---
+    // --- 5. BẢN ĐỒ LEAFLET & QUẢN LÝ LỚP HIỂN THỊ ---
     function khoiTaoBanDoLeaflet() {
       if (map !== null) return;
 
@@ -362,6 +364,7 @@
       mxLayer.addTo(map); 
       lyTrinhLayer.addTo(map);
 
+      // Thêm bảng điều khiển các lớp bản đồ (Layer Control) ở góc trên bên phải
       L.control.layers(
         { "Bản đồ OSM": osm, "Vệ tinh": sat }, 
         { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
