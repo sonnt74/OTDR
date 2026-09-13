@@ -358,39 +358,38 @@
     async function taiDuLieuSupabase(forceRefresh = false) {
       showLoading("Đang tải dữ liệu từ máy chủ...");
       try {
-        // Tải độc lập các bảng danh mục cơ bản trước để tránh lỗi schema phức tạp
-        let [daiRes, tramRes, tuyenRes, doanRes, diemRes, loaiDiemRes, doanCapDiemRes] = await Promise.all([
-          supabaseClient.from('dai_vt').select('*'),
-          supabaseClient.from('tram_vt').select('*'),
-          supabaseClient.from('tuyen_cap').select('*'),
-          supabaseClient.from('doan_cap').select('*'),
-          supabaseClient.from('diem_ha_tang').select('*'),
-          supabaseClient.from('loai_diem').select('*'),
-          supabaseClient.from('doan_cap_diem').select('*')
-        ]);
+        // Gọi riêng lẻ từng bảng để tránh lỗi phân quyền schema hoặc quan hệ bảng
+        let daiReq = await supabaseClient.from('dai_vt').select('*');
+        let tramReq = await supabaseClient.from('tram_vt').select('*');
+        let tuyenReq = await supabaseClient.from('tuyen_cap').select('*');
+        let doanReq = await supabaseClient.from('doan_cap').select('*');
+        let diemReq = await supabaseClient.from('diem_ha_tang').select('*');
+        let dcdReq = await supabaseClient.from('doan_cap_diem').select('*');
 
-        rawDaiList = daiRes.data || [];
-        rawTramList = tramRes.data || [];
-        rawTuyenList = tuyenRes.data || [];
-        rawDoanCapList = doanRes.data || [];
+        rawDaiList = daiReq.data || [];
+        rawTramList = tramReq.data || [];
+        rawTuyenList = tuyenReq.data || [];
+        rawDoanCapList = doanReq.data || [];
         
-        var rawDiemList = diemRes.data || [];
-        var rawLoaiDiemList = loaiDiemRes.data || [];
-        var rawDoanCapDiemList = doanCapDiemRes.data || [];
+        var rawDiemList = diemReq.data || [];
+        var rawDoanCapDiemList = dcdReq.data || [];
 
-        // Tạo bảng tra cứu nhanh (Dictionary) bằng JavaScript để thay thế JOIN của SQL
-        var loaiDiemMap = {};
-        rawLoaiDiemList.forEach(l => { loaiDiemMap[l.id_loaidiem || l.id] = l.ten_loaidiem || l.ten || 'Điểm'; });
-
+        // Tạo từ điển (Dictionary) tra cứu nhanh bằng ID
         var diemMap = {};
-        rawDiemList.forEach(d => { diemMap[d.id_diem || d.id] = d; });
+        rawDiemList.forEach(d => { 
+          var id = d.id_diem || d.id;
+          if(id) diemMap[id] = d; 
+        });
 
         var doanCapMap = {};
-        rawDoanCapList.forEach(dc => { doanCapMap[dc.id_doan_cap || dc.id] = dc; });
+        rawDoanCapList.forEach(dc => { 
+          var id = dc.id_doan_cap || dc.id;
+          if(id) doanCapMap[id] = dc; 
+        });
 
         var allEntries = [];
-        
-        // Ghép nối dữ liệu thủ công bằng JavaScript cực kỳ an toàn, không sợ lỗi schema
+
+        // Ghép nối dữ liệu giữa điểm hạ tầng và đoạn cáp thủ công bằng JavaScript
         rawDoanCapDiemList.forEach(item => {
           var diemId = item.id_diem || item.diem_id;
           var doanCapId = item.id_doan_cap || item.doan_cap_id;
@@ -404,10 +403,9 @@
           var lngNum = parseFloat(pt.long || pt.lng);
           if (isNaN(latNum) || isNaN(lngNum)) return;
 
-          var idLoai = pt.id_loaidiem || pt.loai_diem_id || 1;
-          var loaiName = loaiDiemMap[idLoai] || 'Điểm';
+          var loaiName = pt.loai_diem || pt.ten_loaidiem || 'Điểm';
           var idTuyen = dc ? (dc.id_tuyen || dc.tuyen_cap_id) : null;
-          var isMx = (Number(idLoai) === 4 || loaiName.toLowerCase().includes('măng xông') || loaiName.toLowerCase().includes('mx'));
+          var isMx = (Number(pt.id_loaidiem) === 4 || String(loaiName).toLowerCase().includes('măng xông') || String(loaiName).toLowerCase().includes('mx'));
 
           allEntries.push({
             id: pt.id_diem || pt.id, 
@@ -417,7 +415,7 @@
             idTuyen: idTuyen, 
             idDoanCap: doanCapId, 
             idTram: pt.id_tram || 2, 
-            idLoaiDiem: idLoai,
+            idLoaiDiem: pt.id_loaidiem || 1,
             loai: loaiName, 
             lyTrinh: pt.ly_trinh || '', 
             duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
@@ -427,7 +425,7 @@
         });
 
         globalDataPoints = allEntries;
-        console.log("Đã nạp thành công tổng số điểm:", globalDataPoints.length);
+        console.log("Tổng số điểm hạ tầng sau khi xử lý:", globalDataPoints.length);
         
         khoiTaoComboDai();
         
