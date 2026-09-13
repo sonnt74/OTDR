@@ -265,24 +265,41 @@
       var pass = document.getElementById('loginPass').value;
       var statusEl = document.getElementById('loginStatus');
 
-      if (!email || !pass) { statusEl.style.color = 'red'; statusEl.textContent = "Nhập đủ email và mật khẩu!"; return; }
-      statusEl.style.color = '#0d6efd'; statusEl.textContent = "Đang kiểm tra bảo mật...";
+      if (!email || !pass) { 
+        statusEl.style.color = 'red'; 
+        statusEl.textContent = "Nhập đủ email và mật khẩu!"; 
+        return; 
+      }
+      
+      statusEl.style.color = '#0d6efd'; 
+      statusEl.textContent = "Đang kiểm tra thông tin...";
 
       try {
-        const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({ email: email, password: pass });
-        if (authError) throw authError;
+        // Truy vấn trực tiếp vào bảng public.tai_khoan thay vì gọi auth hệ thống
+        const { data, error } = await supabaseClient
+          .from('tai_khoan')
+          .select('*')
+          .eq('email', email)
+          .eq('password', pass)
+          .single();
 
-        const { data: roleData, error: roleError } = await supabaseClient.from('user_roles').select('*').eq('id', authData.user.id).single();
-
-        if (roleError || !roleData) {
-          currentUser = { isLoggedIn: true, role: 'member', idDai: null, idTram: null };
-        } else {
-          currentUser = { isLoggedIn: true, role: roleData.role, idDai: roleData.id_dai, idTram: roleData.id_tram };
+        if (error || !data) {
+          throw new Error("Sai email hoặc mật khẩu!");
         }
 
-        statusEl.style.color = 'green'; statusEl.textContent = "Đăng nhập thành công!";
-        document.getElementById('loginModal').style.display = 'none';
+        // Thiết lập thông tin người dùng hiện tại dựa trên dữ liệu lấy được
+        currentUser = { 
+          isLoggedIn: true, 
+          role: data.role || 'member', 
+          idDai: data.id_dai, 
+          idTram: data.id_tram 
+        };
+
+        statusEl.style.color = 'green'; 
+        statusEl.textContent = "Đăng nhập thành công!";
         
+        // Ẩn bảng đăng nhập, hiện giao diện làm việc
+        document.getElementById('loginModal').style.display = 'none';
         document.getElementById('sidebar-menu').style.display = 'flex';
         document.getElementById('control-panel').style.display = 'block';
 
@@ -290,6 +307,7 @@
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
+        // Khởi tạo bản đồ và tải dữ liệu hệ thống
         khoiTaoBanDoLeaflet();
 
         setTimeout(async () => {
@@ -297,7 +315,8 @@
         }, 100);
 
       } catch (err) {
-        statusEl.style.color = 'red'; statusEl.textContent = "Lỗi: " + err.message;
+        statusEl.style.color = 'red'; 
+        statusEl.textContent = "Lỗi: " + err.message;
       }
     }
 
