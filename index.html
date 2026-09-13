@@ -18,7 +18,7 @@
     /* Reset & Khung làm việc */
     html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Arial, sans-serif; overflow: hidden; display: flex; flex-direction: row; }
     
-    /* Menu Bar bên trái */
+    /* Menu Bar bên trái (Mặc định ẩn) */
     #sidebar-menu { width: 70px; height: 100vh; background-color: #212529; color: white; display: none; flex-direction: column; align-items: center; padding-top: 15px; z-index: 3000; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
     .menu-item { width: 50px; height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; margin-bottom: 12px; color: #adb5bd; cursor: pointer; font-size: 10px; transition: all 0.2s; text-decoration: none; }
     .menu-item:hover, .menu-item.active { background-color: #0d6efd; color: white; }
@@ -28,7 +28,7 @@
     #workspace { flex: 1; position: relative; height: 100vh; }
     #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
     
-    /* Bảng điều khiển */
+    /* Bảng điều khiển (Mặc định ẩn) */
     #control-panel { position: absolute; top: 15px; left: 15px; z-index: 2000; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 310px; display: none; max-height: 90vh; overflow-y: auto; }
     .panel-header { background-color: #0d6efd; color: white; padding: 8px 10px; font-weight: bold; font-size: 13px; border-radius: 5px; margin-bottom: 8px; text-align: center; }
     .form-group { margin-bottom: 8px; }
@@ -95,24 +95,21 @@
   <div id="workspace">
     <div id="map"></div>
 
-    <!-- Bảng Điều Khiển -->
+    <!-- Bảng Điều Khiển (Ẩn trước khi đăng nhập) -->
     <div id="control-panel">
       <div class="panel-header"><span>🗺️ ĐIỀU KHIỂN & PHÂN TÍCH OTDR</span></div>
       
-      <!-- Combobox Lọc Dữ Liệu -->
       <div class="form-group"><label>1. Chọn Đài VT:</label><select id="selectDai" onchange="onDaiChange()"><option value="ALL">-- Tất cả --</option></select></div>
       <div class="form-group"><label>2. Chọn Trạm VT:</label><select id="selectTram" onchange="onTramChange()"><option value="ALL">-- Tất cả --</option></select></div>
       <div class="form-group"><label>3. Chọn Tuyến Cáp:</label><select id="selectTuyen" onchange="onTuyenChange()"><option value="ALL">-- Chọn tuyến --</option></select></div>
       <div class="form-group"><label>4. Chọn Đoạn Cáp:</label><select id="selectDoanCap" onchange="onDoanCapChange()"><option value="ALL">-- Tất cả đoạn --</option></select></div>
       
-      <!-- OTDR -->
       <div class="form-group"><label>5. Nguồn điểm đo:</label><select id="comboDiemA" onchange="onDiemAChange()"><option value="DEFAULT">📍 Trạm TNN (21.593365, 105.839945)</option></select></div>
       <div class="checkbox-group"><input type="checkbox" id="chkNghichHuong" onchange="onDiemAChange()"><label style="margin:0;cursor:pointer;" for="chkNghichHuong">Đo ngược hướng (Quay đầu)</label></div>
       <div class="form-group"><label>6. Hệ số chùng cáp:</label><input type="number" id="txtDoChung" value="1.075" step="0.001"></div>
       <div class="form-group"><label>7. Cự ly đo OTDR (km):</label><input type="number" id="txtKcOtdr" value="3.5" step="0.1"></div>
       <div class="form-group"><button class="btn-action" onclick="timViTriDut()">🔍 PHÂN TÍCH & TÌM VỊ TRÍ SỰ CỐ</button></div>
       
-      <!-- Tìm Lý Trình -->
       <div class="form-group" style="border-top: 1px dashed #ccc; padding-top: 8px; margin-top: 8px;">
         <label>8. Tìm nhanh Lý trình (QL):</label>
         <div style="display: flex; gap: 6px;">
@@ -274,6 +271,11 @@
 
     var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], globalDataPoints = [];
 
+    // Khởi tạo bản đồ ngay khi trang tải xong để thẻ div #map nhận diện đúng kích thước và lớp hiển thị
+    window.onload = function() {
+      khoiTaoBanDoLeaflet();
+    };
+
     // --- 3. HÀM TIỆN ÍCH GIAO DIỆN ---
     function toggleGISPanel() { 
       var p = document.getElementById('control-panel'); 
@@ -318,6 +320,7 @@
         statusEl.style.color = 'green'; statusEl.textContent = "Đăng nhập thành công!";
         document.getElementById('loginModal').style.display = 'none';
         
+        // Hiển thị menu và bảng điều khiển sau khi đăng nhập thành công
         document.getElementById('sidebar-menu').style.display = 'flex';
         document.getElementById('control-panel').style.display = 'block';
 
@@ -326,7 +329,7 @@
         }
 
         setTimeout(() => { 
-          khoiTaoBanDoLeaflet(); 
+          if(map) map.invalidateSize();
           taiDuLieuSupabase();
         }, 150);
 
@@ -343,12 +346,11 @@
       document.getElementById('adminMenuSection').style.display = 'none';
       document.getElementById('loginModal').style.display = 'flex';
       document.getElementById('loginPass').value = '';
-      if(map) { map.remove(); map = null; }
     }
 
-    // --- 5. BẢN ĐỒ LEAFLET (ĐÃ BỔ SUNG LỚP HIỂN THỊ) ---
+    // --- 5. BẢN ĐỒ LEAFLET ---
     function khoiTaoBanDoLeaflet() {
-      if (map !== null) { map.invalidateSize(); return; }
+      if (map !== null) return;
 
       var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
       var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 19 });
@@ -360,14 +362,11 @@
       mxLayer.addTo(map); 
       lyTrinhLayer.addTo(map);
 
-      // Thêm thanh công cụ chọn lớp bản đồ và lớp phủ ở góc trên bên phải
       L.control.layers(
         { "Bản đồ OSM": osm, "Vệ tinh": sat }, 
         { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
         { position: 'topright' }
       ).addTo(map);
-
-      setTimeout(() => { map.invalidateSize(); }, 200);
 
       map.on('contextmenu', function(e) {
         if (!currentUser.isLoggedIn) { alert("Vui lòng đăng nhập để thao tác."); return; }
@@ -737,6 +736,19 @@
         var segmentSuffix = resultSuffixes[idx] || globalSuffix;
         return "Km " + km + "+" + (m < 10 ? "00" + m : (m < 100 ? "0" + m : m)) + (segmentSuffix ? " " + segmentSuffix : "");
       });
+    }
+
+    function parseLyTrinh(str) {
+      if (!str) return { meters: null, suffix: "" };
+      var s = str.toString().trim();
+      var match = s.match(/(?:km\s*)?(\d+)\s*\+\s*(\d+)(.*)/i);
+      if (match) {
+        var km = parseInt(match[1]) || 0;
+        var m = parseInt(match[2]) || 0;
+        var suffix = match[3] ? match[3].trim() : "";
+        return { meters: km * 1000 + m, suffix: suffix };
+      }
+      return { meters: null, suffix: "" };
     }
 
     function interpolateLyTrinhAtDistance(exactPhysDist, pts, calculatedLyTrinhs) {
