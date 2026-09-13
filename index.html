@@ -18,7 +18,7 @@
     /* Reset & Khung làm việc */
     html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Arial, sans-serif; overflow: hidden; display: flex; flex-direction: row; }
     
-    /* Menu Bar bên trái (Mặc định ẩn) */
+    /* Menu Bar bên trái */
     #sidebar-menu { width: 70px; height: 100vh; background-color: #212529; color: white; display: none; flex-direction: column; align-items: center; padding-top: 15px; z-index: 3000; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
     .menu-item { width: 50px; height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; margin-bottom: 12px; color: #adb5bd; cursor: pointer; font-size: 10px; transition: all 0.2s; text-decoration: none; }
     .menu-item:hover, .menu-item.active { background-color: #0d6efd; color: white; }
@@ -28,7 +28,7 @@
     #workspace { flex: 1; position: relative; height: 100vh; }
     #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
     
-    /* Bảng điều khiển (Mặc định ẩn) */
+    /* Bảng điều khiển */
     #control-panel { position: absolute; top: 15px; left: 15px; z-index: 2000; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 310px; display: none; max-height: 90vh; overflow-y: auto; }
     .panel-header { background-color: #0d6efd; color: white; padding: 8px 10px; font-weight: bold; font-size: 13px; border-radius: 5px; margin-bottom: 8px; text-align: center; }
     .form-group { margin-bottom: 8px; }
@@ -271,7 +271,7 @@
 
     var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], globalDataPoints = [];
 
-    // Khởi tạo bản đồ ngay khi trang tải xong và gọi lại invalidateSize() để Leaflet nhận diện đúng diện tích hiển thị
+    // Khởi tạo bản đồ ngay khi tải trang
     window.onload = function() {
       khoiTaoBanDoLeaflet();
     };
@@ -330,7 +330,7 @@
 
         setTimeout(() => { 
           if(map) {
-            map.invalidateSize();
+            map.invalidateSize(); // Ép làm mới kích thước bản đồ
           }
           taiDuLieuSupabase();
         }, 150);
