@@ -231,7 +231,6 @@
     var currentUser = { isLoggedIn: false, role: 'member', idDai: null, idTram: null };
     var map = null;
     
-    // Khởi tạo trước các Layer toàn cục để chống lỗi null
     var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
     var mxLayer = L.layerGroup();
     var polylinesLayer = L.layerGroup();
@@ -290,10 +289,8 @@
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
-        // 1. Khởi tạo bản đồ ngay sau đăng nhập
         khoiTaoBanDoLeaflet();
 
-        // 2. Tải dữ liệu CSDL
         setTimeout(() => {
           taiDuLieuSupabase();
         }, 150);
@@ -402,7 +399,7 @@
         var selTuyen = document.getElementById('selectTuyen');
         if (selTuyen.options.length > 1) {
           selTuyen.selectedIndex = 1;
-          onTuyenChange();
+          onTuyenChange(); // Tự động kích hoạt vẽ tuyến đầu tiên
         }
 
       } catch (err) {
