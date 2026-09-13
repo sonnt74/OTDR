@@ -77,7 +77,7 @@
       height: 100%;
     }
     
-    /* Control Panel - Thu gọn, tối ưu không gian, không dùng scroll */
+    /* Control Panel */
     #control-panel {
       position: absolute;
       top: 10px;
@@ -124,7 +124,6 @@
       font-size: 11px;
       box-sizing: border-box;
     }
-    /* Thêm style cho thẻ bị vô hiệu hóa (Phân quyền) */
     .form-group select:disabled, .form-group input:disabled { background-color: #e9ecef; cursor: not-allowed; }
 
     .btn-action {
@@ -192,7 +191,6 @@
       border-radius: 8px; padding: 20px; display: flex; flex-direction: column;
       box-shadow: 0 10px 30px rgba(0,0,0,0.3);
     }
-    /* Modal Cài đặt & CRUD làm hẹp gọn lại */
     #configModal .modal-content { max-width: 320px; padding: 15px; }
     #crudModal .modal-content { max-width: 350px; padding: 15px; }
     #loginModal .modal-content { max-width: 350px; padding: 15px; }
@@ -217,7 +215,6 @@
     .btn-small { background: #0d6efd; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; }
     .btn-small.del { background: #dc3545; }
 
-    /* Responsive Design cho Mobile & Tablet */
     @media (max-width: 768px) {
       body { flex-direction: column-reverse; }
       #sidebar-menu { width: 100%; height: 55px; flex-direction: row; justify-content: space-around; padding-top: 0; }
@@ -378,7 +375,7 @@
     </div>
   </div>
 
-  <!-- Modal: Cài đặt & Cấu hình (Có Menu Quản trị) -->
+  <!-- Modal: Cài đặt & Cấu hình -->
   <div id="configModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -428,7 +425,7 @@
     </div>
   </div>
 
-  <!-- Modal: Quản lý Tài khoản (RBAC) -->
+  <!-- Modal: Quản lý Tài khoản -->
   <div id="manageMembersModal" class="app-modal">
     <div class="modal-content"><div class="modal-header"><span>👥 Tài khoản hệ thống</span><button onclick="closeModals()" style="background:#dc3545; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">Đóng</button></div>
       <div class="modal-body">
@@ -437,7 +434,7 @@
     </div>
   </div>
 
-  <!-- Modal: Thêm Tài khoản (RBAC) -->
+  <!-- Modal: Thêm Tài khoản -->
   <div id="addMemberModal" class="app-modal">
     <div class="modal-content"><div class="modal-header"><span>👥 Thêm Tài Khoản Mới</span><button onclick="closeModals()" style="background:#dc3545; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">Đóng</button></div>
       <div class="modal-body">
@@ -492,9 +489,8 @@
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const CACHE_KEY = 'tnn_gis_hierarchy_cache';
-    const CACHE_VERSION = '1.0.11';
+    const CACHE_VERSION = '1.0.12';
 
-    // Thêm biến currentUser cho RBAC
     var currentUser = { isLoggedIn: false, role: 'member', idDai: null, idTram: null };
 
     var map;
@@ -540,7 +536,6 @@
       document.querySelectorAll('.app-modal').forEach(m => { if(m.id !== 'customAlertModal') m.style.display = 'none'; });
     }
 
-    // Xử lý nút Tài Khoản (Đăng nhập / Đăng xuất)
     async function handleAuthClick() {
       if (currentUser.isLoggedIn) {
         await supabaseClient.auth.signOut();
@@ -548,8 +543,8 @@
         document.getElementById('adminMenuSection').style.display = 'none';
         document.getElementById('authMenuText').innerText = "Login";
         showAlert("Đã đăng xuất thành công khỏi hệ thống.");
-        khoiTaoComboDai(); // Tải lại combobox (Bỏ khóa RBAC)
-        xoaTuyenThuCong(); // Làm sạch map
+        khoiTaoComboDai();
+        xoaTuyenThuCong();
       } else {
         openModal('loginModal');
       }
@@ -573,7 +568,6 @@
 
       setTimeout(() => { map.invalidateSize(); }, 200);
 
-      // Phân quyền: Mở form thêm điểm khi click chuột phải
       map.on('contextmenu', function(e) {
         if (!currentUser.isLoggedIn) { showAlert("Vui lòng đăng nhập để thao tác."); return; }
         if (currentUser.role === 'member') { showAlert("Tài khoản Thành viên không có quyền Thêm Điểm!"); return; }
@@ -789,7 +783,6 @@
         opt.textContent = dai.ten_dai;
         selDai.appendChild(opt);
       });
-      // Tích hợp khóa RBAC
       if (currentUser.role === 'member' && currentUser.idDai) {
         selDai.value = currentUser.idDai;
         selDai.disabled = true;
@@ -811,7 +804,6 @@
         opt.textContent = tram.ten_tram;
         selTram.appendChild(opt);
       });
-      // Tích hợp khóa RBAC
       if (currentUser.role === 'member' && currentUser.idTram) {
         selTram.value = currentUser.idTram;
         selTram.disabled = true;
@@ -1087,7 +1079,6 @@
           if (mx.doCachTram) mxPopup += "📏 Đo cách trạm: <b>" + mx.doCachTram + "</b><br>";
           mxPopup += "<a href='https://www.google.com/maps/search/?api=1&query=" + lat + "," + lng + "' target='_blank' class='gmaps-btn'>🗺️ Google Maps</a>";
 
-          // Phân quyền: Cấp quyền Quản trị viên mới thấy nút Sửa/Xóa
           if (currentUser.role !== 'member') {
             mxPopup += `<hr style="margin:8px 0;">
               <button class="btn-small" onclick="moFormCrud('EDIT','${mx.id}','${mx.ten}',${lat},${lng})">✏️ Sửa</button>
@@ -1258,26 +1249,18 @@
       statusEl.textContent = "Đang xác thực...";
 
       try {
-        // Bước 1: Xác thực với Supabase Auth
         const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email, password: pass });
-        if (error) {
-           throw new Error("Xác thực thất bại: " + error.message);
-        }
+        if (error) throw new Error("Xác thực thất bại: " + error.message);
         
-        // Bước 2: Tải quyền hạn người dùng (RBAC) từ public.user_roles
-        const { data: roleData, error: roleError } = await supabaseClient.from('user_roles').select('*').eq('id', data.user.id).single();
+        let { data: roleData, error: roleError } = await supabaseClient.from('user_roles').select('*').eq('id', data.user.id).single();
         
-        if (roleError) {
-          console.warn("Lỗi tải quyền (Schema Error), hệ thống sẽ dùng quyền mặc định:", roleError.message);
-        }
-
-        if (roleData) {
-          currentUser = { isLoggedIn: true, role: roleData.role, idDai: roleData.id_dai, idTram: roleData.id_tram };
-        } else {
+        if (roleError || !roleData) {
+          await supabaseClient.from('user_roles').insert([{ id: data.user.id, email: data.user.email, role: 'member' }]);
           currentUser = { isLoggedIn: true, role: 'member', idDai: null, idTram: null };
+        } else {
+          currentUser = { isLoggedIn: true, role: roleData.role, idDai: roleData.id_dai, idTram: roleData.id_tram };
         }
 
-        // Hiện công cụ quản trị nếu là admin hệ thống
         if (currentUser.role === 'sys_admin') {
           document.getElementById('adminMenuSection').style.display = 'block';
         } else {
@@ -1290,7 +1273,7 @@
 
         setTimeout(() => { 
           closeModals(); 
-          khoiTaoComboDai(); // Tái khởi tạo Combobox để áp dụng các khóa RBAC
+          khoiTaoComboDai();
         }, 1500);
       } catch (err) {
         statusEl.style.color = 'red';
@@ -1298,7 +1281,6 @@
       }
     }
 
-    // Các hàm phục vụ CRUD Điểm
     function moFormCrud(action, id, name, lat, lng) {
       document.getElementById('crudActionType').value = action; 
       document.getElementById('crudObjectId').value = id || '';
@@ -1355,7 +1337,6 @@
       } catch(err) { showAlert("Lỗi: " + err.message); hideLoading(); }
     }
 
-    // Các hàm phục vụ Quản lý tài khoản Admin
     async function moModalQuanLyThanhVien() {
       openModal('manageMembersModal');
       var tbody = document.querySelector('#memberTable tbody'); tbody.innerHTML = '<tr><td colspan="3">Đang tải...</td></tr>';
