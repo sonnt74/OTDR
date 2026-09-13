@@ -358,23 +358,33 @@
     async function taiDuLieuSupabase(forceRefresh = false) {
       showLoading("Đang tải dữ liệu từ máy chủ...");
       try {
-        // Gọi riêng lẻ từng bảng để tránh lỗi phân quyền schema hoặc quan hệ bảng
-        let daiReq = await supabaseClient.from('dai_vt').select('*');
-        let tramReq = await supabaseClient.from('tram_vt').select('*');
-        let tuyenReq = await supabaseClient.from('tuyen_cap').select('*');
-        let doanReq = await supabaseClient.from('doan_cap').select('*');
-        let diemReq = await supabaseClient.from('diem_ha_tang').select('*');
-        let dcdReq = await supabaseClient.from('doan_cap_diem').select('*');
+        // Tải từng bảng độc lập và bắt lỗi riêng biệt để dễ chẩn đoán
+        let daiRes = await supabaseClient.from('dai_vt').select('*');
+        if (daiRes.error) console.error("Lỗi bảng dai_vt:", daiRes.error.message);
 
-        rawDaiList = daiReq.data || [];
-        rawTramList = tramReq.data || [];
-        rawTuyenList = tuyenReq.data || [];
-        rawDoanCapList = doanReq.data || [];
+        let tramRes = await supabaseClient.from('tram_vt').select('*');
+        if (tramRes.error) console.error("Lỗi bảng tram_vt:", tramRes.error.message);
+
+        let tuyenRes = await supabaseClient.from('tuyen_cap').select('*');
+        if (tuyenRes.error) console.error("Lỗi bảng tuyen_cap:", tuyenRes.error.message);
+
+        let doanRes = await supabaseClient.from('doan_cap').select('*');
+        if (doanRes.error) console.error("Lỗi bảng doan_cap:", doanRes.error.message);
+
+        let diemRes = await supabaseClient.from('diem_ha_tang').select('*');
+        if (diemRes.error) console.error("Lỗi bảng diem_ha_tang:", diemRes.error.message);
+
+        let dcdRes = await supabaseClient.from('doan_cap_diem').select('*');
+        if (dcdRes.error) console.error("Lỗi bảng doan_cap_diem:", dcdRes.error.message);
+
+        rawDaiList = daiRes.data || [];
+        rawTramList = tramRes.data || [];
+        rawTuyenList = tuyenRes.data || [];
+        rawDoanCapList = doanRes.data || [];
         
-        var rawDiemList = diemReq.data || [];
-        var rawDoanCapDiemList = dcdReq.data || [];
+        var rawDiemList = diemRes.data || [];
+        var rawDoanCapDiemList = dcdRes.data || [];
 
-        // Tạo từ điển (Dictionary) tra cứu nhanh bằng ID
         var diemMap = {};
         rawDiemList.forEach(d => { 
           var id = d.id_diem || d.id;
@@ -389,7 +399,6 @@
 
         var allEntries = [];
 
-        // Ghép nối dữ liệu giữa điểm hạ tầng và đoạn cáp thủ công bằng JavaScript
         rawDoanCapDiemList.forEach(item => {
           var diemId = item.id_diem || item.diem_id;
           var doanCapId = item.id_doan_cap || item.doan_cap_id;
@@ -425,7 +434,7 @@
         });
 
         globalDataPoints = allEntries;
-        console.log("Tổng số điểm hạ tầng sau khi xử lý:", globalDataPoints.length);
+        console.log("Tổng số điểm hạ tầng nạp thành công:", globalDataPoints.length);
         
         khoiTaoComboDai();
         
