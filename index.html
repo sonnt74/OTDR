@@ -109,7 +109,7 @@
     </div>
   </div>
 
-  <!-- MODAL ĐĂNG NHẬP (Mở sẵn khi vừa tải trang) -->
+  <!-- MODAL ĐĂNG NHẬP -->
   <div id="loginModal" class="app-modal" style="display: flex;">
     <div class="modal-content" style="max-width: 360px;">
       <div class="modal-header"><span>👤 Đăng nhập Hệ Thống TNN NET1</span></div>
@@ -251,10 +251,7 @@
 
     var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], globalDataPoints = [];
 
-    // KHÔNG gọi khoiTaoBanDoLeaflet() ở window.onload nữa để tránh lỗi render khi modal đăng nhập đang che khuất
-    window.onload = function() {
-      // Chỉ để trống hoặc làm tác vụ nền nhẹ nếu cần
-    };
+    window.onload = function() { };
 
     function toggleGISPanel() { 
       var p = document.getElementById('control-panel'); 
@@ -274,7 +271,6 @@
     function showLoading(msg) { document.getElementById('loading-overlay-text').innerText = msg; document.getElementById('loading-overlay').style.display = 'flex'; }
     function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
 
-    // --- XÁC THỰC & KHỞI TẠO BẢN ĐỒ SAU KHI ĐĂNG NHẬP ---
     async function handleSupabaseLogin() {
       var email = document.getElementById('loginEmail').value.trim();
       var pass = document.getElementById('loginPass').value;
@@ -297,11 +293,8 @@
         }
 
         statusEl.style.color = 'green'; statusEl.textContent = "Đăng nhập thành công!";
-        
-        // 1. Ẩn modal đăng nhập hoàn toàn khỏi layout
         document.getElementById('loginModal').style.display = 'none';
         
-        // 2. Hiển thị menu chức năng và bảng điều khiển
         document.getElementById('sidebar-menu').style.display = 'flex';
         document.getElementById('control-panel').style.display = 'block';
 
@@ -309,7 +302,6 @@
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
-        // 3. Khởi tạo bản đồ ngay sau khi modal đã đóng (lúc này div#map đã có kích thước thực tế chính xác 100%)
         setTimeout(() => {
           khoiTaoBanDoLeaflet();
           taiDuLieuSupabase();
@@ -334,13 +326,23 @@
       document.getElementById('loginPass').value = '';
     }
 
+    // Đã trả lại bản đồ OSM tiêu chuẩn và Vệ tinh Esri
     function khoiTaoBanDoLeaflet() {
       if (map !== null) return;
 
-      var cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 21, maxNativeZoom: 20 });
-      var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 19 });
+      var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+        maxZoom: 21, 
+        maxNativeZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' 
+      });
+      
+      var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { 
+        maxZoom: 21, 
+        maxNativeZoom: 19, 
+        attribution: '&copy; Esri' 
+      });
 
-      map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [cartoLight] });
+      map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [osm] });
       
       polylinesLayer.addTo(map); 
       markersLayer.addTo(map); 
@@ -348,7 +350,7 @@
       lyTrinhLayer.addTo(map);
 
       L.control.layers(
-        { "Bản đồ Sáng (Carto)": cartoLight, "Vệ tinh Esri": sat }, 
+        { "Bản đồ OSM": osm, "Vệ tinh Esri": sat }, 
         { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
         { position: 'topright' }
       ).addTo(map);
