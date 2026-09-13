@@ -326,14 +326,13 @@
       document.getElementById('loginPass').value = '';
     }
 
-    // Đã trả lại bản đồ OSM tiêu chuẩn và Vệ tinh Esri
     function khoiTaoBanDoLeaflet() {
       if (map !== null) return;
 
       var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
         maxZoom: 21, 
         maxNativeZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' 
+        attribution: '&copy; OpenStreetMap contributors' 
       });
       
       var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { 
@@ -493,7 +492,17 @@
           });
         }
         globalDataPoints = allEntries;
+        
+        // Kích hoạt nạp dữ liệu liên hoàn cho combo và tự động vẽ tuyến đầu tiên
         khoiTaoComboDai();
+        
+        // Tự động chọn tuyến đầu tiên nếu danh sách tuyến có sẵn để vẽ luôn lên bản đồ
+        var selTuyen = document.getElementById('selectTuyen');
+        if (selTuyen.options.length > 1) {
+          selTuyen.selectedIndex = 1;
+          onTuyenChange();
+        }
+
       } catch (err) {
         alert("Lỗi khi kết nối CSDL: " + err.message);
       } finally {
