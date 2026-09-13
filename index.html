@@ -3,7 +3,7 @@
 <head>
   <base target="_top">
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1</title>
   
   <!-- Leaflet CSS -->
@@ -15,100 +15,147 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    /* Reset & Khung làm việc tổng thể cho PC */
-    html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Arial, sans-serif; overflow: hidden; display: flex; flex-direction: row; background: #f0f2f5; }
+    /* 1. Khóa hoàn toàn cuộn trang (No Scroll) trên mọi thiết bị */
+    html, body { 
+      width: 100vw; 
+      height: 100vh; 
+      margin: 0; 
+      padding: 0; 
+      font-family: Arial, sans-serif; 
+      overflow: hidden; 
+      display: flex; 
+      flex-direction: row; 
+      background: #f0f2f5; 
+    }
     
-    /* Menu Bar bên trái (Mặc định cho PC) */
-    #sidebar-menu { width: 70px; height: 100vh; background-color: #212529; color: white; display: none; flex-direction: column; align-items: center; padding-top: 15px; z-index: 3000; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
-    .menu-item { width: 50px; height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; margin-bottom: 12px; color: #adb5bd; cursor: pointer; font-size: 10px; transition: all 0.2s; text-decoration: none; }
+    /* 2. Menu Bar bên trái (Mặc định cho PC) */
+    #sidebar-menu { 
+      width: 65px; 
+      height: 100vh; 
+      background-color: #212529; 
+      color: white; 
+      display: none; 
+      flex-direction: column; 
+      align-items: center; 
+      padding-top: 10px; 
+      z-index: 3000; 
+      flex-shrink: 0; 
+      box-shadow: 2px 0 10px rgba(0,0,0,0.3); 
+    }
+    .menu-item { 
+      width: 45px; 
+      height: 45px; 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      justify-content: center; 
+      border-radius: 6px; 
+      margin-bottom: 8px; 
+      color: #adb5bd; 
+      cursor: pointer; 
+      font-size: 9px; 
+      transition: all 0.2s; 
+      text-decoration: none; 
+    }
     .menu-item:hover, .menu-item.active { background-color: #0d6efd; color: white; }
-    .menu-item span.icon { font-size: 20px; margin-bottom: 2px; }
+    .menu-item span.icon { font-size: 18px; margin-bottom: 1px; }
 
-    /* Vùng Bản đồ & Bảng điều khiển */
-    #workspace { flex: 1; position: relative; height: 100vh; }
-    #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+    /* 3. Vùng Bản đồ & Bảng điều khiển */
+    #workspace { 
+      flex: 1; 
+      position: relative; 
+      height: 100vh; 
+      overflow: hidden; 
+    }
+    #map { 
+      width: 100%; 
+      height: 100%; 
+      position: absolute; 
+      top: 0; 
+      left: 0; 
+      z-index: 1; 
+    }
     
-    /* Bảng điều khiển (Control Panel) */
-    #control-panel { position: absolute; top: 15px; left: 15px; z-index: 2000; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 310px; display: none; max-height: 85vh; overflow-y: auto; box-sizing: border-box; }
-    .panel-header { background-color: #0d6efd; color: white; padding: 8px 10px; font-weight: bold; font-size: 13px; border-radius: 5px; margin-bottom: 8px; text-align: center; }
-    .form-group { margin-bottom: 8px; }
-    .form-group label { display: block; font-size: 10px; font-weight: bold; margin-bottom: 3px; color: #333; text-transform: uppercase; }
-    .form-group select, .form-group input { width: 100%; padding: 6px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 11px; box-sizing: border-box; }
+    /* 4. Bảng điều khiển (Control Panel) co giãn gọn gàng */
+    #control-panel { 
+      position: absolute; 
+      top: 10px; 
+      left: 10px; 
+      z-index: 2000; 
+      background: white; 
+      padding: 10px; 
+      border-radius: 8px; 
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3); 
+      width: 290px; 
+      display: none; 
+      max-height: calc(100vh - 20px); 
+      overflow-y: auto; 
+      box-sizing: border-box; 
+    }
+    .panel-header { background-color: #0d6efd; color: white; padding: 6px 8px; font-weight: bold; font-size: 12px; border-radius: 4px; margin-bottom: 6px; text-align: center; }
+    .form-group { margin-bottom: 6px; }
+    .form-group label { display: block; font-size: 9px; font-weight: bold; margin-bottom: 2px; color: #333; text-transform: uppercase; }
+    .form-group select, .form-group input { width: 100%; padding: 5px 6px; border-radius: 4px; border: 1px solid #ccc; font-size: 11px; box-sizing: border-box; }
     .form-group select:disabled, .form-group input:disabled { background-color: #e9ecef; cursor: not-allowed; }
     
-    .btn-action { background-color: #dc3545; color: white; border: none; font-weight: bold; cursor: pointer; padding: 9px; border-radius: 5px; font-size: 11px; width: 100%; margin-top: 2px; }
+    .btn-action { background-color: #dc3545; color: white; border: none; font-weight: bold; cursor: pointer; padding: 7px; border-radius: 4px; font-size: 11px; width: 100%; margin-top: 2px; }
     .btn-action:hover { opacity: 0.9; }
     .btn-success { background-color: #198754; }
     .btn-warning { background-color: #ffc107; color: #000; }
-    .checkbox-group { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 8px; background: #f8f9fa; padding: 6px; border-radius: 4px; }
+    .checkbox-group { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 6px; background: #f8f9fa; padding: 5px; border-radius: 4px; }
 
     /* Lớp mờ tải dữ liệu */
     #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.7); z-index: 999999; justify-content: center; align-items: center; color: #fff; font-size: 16px; flex-direction: column; }
-    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #0d6efd; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; margin-bottom: 12px; }
+    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #0d6efd; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 10px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
     /* Modals */
     .app-modal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 99999; justify-content: center; align-items: center; }
-    .modal-content { background: white; width: 90%; max-width: 550px; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.4); max-height: 85vh; overflow-y: auto; box-sizing: border-box; }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0d6efd; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold; color: #0d6efd; font-size: 15px; }
-    .table-data { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-    .table-data th, .table-data td { border: 1px solid #dee2e6; padding: 8px; text-align: left; }
+    .modal-content { background: white; width: 90%; max-width: 500px; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.4); max-height: 85vh; overflow-y: auto; box-sizing: border-box; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0d6efd; padding-bottom: 8px; margin-bottom: 10px; font-weight: bold; color: #0d6efd; font-size: 14px; }
+    .table-data { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
+    .table-data th, .table-data td { border: 1px solid #dee2e6; padding: 6px; text-align: left; }
     .table-data th { background-color: #f8f9fa; }
 
     /* Thành phần bản đồ */
-    .gmaps-btn { background: #4285F4; color: white; padding: 5px 10px; border-radius: 4px; font-size: 11px; margin-top: 6px; font-weight: bold; display: inline-flex; text-decoration: none; }
-    .mx-marker { width: 14px; height: 14px; background-color: #198754; border: 2px solid #fff; transform: rotate(45deg); box-shadow: 0 0 6px rgba(0,0,0,0.4); }
-    .standard-marker { width: 10px; height: 10px; background-color: #0d6efd; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,0.4); }
-    .point-a-marker { background: linear-gradient(135deg, #ffc107, #ff9800); color: #000; font-weight: bold; font-size: 12px; text-align: center; line-height: 28px; width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 14px rgba(255,193,7,0.9); }
-    .point-b-marker { background: linear-gradient(135deg, #dc3545, #b02a37); color: #fff; font-weight: bold; font-size: 12px; text-align: center; line-height: 28px; width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 14px rgba(220,53,69,0.9); }
-    .lytrinh-badge { background: #fd7e14; color: white; font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: bold; white-space: nowrap; }
-    .btn-small { background: #0d6efd; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; margin-right: 4px; }
+    .gmaps-btn { background: #4285F4; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-top: 4px; font-weight: bold; display: inline-flex; text-decoration: none; }
+    .mx-marker { width: 12px; height: 12px; background-color: #198754; border: 2px solid #fff; transform: rotate(45deg); box-shadow: 0 0 5px rgba(0,0,0,0.4); }
+    .standard-marker { width: 10px; height: 10px; background-color: #0d6efd; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.4); }
+    .point-a-marker { background: linear-gradient(135deg, #ffc107, #ff9800); color: #000; font-weight: bold; font-size: 11px; text-align: center; line-height: 26px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 10px rgba(255,193,7,0.9); }
+    .point-b-marker { background: linear-gradient(135deg, #dc3545, #b02a37); color: #fff; font-weight: bold; font-size: 11px; text-align: center; line-height: 26px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 10px rgba(220,53,69,0.9); }
+    .lytrinh-badge { background: #fd7e14; color: white; font-size: 9px; padding: 2px 5px; border-radius: 3px; font-weight: bold; white-space: nowrap; }
+    .btn-small { background: #0d6efd; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; margin-right: 3px; }
     .btn-small.del { background: #dc3545; }
 
     /* ========================================================
-       RESPONSIVE MEDIA QUERIES (TỰ ĐỘNG CO DÃN THIẾT BỊ)
+       RESPONSIVE CO GIÃN TỰ ĐỘNG KHÔNG DÙNG SCROLL (MOBILE & TABLET)
        ======================================================== */
-
-    /* 1. Máy tính bảng (Tablet) & Điện thoại ngang: Màn hình <= 1024px */
-    @media (max-width: 1024px) {
-      #control-panel { width: 280px; top: 10px; left: 10px; }
-    }
-
-    /* 2. Điện thoại di động (Smartphone): Màn hình <= 768px */
     @media (max-width: 768px) {
-      body { flex-direction: column-reverse; } /* Đảo cấu trúc: Bản đồ/Workspace lên trên, Menu xuống đáy */
+      body { flex-direction: column; } /* Xếp dọc màn hình điện thoại */
       
       #sidebar-menu { 
         width: 100vw; 
-        height: 60px; 
+        height: 50px; 
         flex-direction: row; 
         justify-content: space-around; 
         padding-top: 0; 
-        align-items: center;
+        order: 2; /* Đưa menu xuống đáy màn hình */
       }
       
-      .menu-item { 
-        width: 45px; 
-        height: 45px; 
-        margin-bottom: 0; 
-        font-size: 9px; 
-      }
-      
-      .menu-item span.icon { 
-        font-size: 16px; 
-        margin-bottom: 1px; 
-      }
+      .menu-item { width: 38px; height: 38px; margin-bottom: 0; font-size: 8px; }
+      .menu-item span.icon { font-size: 15px; margin-bottom: 0; }
 
       #workspace { 
-        height: calc(100vh - 60px); 
+        height: calc(100vh - 50px); 
         width: 100vw;
+        order: 1; /* Bản đồ chiếm phần lớn không gian phía trên */
       }
       
       #control-panel { 
-        width: 92%; 
-        left: 4%; 
-        top: 10px; 
-        max-height: 75vh; 
+        width: 94%; 
+        left: 3%; 
+        top: 5px; 
+        max-height: calc(100vh - 70px); 
       }
     }
   </style>
@@ -150,11 +197,11 @@
       <div class="form-group"><label>7. Cự ly đo OTDR (km):</label><input type="number" id="txtKcOtdr" value="3.5" step="0.1"></div>
       <div class="form-group"><button class="btn-action" onclick="timViTriDut()">🔍 PHÂN TÍCH & TÌM VỊ TRÍ SỰ CỐ</button></div>
       
-      <div class="form-group" style="border-top: 1px dashed #ccc; padding-top: 8px; margin-top: 8px;">
+      <div class="form-group" style="border-top: 1px dashed #ccc; padding-top: 6px; margin-top: 6px;">
         <label>8. Tìm nhanh Lý trình (QL):</label>
-        <div style="display: flex; gap: 6px;">
+        <div style="display: flex; gap: 5px;">
           <input type="text" id="txtTimLyTrinh" placeholder="VD: 54+100">
-          <button class="btn-action btn-success" style="width: auto; padding: 5px 12px; margin:0;" onclick="timLyTrinhBanDo()">🔍</button>
+          <button class="btn-action btn-success" style="width: auto; padding: 4px 10px; margin:0;" onclick="timLyTrinhBanDo()">🔍</button>
         </div>
       </div>
     </div>
@@ -162,13 +209,13 @@
 
   <!-- MODAL ĐĂNG NHẬP -->
   <div id="loginModal" class="app-modal" style="display: flex;">
-    <div class="modal-content" style="max-width: 380px;">
+    <div class="modal-content" style="max-width: 360px;">
       <div class="modal-header"><span>👤 Đăng nhập Hệ Thống</span></div>
       <div class="modal-body">
         <div class="form-group"><label>Email:</label><input type="email" id="loginEmail" placeholder="nhanvien@vnpt.vn"></div>
         <div class="form-group"><label>Mật khẩu:</label><input type="password" id="loginPass" placeholder="••••••••"></div>
-        <div class="form-group" style="margin-top: 15px;"><button class="btn-action" style="background:#0d6efd;" onclick="handleSupabaseLogin()">ĐĂNG NHẬP</button></div>
-        <div style="text-align: center; margin-top: 10px;"><small id="loginStatus" style="color: #6c757d;"></small></div>
+        <div class="form-group" style="margin-top: 12px;"><button class="btn-action" style="background:#0d6efd;" onclick="handleSupabaseLogin()">ĐĂNG NHẬP</button></div>
+        <div style="text-align: center; margin-top: 8px;"><small id="loginStatus" style="color: #6c757d;"></small></div>
       </div>
     </div>
   </div>
@@ -191,9 +238,9 @@
     <div class="modal-content">
       <div class="modal-header"><span>🏢 Thông tin Đài VT & Trạm VT</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
       <div class="modal-body">
-        <p><b>Danh sách Đài Viễn Thông:</b></p>
-        <div id="daiListContainer" style="margin-bottom: 10px;"></div>
-        <p><b>Danh sách Trạm Viễn Thông:</b></p>
+        <p style="font-size:11px; margin:0 0 5px 0;"><b>Danh sách Đài Viễn Thông:</b></p>
+        <div id="daiListContainer" style="margin-bottom: 8px;"></div>
+        <p style="font-size:11px; margin:0 0 5px 0;"><b>Danh sách Trạm Viễn Thông:</b></p>
         <table class="table-data" id="stationTable">
           <thead><tr><th>Mã Trạm</th><th>Tên Trạm VT</th><th>Đài trực thuộc</th></tr></thead>
           <tbody><tr><td colspan="3">Đang tải dữ liệu...</td></tr></tbody>
@@ -221,16 +268,16 @@
 
   <!-- MODAL CÀI ĐẶT -->
   <div id="configModal" class="app-modal">
-    <div class="modal-content" style="max-width: 320px;">
+    <div class="modal-content" style="max-width: 300px;">
       <div class="modal-header"><span>⚙️ Thiết lập hệ thống</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
       <div class="modal-body">
         <div class="form-group"><label>Tìm lý trình:</label><select id="settingMarkerBehavior"><option value="keep">Giữ điểm ghim</option><option value="auto_hide">Tự động ẩn sau 5s</option></select></div>
-        <div class="form-group" style="margin-top: 10px;"><button class="btn-action" style="background:#6610f2;" onclick="taiDuLieuSupabase(true)">🔄 TẢI LẠI DỮ LIỆU TỪ MÁY CHỦ</button></div>
-        <div class="form-group" style="margin-top: 8px;"><button class="btn-action btn-danger" onclick="xoaTuyenThuCong()">🗑️ LÀM SẠCH BẢN ĐỒ</button></div>
+        <div class="form-group" style="margin-top: 8px;"><button class="btn-action" style="background:#6610f2;" onclick="taiDuLieuSupabase(true)">🔄 TẢI LẠI DỮ LIỆU</button></div>
+        <div class="form-group" style="margin-top: 6px;"><button class="btn-action btn-danger" onclick="xoaTuyenThuCong()">🗑️ LÀM SẠCH BẢN ĐỒ</button></div>
         
-        <div id="adminMenuSection" style="display: none; border-top: 1px dashed #ccc; margin-top: 15px; padding-top: 10px;">
-          <label style="font-size: 10px; font-weight: bold; margin-bottom: 5px; display:block;">Quyền Quản trị viên:</label>
-          <button class="btn-action btn-success" onclick="moModalQuanLyThanhVien()" style="margin-bottom: 5px;">👥 Quản lý tài khoản</button>
+        <div id="adminMenuSection" style="display: none; border-top: 1px dashed #ccc; margin-top: 10px; padding-top: 8px;">
+          <label style="font-size: 9px; font-weight: bold; margin-bottom: 4px; display:block;">Quyền Quản trị viên:</label>
+          <button class="btn-action btn-success" onclick="moModalQuanLyThanhVien()" style="margin-bottom: 4px;">👥 Quản lý tài khoản</button>
           <button class="btn-action btn-warning" onclick="chuanBiFormThemThanhVien()">+ Thêm tài khoản mới</button>
         </div>
       </div>
@@ -249,14 +296,14 @@
         <div class="form-group"><label>Loại đối tượng:</label><select id="crudObjectLoai"><option value="Măng xông">Măng xông</option><option value="Trạm">Trạm</option><option value="Tủ cáp">Tủ cáp</option></select></div>
         <div class="form-group"><label>Vĩ độ (Lat):</label><input type="text" id="crudObjectLat" disabled></div>
         <div class="form-group"><label>Kinh độ (Lng):</label><input type="text" id="crudObjectLng" disabled></div>
-        <div class="form-group" style="margin-top: 15px;"><button class="btn-action btn-success" id="btnConfirmCrud" onclick="executeCrudAction()">XÁC NHẬN</button></div>
+        <div class="form-group" style="margin-top: 12px;"><button class="btn-action btn-success" id="btnConfirmCrud" onclick="executeCrudAction()">XÁC NHẬN</button></div>
       </div>
     </div>
   </div>
 
   <!-- MODAL QUẢN LÝ THÀNH VIÊN -->
   <div id="manageMembersModal" class="app-modal">
-    <div class="modal-content" style="max-width: 600px;">
+    <div class="modal-content" style="max-width: 550px;">
       <div class="modal-header"><span>👥 Quản Lý Danh Sách</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
       <div class="modal-body">
         <table class="table-data">
@@ -269,7 +316,7 @@
 
   <!-- MODAL THÊM TÀI KHOẢN -->
   <div id="addMemberModal" class="app-modal">
-    <div class="modal-content" style="max-width: 380px;">
+    <div class="modal-content" style="max-width: 360px;">
       <div class="modal-header"><span>👥 Thêm Mới Tài Khoản</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
       <div class="modal-body">
         <div class="form-group"><label>Email:</label><input type="email" id="newMemberEmail" placeholder="nhanvien@vnpt.vn"></div>
@@ -279,8 +326,8 @@
         </div>
         <div class="form-group"><label>Đài:</label><select id="newMemberDai"><option value="">-- Tất cả --</option></select></div>
         <div class="form-group"><label>Trạm:</label><select id="newMemberTram"><option value="">-- Tất cả --</option></select></div>
-        <div class="form-group" style="margin-top: 15px;"><button class="btn-action btn-success" onclick="handleCreateMember()">TẠO TÀI KHOẢN</button></div>
-        <small id="createMemberStatus" style="display:block; text-align:center; margin-top:8px;"></small>
+        <div class="form-group" style="margin-top: 12px;"><button class="btn-action btn-success" onclick="handleCreateMember()">TẠO TÀI KHOẢN</button></div>
+        <small id="createMemberStatus" style="display:block; text-align:center; margin-top:6px;"></small>
       </div>
     </div>
   </div>
@@ -368,9 +415,10 @@
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
+        // Ép làm mới bản đồ ngay khi hiển thị để không bị lỗi xám
         setTimeout(() => { 
           if(map) {
-            map.invalidateSize(); // Làm mới kích thước bản đồ tương ứng với thiết bị
+            map.invalidateSize();
           }
           taiDuLieuSupabase();
         }, 150);
@@ -390,7 +438,7 @@
       document.getElementById('loginPass').value = '';
     }
 
-    // --- 5. BẢN ĐỒ LEAFLET & QUẢN LÝ LỚP HIỂN THỊ ---
+    // --- 5. BẢN ĐỒ LEAFLET & LỚP HIỂN THỊ ---
     function khoiTaoBanDoLeaflet() {
       if (map !== null) return;
 
@@ -425,11 +473,11 @@
           button.href = '#';
           button.title = 'Bật/Tắt đo khoảng cách';
           button.style.backgroundColor = 'white';
-          button.style.width = '30px';
-          button.style.height = '30px';
-          button.style.lineHeight = '30px';
+          button.style.width = '28px';
+          button.style.height = '28px';
+          button.style.lineHeight = '28px';
           button.style.textAlign = 'center';
-          button.style.fontSize = '16px';
+          button.style.fontSize = '14px';
           button.style.textDecoration = 'none';
           button.style.color = 'black';
           button.style.cursor = 'pointer';
@@ -836,12 +884,12 @@
         if (!isNaN(lat) && !isNaN(lng)) {
           bounds.push([lat, lng]);
           var html = idx === 0 ? '<div class="point-a-marker">A</div>' : (idx === pts.length - 1 ? '<div class="point-b-marker">B</div>' : '<div class="standard-marker"></div>');
-          var marker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: html, iconSize: [30, 30], iconAnchor: [15, 15] }) });
+          var marker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: html, iconSize: [26, 26], iconAnchor: [13, 13] }) });
           var ltText = calculatedLyTrinhs[idx];
           marker.bindPopup("Tên: " + pt.ten + "<br>Lý trình: <b>" + (ltText || "Gốc") + "</b><br><a href='https://www.google.com/maps/search/?api=1&query=" + lat + "," + lng + "' target='_blank' class='gmaps-btn'>🗺️ Google Maps</a>");
           markersLayer.addLayer(marker);
           if ((idx === pts.length - 1 || (idx === 0 && ltText)) && ltText) {
-            lyTrinhLayer.addLayer(L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="lytrinh-badge">' + ltText + '</div>', iconSize: [110, 20], iconAnchor: [-10, 10] }), interactive: false }));
+            lyTrinhLayer.addLayer(L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="lytrinh-badge">' + ltText + '</div>', iconSize: [100, 18], iconAnchor: [-8, 8] }), interactive: false }));
           }
         }
       });
@@ -855,7 +903,7 @@
         var lat = parseFloat(mx.lat), lng = parseFloat(mx.lng);
         if (!isNaN(lat) && !isNaN(lng)) {
           bounds.push([lat, lng]);
-          var mxMarker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }) });
+          var mxMarker = L.marker([lat, lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }) });
           
           var mxPopup = "<b>" + mx.ten + "</b><br>";
           if (mx.lyTrinh) mxPopup += "Lý trình: <b>" + mx.lyTrinh + "</b><br>";
@@ -863,7 +911,7 @@
           mxPopup += "<a href='https://www.google.com/maps/search/?api=1&query=" + lat + "," + lng + "' target='_blank' class='gmaps-btn'>🗺️ Google Maps</a>";
 
           if (currentUser.role !== 'member') {
-            mxPopup += `<hr style="margin:8px 0;">
+            mxPopup += `<hr style="margin:6px 0;">
               <button class="btn-small" onclick="moFormCrud('EDIT','${mx.id}','${mx.ten}',${lat},${lng})">✏️ Sửa</button>
               <button class="btn-small del" onclick="moFormCrud('DELETE','${mx.id}','${mx.ten}',${lat},${lng})">🗑️ Xóa</button>`;
           }
@@ -875,7 +923,7 @@
 
       var line = pts.map(function(p) { return [parseFloat(p.lat), parseFloat(p.lng)]; });
       if (line.length > 1) polylinesLayer.addLayer(L.polyline(line, { color: '#0d6efd', weight: 3.5 }));
-      if (bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
+      if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
     }
 
     function timViTriDut() {
@@ -959,14 +1007,14 @@
       }
 
       map.setView([targetLat, targetLng], 21, { animate: true });
-      var faultMarker = L.marker([targetLat, targetLng], { icon: L.divIcon({ className: '', html: '<div style="background:#ff3333; color:white; width:32px; height:32px; border-radius:50%; border:3px solid #fff; display:flex; align-items:center; justify-content:center; font-weight:bold; box-shadow:0 0 15px rgba(255,0,0,0.9);">⚡</div>', iconSize: [32, 32], iconAnchor: [16, 16] }) }).addTo(markersLayer);
+      var faultMarker = L.marker([targetLat, targetLng], { icon: L.divIcon({ className: '', html: '<div style="background:#ff3333; color:white; width:28px; height:28px; border-radius:50%; border:2px solid #fff; display:flex; align-items:center; justify-content:center; font-weight:bold; box-shadow:0 0 12px rgba(255,0,0,0.9);">⚡</div>', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(markersLayer);
 
       var initialPopupHtml = "<b>⚠️ VỊ TRÍ SỰ CỐ OTDR</b><br>" +
                            "Khoảng cách đo: <b>" + kcOtdr + " km</b><br>" +
                            "Lý trình thực tế: <b style='color:#fd7e14;'>" + calcLyTrinhStr + "</b><br>" +
                            "• Măng xông trước: <b>" + prevMXInfo + "</b><br>" +
                            "• Măng xông sau: <b>" + nextMXInfo + "</b><br>" +
-                           "🏛️ Địa chỉ hành chính: <span id='fault-address' style='color:#0d6efd;'>Đang tra cứu...</span><br>" +
+                           "🏛️ Địa chỉ: <span id='fault-address' style='color:#0d6efd;'>Đang tra cứu...</span><br>" +
                            '<a href="https://www.google.com/maps/search/?api=1&query=' + targetLat + ',' + targetLng + '" target="_blank" class="gmaps-btn">🧭 Dẫn đường Google Maps</a>';
 
       faultMarker.bindPopup(initialPopupHtml).openPopup();
@@ -974,11 +1022,11 @@
       fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + targetLat + '&lon=' + targetLng + '&accept-language=vi')
         .then(function(res) { return res.json(); })
         .then(function(data) {
-          var addr = (data && data.display_name) ? data.display_name : "Không xác định được địa chỉ hành chính";
+          var addr = (data && data.display_name) ? data.display_name : "Không xác định được địa chỉ";
           faultMarker.setPopupContent(initialPopupHtml.replace("Đang tra cứu...", addr));
         })
         .catch(function(err) {
-          faultMarker.setPopupContent(initialPopupHtml.replace("Đang tra cứu...", "Không thể tải địa chỉ hành chính"));
+          faultMarker.setPopupContent(initialPopupHtml.replace("Đang tra cứu...", "Không thể tải địa chỉ"));
         });
     }
 
@@ -1005,7 +1053,7 @@
 
     function populateStationTable() {
       var container = document.getElementById('daiListContainer');
-      container.innerHTML = rawDaiList.map(d => '<span style="background:#e9ecef; padding:4px 8px; border-radius:4px; margin-right:5px; display:inline-block; margin-bottom:5px;"><b>' + d.ten_dai + '</b></span>').join('');
+      container.innerHTML = rawDaiList.map(d => '<span style="background:#e9ecef; padding:3px 6px; border-radius:3px; margin-right:4px; display:inline-block; margin-bottom:4px; font-size:10px;"><b>' + d.ten_dai + '</b></span>').join('');
       
       var tbody = document.querySelector('#stationTable tbody');
       tbody.innerHTML = '';
@@ -1085,7 +1133,7 @@
       }
     }
 
-    // --- 10. TÌM LÝ TRÌNH (TÌM NHANH) ---
+    // --- 10. TÌM LÝ TRÌNH ---
     function timLyTrinhBanDo() {
       var txt = document.getElementById('txtTimLyTrinh').value.trim();
       if(!txt) return alert("Nhập lý trình cần tìm!");
@@ -1114,7 +1162,7 @@
       if(closestPt && minDiff <= 3000) {
         map.setView([closestPt.lat, closestPt.lng], 19, { animate: true });
         foundMarkerLayer = L.marker([closestPt.lat, closestPt.lng], {
-          icon: L.divIcon({ className: '', html: '<div style="font-size:30px;">📍</div>', iconSize: [30,30], iconAnchor:[15,30] })
+          icon: L.divIcon({ className: '', html: '<div style="font-size:26px;">📍</div>', iconSize: [26,26], iconAnchor:[13,26] })
         }).addTo(map);
         foundMarkerLayer.bindPopup(`<b>🎯 ĐÃ TÌM THẤY GẦN NHẤT</b><br>${closestPt.ten} (LT: ${closestPt.lyTrinh})<br><i>Lệch khoảng ${minDiff}m</i>`).openPopup();
         
