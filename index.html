@@ -379,13 +379,17 @@
           dcdData.forEach(item => {
             if (!item.diem_ha_tang || !item.doan_cap) return;
             var pt = item.diem_ha_tang;
+            var latNum = parseFloat(pt.lat);
+            var lngNum = parseFloat(pt.long);
+            if (isNaN(latNum) || isNaN(lngNum)) return;
+
             var loaiName = pt.loai_diem ? pt.loai_diem.ten_loaidiem : 'Điểm';
             var idTuyen = item.doan_cap.id_tuyen;
             var idDoanCap = item.id_doan_cap;
             var isMx = (Number(pt.id_loaidiem) === 4 || loaiName.toLowerCase().includes('măng xông') || loaiName.toLowerCase().includes('mx'));
 
             allEntries.push({
-              id: pt.id_diem, ten: pt.ten_diem, lat: parseFloat(pt.lat), lng: parseFloat(pt.long),
+              id: pt.id_diem, ten: pt.ten_diem, lat: latNum, lng: lngNum,
               idTuyen: idTuyen, idDoanCap: idDoanCap, idTram: pt.id_tram || 2, idLoaiDiem: pt.id_loaidiem || 1,
               loai: loaiName, lyTrinh: pt.ly_trinh || '', duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
               doCachTram: pt.do_cach_tram || '', stt: isMx ? 9999 : (item.thu_tu !== undefined ? item.thu_tu : 1)
@@ -399,7 +403,7 @@
         var selTuyen = document.getElementById('selectTuyen');
         if (selTuyen.options.length > 1) {
           selTuyen.selectedIndex = 1;
-          onTuyenChange(); // Tự động kích hoạt vẽ tuyến đầu tiên
+          onTuyenChange();
         }
 
       } catch (err) {
