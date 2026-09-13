@@ -288,8 +288,10 @@
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
+        // 1. Khởi tạo bản đồ ngay sau khi đăng nhập thành công
         khoiTaoBanDoLeaflet();
 
+        // 2. Gọi tải dữ liệu và vẽ tuyến
         setTimeout(() => {
           taiDuLieuSupabase();
         }, 150);
@@ -311,7 +313,10 @@
     }
 
     function khoiTaoBanDoLeaflet() {
-      if (map !== null) return;
+      if (map !== null) {
+        map.invalidateSize();
+        return;
+      }
 
       var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19, attribution: '&copy; OSM' });
       var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 19, attribution: '&copy; Esri' });
@@ -375,6 +380,12 @@
         rawTuyenList = tuyenRes.data || [];
         rawDoanCapList = doanRes.data || [];
 
+        // Debug log để kiểm tra F12
+        console.log("Dữ liệu Đài:", rawDaiList);
+        console.log("Dữ liệu Trạm:", rawTramList);
+        console.log("Dữ liệu Tuyến:", rawTuyenList);
+        console.log("Dữ liệu Đoạn-Điểm:", dcdData);
+
         var allEntries = [];
         if (dcdData) {
           dcdData.forEach(item => {
@@ -408,6 +419,7 @@
       } finally {
         hideLoading();
         if(forceRefresh) closeModals();
+        if(map) map.invalidateSize();
       }
     }
 
@@ -662,6 +674,7 @@
       if (selTuyenId === 'ALL') return;
 
       var pts = getPointsCuaTuyenHienTai();
+      console.log("Điểm vẽ tuyến hiện tại:", pts);
       if (pts.length === 0) return;
 
       var calculatedLyTrinhs = calculateRouteMilestones(pts, selTuyenId);
