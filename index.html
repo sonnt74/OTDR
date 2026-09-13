@@ -46,6 +46,7 @@
     #crudModal .modal-content { max-width: 350px; padding: 15px; }
     #loginModal .modal-content { max-width: 350px; padding: 15px; }
     #addMemberModal .modal-content { max-width: 380px; padding: 15px; }
+    #manageMembersModal .modal-content { max-width: 600px; padding: 15px; }
 
     .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0d6efd; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold; color: #0d6efd; font-size: 15px; }
     .modal-body { overflow-y: auto; flex-grow: 1; font-size: 12px; }
@@ -167,7 +168,8 @@
         </div>
 
         <div id="adminMenuSection" class="form-group" style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 8px; display: none;">
-          <button class="btn-action btn-success" onclick="chuanBiFormThemThanhVien()">👥 Thêm tài khoản thành viên</button>
+          <button class="btn-action btn-success" onclick="moModalQuanLyThanhVien()" style="margin-bottom: 6px;">👥 Quản lý tài khoản</button>
+          <button class="btn-action" style="background: #6c757d;" onclick="chuanBiFormThemThanhVien()">+ Thêm tài khoản mới</button>
         </div>
       </div>
     </div>
@@ -242,6 +244,35 @@
     </div>
   </div>
 
+  <!-- Modal Quản Lý / Danh Sách Thành Viên -->
+  <div id="manageMembersModal" class="app-modal">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <span>👥 Quản Lý Danh Sách Thành Viên</span>
+        <button onclick="closeModals()" style="background:#dc3545; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">Đóng</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 10px;">
+          <button class="btn-action btn-success" onclick="chuanBiFormThemThanhVien()" style="width: auto; padding: 6px 12px;">+ Thêm thành viên mới</button>
+        </div>
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 11px;" id="memberTable">
+            <thead>
+              <tr style="background: #0d6efd; color: white; text-align: left;">
+                <th style="padding: 6px;">Email</th>
+                <th style="padding: 6px;">Vai trò</th>
+                <th style="padding: 6px;">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="memberTableBody">
+              <!-- Nạp dữ liệu động bằng Javascript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.js"></script>
@@ -255,14 +286,14 @@
     var foundMarkerTimer = null; 
     var map;
     
-    // Khởi tạo sẵn các lớp bản đồ toàn cục
+    // Khởi tạo các lớp bản đồ an toàn toàn cục
     var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
     var mxLayer = L.layerGroup();
     var polylinesLayer = L.layerGroup();
     var lyTrinhLayer = L.layerGroup();
     var foundMarkerLayer = null;
 
-    // Khởi tạo các mảng dữ liệu toàn cục mặc định an toàn tuyệt đối tránh lỗi undefined.forEach
+    // Khởi tạo các mảng dữ liệu mặc định an toàn tránh lỗi undefined.forEach
     var rawDaiList = [];
     var rawTramList = [];
     var rawTuyenList = [];
@@ -273,66 +304,51 @@
     function openModal(id) { closeModals(); var t = document.getElementById(id); if(t) t.style.display = 'flex'; }
     function closeModals() { document.querySelectorAll('.app-modal').forEach(m => m.style.display = 'none'); }
 
+    // Xử lý đăng nhập thực tế
     async function handleSupabaseLogin() {
-  var email = document.getElementById('loginEmail').value.trim();
-  var pass = document.getElementById('loginPass').value;
-  var statusEl = document.getElementById('loginStatus');
+      var email = document.getElementById('loginEmail').value.trim();
+      var pass = document.getElementById('loginPass').value;
+      var statusEl = document.getElementById('loginStatus');
 
-  if (!email || !pass) { 
-    statusEl.style.color = 'red'; 
-    statusEl.textContent = "Vui lòng nhập email và mật khẩu!"; 
-    return; 
-  }
+      if (!email || !pass) { statusEl.style.color = 'red'; statusEl.textContent = "Vui lòng nhập email và mật khẩu!"; return; }
 
-  statusEl.style.color = '#0d6efd'; 
-  statusEl.textContent = "Đang xác thực...";
+      statusEl.style.color = '#0d6efd'; statusEl.textContent = "Đang xác thực...";
 
-  try {
-    // 1. Xác thực tài khoản với Supabase Auth
-    const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({ email: email, password: pass });
-    if (authError) throw authError;
+      try {
+        const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({ email: email, password: pass });
+        if (authError) throw authError;
 
-    var user = authData.user;
-    
-    // 2. Truy vấn bảng phân quyền user_roles
-    const { data: roleData, error: roleError } = await supabaseClient.from('user_roles').select('*').eq('id', user.id).single();
+        var user = authData.user;
+        const { data: roleData, error: roleError } = await supabaseClient.from('user_roles').select('*').eq('id', user.id).single();
 
-    if (roleError) {
-      currentUser = { isLoggedIn: true, role: 'member', idDai: null, idTram: null };
-    } else {
-      currentUser = { isLoggedIn: true, role: roleData.role, idDai: roleData.id_dai, idTram: roleData.id_tram };
-    }
+        if (roleError) {
+          currentUser = { isLoggedIn: true, role: 'member', idDai: null, idTram: null };
+        } else {
+          currentUser = { isLoggedIn: true, role: roleData.role, idDai: roleData.id_dai, idTram: roleData.id_tram };
+        }
 
-    statusEl.style.color = 'green';
-    statusEl.textContent = "Đăng nhập thành công! Quyền: " + currentUser.role;
+        statusEl.style.color = 'green';
+        statusEl.textContent = "Đăng nhập thành công! Quyền: " + currentUser.role;
 
-    // 3. Hiển thị menu Quản lý thành viên trong Cài đặt nếu là sys_admin
-    if (currentUser.role === 'sys_admin') {
-      document.getElementById('adminMenuSection').style.display = 'block';
-    }
+        if (currentUser.role === 'sys_admin') {
+          document.getElementById('adminMenuSection').style.display = 'block';
+        }
 
-    // 4. Hiển thị bảng điều khiển GIS trên giao diện
-    document.getElementById('control-panel').style.display = 'block';
+        document.getElementById('control-panel').style.display = 'block';
 
-    // 5. Khởi tạo bộ lọc và nạp dữ liệu bản đồ
-    khoiTaoComboDai();
-    taiDuLieuSupabase(false);
+        khoiTaoComboDai();
+        taiDuLieuSupabase(false);
 
-    // 6. Đóng modal đăng nhập
-    setTimeout(() => { 
-      closeModals(); 
-      
-      // QUAN TRỌNG: Ép Leaflet vẽ lại bản đồ sau khi modal đóng để hiển thị đầy đủ
-      if (map) {
-        map.invalidateSize();
+        setTimeout(() => { 
+          closeModals(); 
+          if (map) { map.invalidateSize(); }
+        }, 800);
+
+      } catch (err) {
+        statusEl.style.color = 'red';
+        statusEl.textContent = "Lỗi đăng nhập: " + err.message;
       }
-    }, 800);
-
-  } catch (err) {
-    statusEl.style.color = 'red';
-    statusEl.textContent = "Lỗi đăng nhập: " + err.message;
-  }
-}
+    }
 
     window.onload = function() {
       var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
@@ -445,55 +461,85 @@
       openModal('addMemberModal');
     }
 
-    // Hàm xử lý tạo thành viên mới gọi qua hàm RPC an toàn của Supabase
-async function handleCreateMember() {
-  var email = document.getElementById('newMemberEmail').value.trim();
-  var password = document.getElementById('newMemberPass').value;
-  var role = document.getElementById('newMemberRole').value;
-  var idDai = document.getElementById('newMemberDai').value || null;
-  var idTram = document.getElementById('newMemberTram').value || null;
-  var statusEl = document.getElementById('createMemberStatus');
+    // Tạo thành viên mới sử dụng hàm RPC tự động xác thực email trên Supabase
+    async function handleCreateMember() {
+      var email = document.getElementById('newMemberEmail').value.trim();
+      var password = document.getElementById('newMemberPass').value;
+      var role = document.getElementById('newMemberRole').value;
+      var idDai = document.getElementById('newMemberDai').value || null;
+      var idTram = document.getElementById('newMemberTram').value || null;
+      var statusEl = document.getElementById('createMemberStatus');
 
-  if (!email || !password) {
-    statusEl.style.color = 'red';
-    statusEl.textContent = "Vui lòng nhập đầy đủ email và mật khẩu!";
-    return;
-  }
+      if (!email || !password) { statusEl.style.color = 'red'; statusEl.textContent = "Nhập đủ email và mật khẩu!"; return; }
 
-  statusEl.style.color = '#0d6efd';
-  statusEl.textContent = "Đang tạo tài khoản và tự động xác thực...";
+      statusEl.style.color = '#0d6efd'; statusEl.textContent = "Đang tạo tài khoản...";
 
-  try {
-    // Gọi hàm RPC create_new_user trên cơ sở dữ liệu
-    const { error } = await supabaseClient.rpc('create_new_user', {
-      user_email: email,
-      user_password: password,
-      user_role: role,
-      target_id_dai: idDai ? parseInt(idDai) : null,
-      target_id_tram: idTram ? parseInt(idTram) : null
-    });
+      try {
+        const { error } = await supabaseClient.rpc('create_new_user', {
+          user_email: email, user_password: password, user_role: role,
+          target_id_dai: idDai ? parseInt(idDai) : null,
+          target_id_tram: idTram ? parseInt(idTram) : null
+        });
 
-    if (error) throw error;
+        if (error) throw error;
+        statusEl.style.color = 'green';
+        statusEl.textContent = "Tạo thành công tài khoản: " + email;
+        setTimeout(() => { closeModals(); document.getElementById('newMemberEmail').value = ''; document.getElementById('newMemberPass').value = ''; statusEl.textContent = ''; }, 1500);
+      } catch (err) {
+        statusEl.style.color = 'red';
+        statusEl.textContent = "Lỗi: " + err.message;
+      }
+    }
 
-    statusEl.style.color = 'green';
-    statusEl.textContent = "Tạo thành công tài khoản: " + email;
-    
-    // Đóng form sau 1.5 giây
-    setTimeout(() => {
-      closeModals();
-      document.getElementById('newMemberEmail').value = '';
-      document.getElementById('newMemberPass').value = '';
-      statusEl.textContent = '';
-    }, 1500);
+    // Mở Modal Quản Lý Danh Sách Thành Viên & Tải dữ liệu từ Supabase
+    async function moModalQuanLyThanhVien() {
+      openModal('manageMembersModal');
+      var tbody = document.getElementById('memberTableBody');
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:10px;">Đang tải danh sách...</td></tr>';
 
-  } catch (err) {
-    statusEl.style.color = 'red';
-    statusEl.textContent = "Lỗi: " + err.message;
-  }
-}
+      try {
+        const { data, error } = await supabaseClient.from('user_roles').select('*');
+        if (error) throw error;
+
+        tbody.innerHTML = '';
+        if (!data || data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:10px;">Chưa có thành viên nào.</td></tr>';
+          return;
+        }
+
+        data.forEach(user => {
+          var tr = document.createElement('tr');
+          tr.style.borderBottom = '1px solid #dee2e6';
+          tr.innerHTML = `
+            <td style="padding: 6px;">${user.email}</td>
+            <td style="padding: 6px;"><b>${user.role}</b></td>
+            <td style="padding: 6px;">
+              <button class="btn-small del" onclick="xoaTaiKhoan('${user.id}', '${user.email}')">Xóa</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:red; padding:10px;">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+      }
+    }
+
+    // Xử lý Xóa Tài khoản
+    async function xoaTaiKhoan(userId, email) {
+      if (!confirm(`Bạn có chắc chắn muốn xóa tài khoản "${email}" không?`)) return;
+
+      try {
+        const { error } = await supabaseClient.rpc('delete_user_account', { target_user_id: userId });
+        if (error) throw error;
+
+        alert("Đã xóa tài khoản thành công!");
+        moModalQuanLyThanhVien(); // Tải lại bảng danh sách
+      } catch (err) {
+        alert("Lỗi khi xóa tài khoản: " + err.message);
+      }
+    }
 
     async function taiDuLieuSupabase(forceRefresh = false) {
-      // Dữ liệu mẫu khởi tạo an toàn
       rawDaiList = [{ id_dai: 1, ten_dai: 'Đài Thái Nguyên' }, { id_dai: 2, ten_dai: 'Đài Phổ Yên' }];
       rawTramList = [{ id_tram: 1, ten_tram: 'Trạm A', id_dai: 1 }, { id_tram: 2, ten_tram: 'Trạm TNN', id_dai: 1 }];
       rawTuyenList = [{ id_tuyen_cap: 1, ma_tuyencap: 'TNN-01' }];
