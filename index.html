@@ -16,7 +16,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    /* Đảm bảo toàn bộ không gian màn hình được lấp đầy tuyệt đối */
+    /* Thiết lập không gian màn hình chuẩn tuyệt đối */
     html, body { 
       width: 100vw; 
       height: 100vh; 
@@ -28,7 +28,7 @@
       flex-direction: row; 
     }
 
-    /* Thanh menu bên trái */
+    /* Thanh Menu bên trái */
     #sidebar-menu { 
       width: 70px; 
       height: 100vh;
@@ -68,7 +68,7 @@
       margin-bottom: 2px; 
     }
 
-    /* Vùng chứa không gian làm việc chính (Bản đồ + Bảng điều khiển) */
+    /* Vùng chứa không gian làm việc chính */
     #workspace { 
       flex: 1; 
       position: relative; 
@@ -76,7 +76,7 @@
       height: 100vh; 
     }
 
-    /* Khung bản đồ bắt buộc phải có chiều rộng và chiều cao 100% */
+    /* Khung bản đồ chiếm trọn vùng làm việc */
     #map { 
       width: 100%; 
       height: 100%; 
@@ -86,7 +86,7 @@
       z-index: 1;
     }
     
-    /* Bảng điều khiển GIS nổi trên bản đồ */
+    /* Bảng điều khiển GIS nổi */
     #control-panel { 
       position: absolute; 
       top: 10px; 
@@ -97,7 +97,7 @@
       border-radius: 8px; 
       box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
       width: 310px; 
-      display: block; /* Đảm bảo luôn hiển thị */
+      display: block; 
     }
     
     .panel-header { 
@@ -143,7 +143,6 @@
 
     .gmaps-btn { background: #4285F4; color: white; padding: 5px 10px; border-radius: 4px; font-size: 11px; margin-top: 6px; font-weight: bold; display: inline-flex; gap: 4px; text-decoration: none; }
     .mx-marker { width: 14px; height: 14px; background-color: #198754; border: 2px solid #fff; transform: rotate(45deg); box-shadow: 0 0 6px rgba(0,0,0,0.4); }
-    .standard-marker { width: 10px; height: 10px; background-color: #0d6efd; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,0.4); }
     .btn-small { background: #0d6efd; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; }
     .btn-small.del { background: #dc3545; }
 
@@ -173,7 +172,7 @@
     <!-- Khung chứa bản đồ -->
     <div id="map"></div>
 
-    <!-- Bảng điều khiển GIS nổi trên bản đồ -->
+    <!-- Bảng điều khiển GIS -->
     <div id="control-panel">
       <div class="panel-header"><span>🗺️ ĐIỀU KHIỂN & PHÂN TÍCH OTDR</span></div>
       <div class="panel-body-content" id="panelBodyContent">
@@ -208,7 +207,6 @@
         </div>
         <div class="form-group"><button class="btn-action" onclick="timViTriDut()">🔍 PHÂN TÍCH & TÌM VỊ TRÍ SỰ CỐ</button></div>
         
-        <!-- Tìm nhanh lý trình -->
         <div class="form-group" style="border-top: 1px dashed #ccc; padding-top: 8px; margin-top: 8px;">
           <label>7. Tìm nhanh Lý trình (QL):</label>
           <div style="display: flex; gap: 6px;">
@@ -265,11 +263,12 @@
     </div>
   </div>
 
-  <div id="loginModal" class="app-modal" style="display: flex;"> <!-- Hiện modal đăng nhập đầu tiên khi bật trang -->
+  <!-- Modal Đăng nhập (Hiện mặc định khi mở trang) -->
+  <div id="loginModal" class="app-modal" style="display: flex;">
     <div class="modal-content">
       <div class="modal-header">
         <span>👤 Đăng nhập Hệ Thống</span>
-        <button onclick="closeModals()" style="background:#dc3545; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">Đóng</button>
+        <button onclick="closeModals()" style="background:#dc3545; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;" disabled>Đóng</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
@@ -391,8 +390,10 @@
     function openModal(id) { closeModals(); var t = document.getElementById(id); if(t) t.style.display = 'flex'; }
     function closeModals() { document.querySelectorAll('.app-modal').forEach(m => m.style.display = 'none'); }
 
-    // Khởi tạo bản đồ ngay khi trang tải xong
-    window.onload = function() {
+    // HÀM KHỞI TẠO BẢN ĐỒ (Được gọi sau khi đăng nhập thành công để đảm bảo DOM hiển thị đúng)
+    function khoiTaoBanDoLeaflet() {
+      if (map !== null) return; // Chỉ khởi tạo 1 lần duy nhất
+
       var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
       map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [osm] });
       
@@ -406,10 +407,10 @@
         moFormCrud('ADD', null, '', e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6));
       });
 
-      // Tải dữ liệu mẫu ban đầu để bản đồ có nội dung hiển thị
       taiDuLieuSupabase(false);
-    };
+    }
 
+    // Xử lý đăng nhập thực tế và kích hoạt bản đồ
     async function handleSupabaseLogin() {
       var email = document.getElementById('loginEmail').value.trim();
       var pass = document.getElementById('loginPass').value;
@@ -439,13 +440,16 @@
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
-        // Đóng modal đăng nhập và ép làm mới kích thước bản đồ Leaflet
-        setTimeout(() => { 
-          closeModals(); 
+        // 1. Đóng modal đăng nhập
+        closeModals();
+
+        // 2. Kích hoạt khởi tạo bản đồ Leaflet ngay sau khi modal biến mất
+        setTimeout(() => {
+          khoiTaoBanDoLeaflet();
           if (map) {
             map.invalidateSize();
           }
-        }, 800);
+        }, 100);
 
       } catch (err) {
         statusEl.style.color = 'red';
@@ -487,7 +491,7 @@
         }
       });
 
-      if (foundMarkerLayer) { map.removeLayer(foundMarkerLayer); }
+      if (foundMarkerLayer && map) { map.removeLayer(foundMarkerLayer); }
       if (foundMarkerTimer) { clearTimeout(foundMarkerTimer); foundMarkerTimer = null; }
 
       if (closestPt && minDiff <= 3000) { 
@@ -502,7 +506,7 @@
         
         if (document.getElementById('settingMarkerBehavior').value === 'auto_hide') {
             foundMarkerTimer = setTimeout(function() {
-                if (foundMarkerLayer) { map.removeLayer(foundMarkerLayer); foundMarkerLayer = null; }
+                if (foundMarkerLayer && map) { map.removeLayer(foundMarkerLayer); foundMarkerLayer = null; }
             }, 5000);
         }
       } else {
@@ -615,7 +619,7 @@
         alert("Đã xóa tài khoản thành công!");
         moModalQuanLyThanhVien();
       } catch (err) {
-        alert("Lỗi khi xóa tài khoản: " + err.message);
+        alert("Lỗi khi xóa tài khoản: " + err.message;
       }
     }
 
@@ -673,7 +677,7 @@
     }
 
     function veLaiTuyenAB() {
-      if (!markersLayer || !mxLayer || !polylinesLayer || !lyTrinhLayer) return;
+      if (!markersLayer || !mxLayer || !polylinesLayer || !lyTrinhLayer || !map) return;
       markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers(); lyTrinhLayer.clearLayers(); 
       if (foundMarkerLayer && map) map.removeLayer(foundMarkerLayer);
       
