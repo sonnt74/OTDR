@@ -426,41 +426,52 @@
       openModal('addMemberModal');
     }
 
-    async function handleCreateMember() {
-      var email = document.getElementById('newMemberEmail').value.trim();
-      var password = document.getElementById('newMemberPass').value;
-      var role = document.getElementById('newMemberRole').value;
-      var idDai = document.getElementById('newMemberDai').value || null;
-      var idTram = document.getElementById('newMemberTram').value || null;
-      var statusEl = document.getElementById('createMemberStatus');
+    // Hàm xử lý tạo thành viên mới gọi qua hàm RPC an toàn của Supabase
+async function handleCreateMember() {
+  var email = document.getElementById('newMemberEmail').value.trim();
+  var password = document.getElementById('newMemberPass').value;
+  var role = document.getElementById('newMemberRole').value;
+  var idDai = document.getElementById('newMemberDai').value || null;
+  var idTram = document.getElementById('newMemberTram').value || null;
+  var statusEl = document.getElementById('createMemberStatus');
 
-      if (!email || !password) { statusEl.style.color = 'red'; statusEl.textContent = "Nhập đủ email và mật khẩu!"; return; }
+  if (!email || !password) {
+    statusEl.style.color = 'red';
+    statusEl.textContent = "Vui lòng nhập đầy đủ email và mật khẩu!";
+    return;
+  }
 
-      statusEl.style.color = '#0d6efd'; statusEl.textContent = "Đang tạo tài khoản...";
+  statusEl.style.color = '#0d6efd';
+  statusEl.textContent = "Đang tạo tài khoản và tự động xác thực...";
 
-      try {
-        const { data: authData, error: authError } = await supabaseClient.auth.signUp({ email: email, password: password });
-        if (authError) throw authError;
+  try {
+    // Gọi hàm RPC create_new_user trên cơ sở dữ liệu
+    const { error } = await supabaseClient.rpc('create_new_user', {
+      user_email: email,
+      user_password: password,
+      user_role: role,
+      target_id_dai: idDai ? parseInt(idDai) : null,
+      target_id_tram: idTram ? parseInt(idTram) : null
+    });
 
-        var newUserId = authData.user ? authData.user.id : null;
-        if (!newUserId) throw new Error("Không lấy được ID tài khoản vừa tạo.");
+    if (error) throw error;
 
-        const { error: roleError } = await supabaseClient.from('user_roles').insert([{
-          id: newUserId, email: email, role: role,
-          id_dai: idDai ? parseInt(idDai) : null,
-          id_tram: idTram ? parseInt(idTram) : null
-        }]);
+    statusEl.style.color = 'green';
+    statusEl.textContent = "Tạo thành công tài khoản: " + email;
+    
+    // Đóng form sau 1.5 giây
+    setTimeout(() => {
+      closeModals();
+      document.getElementById('newMemberEmail').value = '';
+      document.getElementById('newMemberPass').value = '';
+      statusEl.textContent = '';
+    }, 1500);
 
-        if (roleError) throw roleError;
-
-        statusEl.style.color = 'green';
-        statusEl.textContent = "Tạo thành công tài khoản: " + email;
-        setTimeout(() => { closeModals(); document.getElementById('newMemberEmail').value = ''; document.getElementById('newMemberPass').value = ''; statusEl.textContent = ''; }, 1500);
-      } catch (err) {
-        statusEl.style.color = 'red';
-        statusEl.textContent = "Lỗi: " + err.message;
-      }
-    }
+  } catch (err) {
+    statusEl.style.color = 'red';
+    statusEl.textContent = "Lỗi: " + err.message;
+  }
+}
 
     async function taiDuLieuSupabase(forceRefresh = false) {
       // Dữ liệu mẫu khởi tạo an toàn
