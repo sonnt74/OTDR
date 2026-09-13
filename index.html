@@ -18,7 +18,7 @@
     /* Reset & Khung làm việc */
     html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Arial, sans-serif; overflow: hidden; display: flex; flex-direction: row; }
     
-    /* Menu Bar bên trái (Mặc định ẩn, hiện sau khi đăng nhập) */
+    /* Menu Bar bên trái */
     #sidebar-menu { width: 70px; height: 100vh; background-color: #212529; color: white; display: none; flex-direction: column; align-items: center; padding-top: 15px; z-index: 3000; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
     .menu-item { width: 50px; height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; margin-bottom: 12px; color: #adb5bd; cursor: pointer; font-size: 10px; transition: all 0.2s; text-decoration: none; }
     .menu-item:hover, .menu-item.active { background-color: #0d6efd; color: white; }
@@ -28,7 +28,7 @@
     #workspace { flex: 1; position: relative; height: 100vh; }
     #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
     
-    /* Bảng điều khiển (Mặc định ẩn) */
+    /* Bảng điều khiển */
     #control-panel { position: absolute; top: 15px; left: 15px; z-index: 2000; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 310px; display: none; max-height: 90vh; overflow-y: auto; }
     .panel-header { background-color: #0d6efd; color: white; padding: 8px 10px; font-weight: bold; font-size: 13px; border-radius: 5px; margin-bottom: 8px; text-align: center; }
     .form-group { margin-bottom: 8px; }
@@ -47,7 +47,7 @@
     .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #0d6efd; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; margin-bottom: 12px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    /* Modals (Hộp thoại) */
+    /* Modals */
     .app-modal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 99999; justify-content: center; align-items: center; }
     .modal-content { background: white; width: 90%; max-width: 550px; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.4); max-height: 85vh; overflow-y: auto; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0d6efd; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold; color: #0d6efd; font-size: 15px; }
@@ -200,7 +200,7 @@
     </div>
   </div>
 
-  <!-- MODAL CRUD (Thêm/Sửa/Xóa Điểm) -->
+  <!-- MODAL CRUD -->
   <div id="crudModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header"><span id="crudTitle">📝 Thông tin Đối tượng</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -272,7 +272,6 @@
     var measureMarkers = [];
     var measurePolyline = null;
 
-    // Dữ liệu từ Database
     var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], globalDataPoints = [];
 
     // --- 3. HÀM TIỆN ÍCH GIAO DIỆN ---
@@ -347,7 +346,7 @@
       if(map) { map.remove(); map = null; }
     }
 
-    // --- 5. BẢN ĐỒ LEAFLET ---
+    // --- 5. BẢN ĐỒ LEAFLET (ĐÃ BỔ SUNG LỚP HIỂN THỊ) ---
     function khoiTaoBanDoLeaflet() {
       if (map !== null) { map.invalidateSize(); return; }
 
@@ -356,8 +355,12 @@
 
       map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [osm] });
       
-      markersLayer.addTo(map); mxLayer.addTo(map); polylinesLayer.addTo(map); lyTrinhLayer.addTo(map);
+      polylinesLayer.addTo(map); 
+      markersLayer.addTo(map); 
+      mxLayer.addTo(map); 
+      lyTrinhLayer.addTo(map);
 
+      // Thêm thanh công cụ chọn lớp bản đồ và lớp phủ ở góc trên bên phải
       L.control.layers(
         { "Bản đồ OSM": osm, "Vệ tinh": sat }, 
         { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
