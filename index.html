@@ -221,7 +221,8 @@
 
   <!-- LEAFLET & MARKERCLUSTER JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.js"></script>
+  <!-- Đã sửa lại đúng tên tệp script của MarkerCluster bên dưới -->
+  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 
   <script>
     const SUPABASE_URL = 'https://clddwitzwuewwxawuorv.supabase.co';
@@ -289,10 +290,8 @@
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
-        // 1. Khởi tạo bản đồ Leaflet ngay
         khoiTaoBanDoLeaflet();
 
-        // 2. Tải dữ liệu CSDL ngay sau đó
         setTimeout(async () => {
           await taiDuLieuSupabase();
         }, 100);
@@ -400,10 +399,8 @@
         }
         globalDataPoints = allEntries;
         
-        // Nạp dữ liệu vào combo box
         khoiTaoComboDai();
         
-        // Tự động kích hoạt chọn tuyến đầu tiên để vẽ lên bản đồ ngay lập tức
         var selTuyen = document.getElementById('selectTuyen');
         if (selTuyen.options.length > 1) {
           selTuyen.selectedIndex = 1;
