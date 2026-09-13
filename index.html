@@ -6,26 +6,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1</title>
   
-  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
-  
-  <!-- Supabase SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-  <!-- Liên kết tệp CSS riêng -->
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Overlay Loading -->
   <div id="loading-overlay">
     <div class="spinner"></div>
     <div id="loading-overlay-text">Đang đồng bộ dữ liệu...</div>
   </div>
 
-  <!-- Thanh công cụ bên trái -->
   <div id="sidebar-menu">
     <div class="menu-item active" onclick="toggleGISPanel()" title="Ẩn/Hiện Bảng Điều Khiển"><span class="icon">🗺️</span><span>GIS</span></div>
     <div class="menu-item" onclick="taiDuLieuSupabase(true)" title="Làm mới dữ liệu từ máy chủ"><span class="icon">🔄</span><span>Làm mới</span></div>
@@ -33,7 +26,6 @@
     <div class="menu-item" onclick="handleLogout()" title="Đăng xuất" style="margin-top: auto;"><span class="icon">🚪</span><span>Thoát</span></div>
   </div>
 
-  <!-- Khu vực làm việc chính (Bản đồ & Bảng điều khiển) -->
   <div id="workspace">
     <div id="map"></div>
     <div id="gps-btn" class="map-tool-btn" onclick="triggerUserLocation()" title="Định vị">📍</div>
@@ -66,7 +58,6 @@
     </div>
   </div>
 
-  <!-- Modal Đăng Nhập -->
   <div id="loginModal" class="app-modal" style="display: flex;">
     <div class="modal-content" style="max-width: 320px;">
       <div class="modal-header"><span>👤 Đăng nhập Hệ Thống</span></div>
@@ -79,7 +70,6 @@
     </div>
   </div>
 
-  <!-- Modal Quản trị tập trung -->
   <div id="adminMasterModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header"><span>⚙️ QUẢN TRỊ HỆ THỐNG & DANH MỤC</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -97,9 +87,7 @@
             <b style="font-size:11px;">Tài khoản:</b><button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien()">+ Thêm</button>
           </div>
           <table class="table-data">
-            <thead>
-              <tr><th>Email</th><th>Vai trò</th><th>Đài quản lý</th><th>Trạm quản lý</th><th>Map?</th><th>Thao tác</th></tr>
-            </thead>
+            <thead><tr><th>Email</th><th>Vai trò</th><th>Đài quản lý</th><th>Trạm quản lý</th><th>Map?</th><th>Thao tác</th></tr></thead>
             <tbody id="masterAccountTableBody"></tbody>
           </table>
         </div>
@@ -127,7 +115,6 @@
     </div>
   </div>
 
-  <!-- Modal Thêm/Sửa Tài Khoản -->
   <div id="addMemberModal" class="app-modal">
     <div class="modal-content" style="max-width: 360px;">
       <div class="modal-header"><span id="accountModalTitle">👥 Thêm/Sửa Tài Khoản</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -155,7 +142,6 @@
     </div>
   </div>
 
-  <!-- Modal Dùng Chung Danh Mục -->
   <div id="genericAuxModal" class="app-modal">
     <div class="modal-content" style="max-width: 350px;">
       <div class="modal-header"><span id="auxModalTitle">📝 Thêm/Sửa Danh Mục</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -168,7 +154,6 @@
     </div>
   </div>
 
-  <!-- Modal Thêm/Sửa Đối Tượng Bản Đồ (CRUD) -->
   <div id="crudModal" class="app-modal">
     <div class="modal-content" style="max-width: 320px;">
       <div class="modal-header"><span id="crudTitle">📝 Thông tin Đối tượng</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -185,11 +170,8 @@
     </div>
   </div>
 
-  <!-- Leaflet & MarkerCluster JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
-
-  <!-- Liên kết tệp JavaScript logic chính -->
   <script src="app.js"></script>
 </body>
 </html>
