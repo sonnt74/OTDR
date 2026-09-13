@@ -289,11 +289,13 @@
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
+        // 1. Khởi tạo bản đồ Leaflet ngay
         khoiTaoBanDoLeaflet();
 
-        setTimeout(() => {
-          taiDuLieuSupabase();
-        }, 150);
+        // 2. Tải dữ liệu CSDL ngay sau đó
+        setTimeout(async () => {
+          await taiDuLieuSupabase();
+        }, 100);
 
       } catch (err) {
         statusEl.style.color = 'red'; statusEl.textContent = "Lỗi: " + err.message;
@@ -398,8 +400,10 @@
         }
         globalDataPoints = allEntries;
         
+        // Nạp dữ liệu vào combo box
         khoiTaoComboDai();
         
+        // Tự động kích hoạt chọn tuyến đầu tiên để vẽ lên bản đồ ngay lập tức
         var selTuyen = document.getElementById('selectTuyen');
         if (selTuyen.options.length > 1) {
           selTuyen.selectedIndex = 1;
