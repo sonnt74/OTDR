@@ -15,83 +15,21 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    /* 1. Khóa hoàn toàn cuộn trang (No Scroll) trên mọi thiết bị */
-    html, body { 
-      width: 100vw; 
-      height: 100vh; 
-      margin: 0; 
-      padding: 0; 
-      font-family: Arial, sans-serif; 
-      overflow: hidden; 
-      display: flex; 
-      flex-direction: row; 
-      background: #f0f2f5; 
-    }
+    /* Khóa cuộn trang hoàn toàn (No Scroll) */
+    html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Arial, sans-serif; overflow: hidden; display: flex; flex-direction: row; background: #f0f2f5; }
     
-    /* 2. Menu Bar bên trái (Mặc định cho PC) */
-    #sidebar-menu { 
-      width: 65px; 
-      height: 100vh; 
-      background-color: #212529; 
-      color: white; 
-      display: none; 
-      flex-direction: column; 
-      align-items: center; 
-      padding-top: 10px; 
-      z-index: 3000; 
-      flex-shrink: 0; 
-      box-shadow: 2px 0 10px rgba(0,0,0,0.3); 
-    }
-    .menu-item { 
-      width: 45px; 
-      height: 45px; 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      justify-content: center; 
-      border-radius: 6px; 
-      margin-bottom: 8px; 
-      color: #adb5bd; 
-      cursor: pointer; 
-      font-size: 9px; 
-      transition: all 0.2s; 
-      text-decoration: none; 
-    }
+    /* Menu Bar bên trái */
+    #sidebar-menu { width: 65px; height: 100vh; background-color: #212529; color: white; display: none; flex-direction: column; align-items: center; padding-top: 10px; z-index: 3000; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
+    .menu-item { width: 45px; height: 45px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 6px; margin-bottom: 8px; color: #adb5bd; cursor: pointer; font-size: 9px; transition: all 0.2s; text-decoration: none; }
     .menu-item:hover, .menu-item.active { background-color: #0d6efd; color: white; }
     .menu-item span.icon { font-size: 18px; margin-bottom: 1px; }
 
-    /* 3. Vùng Bản đồ & Bảng điều khiển */
-    #workspace { 
-      flex: 1; 
-      position: relative; 
-      height: 100vh; 
-      overflow: hidden; 
-    }
-    #map { 
-      width: 100%; 
-      height: 100%; 
-      position: absolute; 
-      top: 0; 
-      left: 0; 
-      z-index: 1; 
-    }
+    /* Vùng Bản đồ & Bảng điều khiển */
+    #workspace { flex: 1; position: relative; height: 100vh; overflow: hidden; }
+    #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
     
-    /* 4. Bảng điều khiển (Control Panel) co giãn gọn gàng */
-    #control-panel { 
-      position: absolute; 
-      top: 10px; 
-      left: 10px; 
-      z-index: 2000; 
-      background: white; 
-      padding: 10px; 
-      border-radius: 8px; 
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3); 
-      width: 290px; 
-      display: none; 
-      max-height: calc(100vh - 20px); 
-      overflow-y: auto; 
-      box-sizing: border-box; 
-    }
+    /* Bảng điều khiển */
+    #control-panel { position: absolute; top: 10px; left: 10px; z-index: 2000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 290px; display: none; max-height: calc(100vh - 20px); overflow-y: auto; box-sizing: border-box; }
     .panel-header { background-color: #0d6efd; color: white; padding: 6px 8px; font-weight: bold; font-size: 12px; border-radius: 4px; margin-bottom: 6px; text-align: center; }
     .form-group { margin-bottom: 6px; }
     .form-group label { display: block; font-size: 9px; font-weight: bold; margin-bottom: 2px; color: #333; text-transform: uppercase; }
@@ -127,36 +65,11 @@
     .btn-small { background: #0d6efd; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; margin-right: 3px; }
     .btn-small.del { background: #dc3545; }
 
-    /* ========================================================
-       RESPONSIVE CO GIÃN TỰ ĐỘNG KHÔNG DÙNG SCROLL (MOBILE & TABLET)
-       ======================================================== */
     @media (max-width: 768px) {
-      body { flex-direction: column; } /* Xếp dọc màn hình điện thoại */
-      
-      #sidebar-menu { 
-        width: 100vw; 
-        height: 50px; 
-        flex-direction: row; 
-        justify-content: space-around; 
-        padding-top: 0; 
-        order: 2; /* Đưa menu xuống đáy màn hình */
-      }
-      
-      .menu-item { width: 38px; height: 38px; margin-bottom: 0; font-size: 8px; }
-      .menu-item span.icon { font-size: 15px; margin-bottom: 0; }
-
-      #workspace { 
-        height: calc(100vh - 50px); 
-        width: 100vw;
-        order: 1; /* Bản đồ chiếm phần lớn không gian phía trên */
-      }
-      
-      #control-panel { 
-        width: 94%; 
-        left: 3%; 
-        top: 5px; 
-        max-height: calc(100vh - 70px); 
-      }
+      body { flex-direction: column; }
+      #sidebar-menu { width: 100vw; height: 50px; flex-direction: row; justify-content: space-around; padding-top: 0; order: 2; }
+      #workspace { height: calc(100vh - 50px); width: 100vw; order: 1; }
+      #control-panel { width: 94%; left: 3%; top: 5px; max-height: calc(100vh - 70px); }
     }
   </style>
 </head>
@@ -165,7 +78,7 @@
   <!-- LOADING OVERLAY -->
   <div id="loading-overlay">
     <div class="spinner"></div>
-    <div id="loading-overlay-text">Đang đồng bộ dữ liệu hệ thống từ Supabase...</div>
+    <div id="loading-overlay-text">Đang đồng bộ dữ liệu hệ thống...</div>
   </div>
 
   <!-- MENU BAR -->
@@ -207,10 +120,10 @@
     </div>
   </div>
 
-  <!-- MODAL ĐĂNG NHẬP -->
+  <!-- MODAL ĐĂNG NHẬP (PHỦ LÊN BẢN ĐỒ KHI KHỞI ĐỘNG) -->
   <div id="loginModal" class="app-modal" style="display: flex;">
     <div class="modal-content" style="max-width: 360px;">
-      <div class="modal-header"><span>👤 Đăng nhập Hệ Thống</span></div>
+      <div class="modal-header"><span>👤 Đăng nhập Hệ Thống TNN NET1</span></div>
       <div class="modal-body">
         <div class="form-group"><label>Email:</label><input type="email" id="loginEmail" placeholder="nhanvien@vnpt.vn"></div>
         <div class="form-group"><label>Mật khẩu:</label><input type="password" id="loginPass" placeholder="••••••••"></div>
@@ -358,7 +271,7 @@
 
     var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], globalDataPoints = [];
 
-    // Khởi tạo bản đồ ngay khi tải trang
+    // Khởi tạo bản đồ ngay khi tải trang để bản đồ render sẵn sàng nền tảng
     window.onload = function() {
       khoiTaoBanDoLeaflet();
     };
@@ -407,7 +320,7 @@
         statusEl.style.color = 'green'; statusEl.textContent = "Đăng nhập thành công!";
         document.getElementById('loginModal').style.display = 'none';
         
-        // Hiển thị menu và bảng điều khiển sau khi đăng nhập thành công
+        // Hiển thị menu chức năng và bảng điều khiển
         document.getElementById('sidebar-menu').style.display = 'flex';
         document.getElementById('control-panel').style.display = 'block';
 
@@ -415,7 +328,7 @@
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
-        // Ép làm mới bản đồ ngay khi hiển thị để không bị lỗi xám
+        // Cập nhật lại bản đồ lần cuối sau khi ẩn modal đăng nhập để khớp toàn màn hình
         setTimeout(() => { 
           if(map) {
             map.invalidateSize();
@@ -438,7 +351,7 @@
       document.getElementById('loginPass').value = '';
     }
 
-    // --- 5. BẢN ĐỒ LEAFLET & LỚP HIỂN THỊ ---
+    // --- 5. BẢN ĐỒ LEAFLET & QUẢN LÝ LỚP HIỂN THỊ ---
     function khoiTaoBanDoLeaflet() {
       if (map !== null) return;
 
@@ -521,6 +434,8 @@
           return;
         }
       });
+
+      setTimeout(() => { map.invalidateSize(); }, 100);
     }
 
     function clearMeasure() {
