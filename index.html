@@ -358,46 +358,76 @@
     async function taiDuLieuSupabase(forceRefresh = false) {
       showLoading("Đang tải dữ liệu từ máy chủ...");
       try {
-        let [daiRes, tramRes, tuyenRes, doanRes, dcdData] = await Promise.all([
+        // Tải độc lập các bảng danh mục cơ bản trước để tránh lỗi schema phức tạp
+        let [daiRes, tramRes, tuyenRes, doanRes, diemRes, loaiDiemRes, doanCapDiemRes] = await Promise.all([
           supabaseClient.from('dai_vt').select('*'),
           supabaseClient.from('tram_vt').select('*'),
           supabaseClient.from('tuyen_cap').select('*'),
           supabaseClient.from('doan_cap').select('*'),
-          fetchAllRows('doan_cap_diem', `
-            id, thu_tu, id_doan_cap,
-            diem_ha_tang ( id_diem, ten_diem, lat, long, ly_trinh, du_tru, do_cach_tram, id_tram, id_loaidiem, loai_diem ( id_loaidiem, ten_loaidiem ), huong ( ten_huong ) ),
-            doan_cap ( id_doan_cap, ma_doancap, ten_doan_cap, id_tuyen, tuyen_cap ( id_tuyen_cap, ma_tuyencap, ten_tuyencap ) )
-          `, 'thu_tu')
+          supabaseClient.from('diem_ha_tang').select('*'),
+          supabaseClient.from('loai_diem').select('*'),
+          supabaseClient.from('doan_cap_diem').select('*')
         ]);
 
         rawDaiList = daiRes.data || [];
         rawTramList = tramRes.data || [];
         rawTuyenList = tuyenRes.data || [];
         rawDoanCapList = doanRes.data || [];
+        
+        var rawDiemList = diemRes.data || [];
+        var rawLoaiDiemList = loaiDiemRes.data || [];
+        var rawDoanCapDiemList = doanCapDiemRes.data || [];
+
+        // Tạo bảng tra cứu nhanh (Dictionary) bằng JavaScript để thay thế JOIN của SQL
+        var loaiDiemMap = {};
+        rawLoaiDiemList.forEach(l => { loaiDiemMap[l.id_loaidiem || l.id] = l.ten_loaidiem || l.ten || 'Điểm'; });
+
+        var diemMap = {};
+        rawDiemList.forEach(d => { diemMap[d.id_diem || d.id] = d; });
+
+        var doanCapMap = {};
+        rawDoanCapList.forEach(dc => { doanCapMap[dc.id_doan_cap || dc.id] = dc; });
 
         var allEntries = [];
-        if (dcdData) {
-          dcdData.forEach(item => {
-            if (!item.diem_ha_tang || !item.doan_cap) return;
-            var pt = item.diem_ha_tang;
-            var latNum = parseFloat(pt.lat);
-            var lngNum = parseFloat(pt.long);
-            if (isNaN(latNum) || isNaN(lngNum)) return;
+        
+        // Ghép nối dữ liệu thủ công bằng JavaScript cực kỳ an toàn, không sợ lỗi schema
+        rawDoanCapDiemList.forEach(item => {
+          var diemId = item.id_diem || item.diem_id;
+          var doanCapId = item.id_doan_cap || item.doan_cap_id;
+          
+          var pt = diemMap[diemId];
+          var dc = doanCapMap[doanCapId];
+          
+          if (!pt) return;
 
-            var loaiName = pt.loai_diem ? pt.loai_diem.ten_loaidiem : 'Điểm';
-            var idTuyen = item.doan_cap.id_tuyen;
-            var idDoanCap = item.id_doan_cap;
-            var isMx = (Number(pt.id_loaidiem) === 4 || loaiName.toLowerCase().includes('măng xông') || loaiName.toLowerCase().includes('mx'));
+          var latNum = parseFloat(pt.lat);
+          var lngNum = parseFloat(pt.long || pt.lng);
+          if (isNaN(latNum) || isNaN(lngNum)) return;
 
-            allEntries.push({
-              id: pt.id_diem, ten: pt.ten_diem, lat: latNum, lng: lngNum,
-              idTuyen: idTuyen, idDoanCap: idDoanCap, idTram: pt.id_tram || 2, idLoaiDiem: pt.id_loaidiem || 1,
-              loai: loaiName, lyTrinh: pt.ly_trinh || '', duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-              doCachTram: pt.do_cach_tram || '', stt: isMx ? 9999 : (item.thu_tu !== undefined ? item.thu_tu : 1)
-            });
+          var idLoai = pt.id_loaidiem || pt.loai_diem_id || 1;
+          var loaiName = loaiDiemMap[idLoai] || 'Điểm';
+          var idTuyen = dc ? (dc.id_tuyen || dc.tuyen_cap_id) : null;
+          var isMx = (Number(idLoai) === 4 || loaiName.toLowerCase().includes('măng xông') || loaiName.toLowerCase().includes('mx'));
+
+          allEntries.push({
+            id: pt.id_diem || pt.id, 
+            ten: pt.ten_diem || pt.ten, 
+            lat: latNum, 
+            lng: lngNum,
+            idTuyen: idTuyen, 
+            idDoanCap: doanCapId, 
+            idTram: pt.id_tram || 2, 
+            idLoaiDiem: idLoai,
+            loai: loaiName, 
+            lyTrinh: pt.ly_trinh || '', 
+            duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
+            doCachTram: pt.do_cach_tram || '', 
+            stt: isMx ? 9999 : (item.thu_tu !== undefined ? item.thu_tu : 1)
           });
-        }
+        });
+
         globalDataPoints = allEntries;
+        console.log("Đã nạp thành công tổng số điểm:", globalDataPoints.length);
         
         khoiTaoComboDai();
         
