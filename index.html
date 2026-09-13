@@ -244,7 +244,6 @@
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.default.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.js"></script>
 
   <script>
@@ -254,14 +253,21 @@
     
     var currentUser = { isLoggedIn: false, role: 'member', idDai: null, idTram: null };
     var foundMarkerTimer = null; 
-    var map, markersLayer, mxLayer, polylinesLayer, lyTrinhLayer, foundMarkerLayer = null;
+    var map;
+    
+    // ĐÃ KHẮC PHỤC: Khởi tạo sẵn các lớp bản đồ toàn cục ngay từ đầu để tránh lỗi undefined
+    var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 });
+    var mxLayer = L.layerGroup();
+    var polylinesLayer = L.layerGroup();
+    var lyTrinhLayer = L.layerGroup();
+    var foundMarkerLayer = null;
+
     var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], globalDataPoints = [];
 
     function toggleGISPanel() { closeModals(); var p = document.getElementById('control-panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; }
     function openModal(id) { closeModals(); var t = document.getElementById(id); if(t) t.style.display = 'flex'; }
     function closeModals() { document.querySelectorAll('.app-modal').forEach(m => m.style.display = 'none'); }
 
-    // HÀM ĐĂNG NHẬP HOÀN CHỈNH (Đã khắc phục lỗi không hiển thị giao diện)
     async function handleSupabaseLogin() {
       var email = document.getElementById('loginEmail').value.trim();
       var pass = document.getElementById('loginPass').value;
@@ -287,19 +293,15 @@
         statusEl.style.color = 'green';
         statusEl.textContent = "Đăng nhập thành công! Quyền: " + currentUser.role;
 
-        // 1. Hiển thị menu Quản lý thành viên trong Cài đặt nếu là sys_admin
         if (currentUser.role === 'sys_admin') {
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
-        // 2. Kích hoạt hiển thị bảng điều khiển GIS trên giao diện
         document.getElementById('control-panel').style.display = 'block';
 
-        // 3. Khởi tạo lại bộ lọc theo phân quyền và nạp dữ liệu bản đồ
         khoiTaoComboDai();
         taiDuLieuSupabase(false);
 
-        // Đóng modal đăng nhập sau 1.2 giây
         setTimeout(() => { closeModals(); }, 1200);
 
       } catch (err) {
@@ -311,10 +313,12 @@
     window.onload = function() {
       var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
       map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [osm] });
-      polylinesLayer = L.layerGroup().addTo(map); 
-      markersLayer = L.markerClusterGroup({ maxClusterRadius: 40 }).addTo(map); 
-      mxLayer = L.layerGroup().addTo(map); 
-      lyTrinhLayer = L.layerGroup().addTo(map);
+      
+      // Đưa các lớp vào bản đồ
+      polylinesLayer.addTo(map); 
+      markersLayer.addTo(map); 
+      mxLayer.addTo(map); 
+      lyTrinhLayer.addTo(map);
 
       map.on('contextmenu', function(e) {
         if (currentUser.role === 'member') { alert("Thành viên không có quyền tạo điểm mới."); return; }
