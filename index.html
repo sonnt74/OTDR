@@ -15,10 +15,10 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    /* Reset & Khung làm việc */
-    html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Arial, sans-serif; overflow: hidden; display: flex; flex-direction: row; }
+    /* Reset & Khung làm việc tổng thể cho PC */
+    html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Arial, sans-serif; overflow: hidden; display: flex; flex-direction: row; background: #f0f2f5; }
     
-    /* Menu Bar bên trái */
+    /* Menu Bar bên trái (Mặc định cho PC) */
     #sidebar-menu { width: 70px; height: 100vh; background-color: #212529; color: white; display: none; flex-direction: column; align-items: center; padding-top: 15px; z-index: 3000; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
     .menu-item { width: 50px; height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; margin-bottom: 12px; color: #adb5bd; cursor: pointer; font-size: 10px; transition: all 0.2s; text-decoration: none; }
     .menu-item:hover, .menu-item.active { background-color: #0d6efd; color: white; }
@@ -28,8 +28,8 @@
     #workspace { flex: 1; position: relative; height: 100vh; }
     #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
     
-    /* Bảng điều khiển */
-    #control-panel { position: absolute; top: 15px; left: 15px; z-index: 2000; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 310px; display: none; max-height: 90vh; overflow-y: auto; }
+    /* Bảng điều khiển (Control Panel) */
+    #control-panel { position: absolute; top: 15px; left: 15px; z-index: 2000; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 310px; display: none; max-height: 85vh; overflow-y: auto; box-sizing: border-box; }
     .panel-header { background-color: #0d6efd; color: white; padding: 8px 10px; font-weight: bold; font-size: 13px; border-radius: 5px; margin-bottom: 8px; text-align: center; }
     .form-group { margin-bottom: 8px; }
     .form-group label { display: block; font-size: 10px; font-weight: bold; margin-bottom: 3px; color: #333; text-transform: uppercase; }
@@ -49,7 +49,7 @@
 
     /* Modals */
     .app-modal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 99999; justify-content: center; align-items: center; }
-    .modal-content { background: white; width: 90%; max-width: 550px; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.4); max-height: 85vh; overflow-y: auto; }
+    .modal-content { background: white; width: 90%; max-width: 550px; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.4); max-height: 85vh; overflow-y: auto; box-sizing: border-box; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0d6efd; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold; color: #0d6efd; font-size: 15px; }
     .table-data { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
     .table-data th, .table-data td { border: 1px solid #dee2e6; padding: 8px; text-align: left; }
@@ -65,11 +65,51 @@
     .btn-small { background: #0d6efd; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; margin-right: 4px; }
     .btn-small.del { background: #dc3545; }
 
+    /* ========================================================
+       RESPONSIVE MEDIA QUERIES (TỰ ĐỘNG CO DÃN THIẾT BỊ)
+       ======================================================== */
+
+    /* 1. Máy tính bảng (Tablet) & Điện thoại ngang: Màn hình <= 1024px */
+    @media (max-width: 1024px) {
+      #control-panel { width: 280px; top: 10px; left: 10px; }
+    }
+
+    /* 2. Điện thoại di động (Smartphone): Màn hình <= 768px */
     @media (max-width: 768px) {
-      body { flex-direction: column-reverse; }
-      #sidebar-menu { width: 100vw; height: 55px; flex-direction: row; justify-content: space-around; padding-top: 0; }
-      #workspace { height: calc(100vh - 55px); }
-      #control-panel { width: 90%; left: 5%; top: 10px; }
+      body { flex-direction: column-reverse; } /* Đảo cấu trúc: Bản đồ/Workspace lên trên, Menu xuống đáy */
+      
+      #sidebar-menu { 
+        width: 100vw; 
+        height: 60px; 
+        flex-direction: row; 
+        justify-content: space-around; 
+        padding-top: 0; 
+        align-items: center;
+      }
+      
+      .menu-item { 
+        width: 45px; 
+        height: 45px; 
+        margin-bottom: 0; 
+        font-size: 9px; 
+      }
+      
+      .menu-item span.icon { 
+        font-size: 16px; 
+        margin-bottom: 1px; 
+      }
+
+      #workspace { 
+        height: calc(100vh - 60px); 
+        width: 100vw;
+      }
+      
+      #control-panel { 
+        width: 92%; 
+        left: 4%; 
+        top: 10px; 
+        max-height: 75vh; 
+      }
     }
   </style>
 </head>
@@ -330,7 +370,7 @@
 
         setTimeout(() => { 
           if(map) {
-            map.invalidateSize(); // Ép làm mới kích thước bản đồ
+            map.invalidateSize(); // Làm mới kích thước bản đồ tương ứng với thiết bị
           }
           taiDuLieuSupabase();
         }, 150);
@@ -364,7 +404,6 @@
       mxLayer.addTo(map); 
       lyTrinhLayer.addTo(map);
 
-      // Thêm bảng điều khiển các lớp bản đồ (Layer Control) ở góc trên bên phải
       L.control.layers(
         { "Bản đồ OSM": osm, "Vệ tinh": sat }, 
         { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
