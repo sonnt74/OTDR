@@ -15,21 +15,21 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    /* Khóa cuộn trang hoàn toàn (No Scroll) bằng chuẩn 100% thay vì vh để tương thích Iframe/GAS */
-    html, body { width: 100%; height: 100%; margin: 0; padding: 0; font-family: Arial, sans-serif; overflow: hidden; display: flex; flex-direction: row; background: #f0f2f5; }
+    /* Khóa cuộn trang hoàn toàn (No Scroll) */
+    html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Arial, sans-serif; overflow: hidden; display: flex; flex-direction: row; background: #f0f2f5; }
     
     /* Menu Bar bên trái */
-    #sidebar-menu { width: 65px; height: 100%; background-color: #212529; color: white; display: none; flex-direction: column; align-items: center; padding-top: 10px; z-index: 3000; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
+    #sidebar-menu { width: 65px; height: 100vh; background-color: #212529; color: white; display: none; flex-direction: column; align-items: center; padding-top: 10px; z-index: 3000; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
     .menu-item { width: 45px; height: 45px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 6px; margin-bottom: 8px; color: #adb5bd; cursor: pointer; font-size: 9px; transition: all 0.2s; text-decoration: none; }
     .menu-item:hover, .menu-item.active { background-color: #0d6efd; color: white; }
     .menu-item span.icon { font-size: 18px; margin-bottom: 1px; }
 
     /* Vùng Bản đồ & Bảng điều khiển */
-    #workspace { flex: 1; position: relative; height: 100%; overflow: hidden; }
+    #workspace { flex: 1; position: relative; height: 100vh; overflow: hidden; }
     #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
     
     /* Bảng điều khiển */
-    #control-panel { position: absolute; top: 10px; left: 10px; z-index: 2000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 290px; display: none; max-height: calc(100% - 20px); overflow-y: auto; box-sizing: border-box; }
+    #control-panel { position: absolute; top: 10px; left: 10px; z-index: 2000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 290px; display: none; max-height: calc(100vh - 20px); overflow-y: auto; box-sizing: border-box; }
     .panel-header { background-color: #0d6efd; color: white; padding: 6px 8px; font-weight: bold; font-size: 12px; border-radius: 4px; margin-bottom: 6px; text-align: center; }
     .form-group { margin-bottom: 6px; }
     .form-group label { display: block; font-size: 9px; font-weight: bold; margin-bottom: 2px; color: #333; text-transform: uppercase; }
@@ -43,13 +43,13 @@
     .checkbox-group { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 6px; background: #f8f9fa; padding: 5px; border-radius: 4px; }
 
     /* Lớp mờ tải dữ liệu */
-    #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 999999; justify-content: center; align-items: center; color: #fff; font-size: 16px; flex-direction: column; }
+    #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.7); z-index: 999999; justify-content: center; align-items: center; color: #fff; font-size: 16px; flex-direction: column; }
     .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #0d6efd; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 10px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
     /* Modals */
-    .app-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 99999; justify-content: center; align-items: center; }
-    .modal-content { background: white; width: 90%; max-width: 500px; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.4); max-height: 85%; overflow-y: auto; box-sizing: border-box; }
+    .app-modal { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 99999; justify-content: center; align-items: center; }
+    .modal-content { background: white; width: 90%; max-width: 500px; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.4); max-height: 85vh; overflow-y: auto; box-sizing: border-box; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0d6efd; padding-bottom: 8px; margin-bottom: 10px; font-weight: bold; color: #0d6efd; font-size: 14px; }
     .table-data { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
     .table-data th, .table-data td { border: 1px solid #dee2e6; padding: 6px; text-align: left; }
@@ -67,9 +67,9 @@
 
     @media (max-width: 768px) {
       body { flex-direction: column; }
-      #sidebar-menu { width: 100%; height: 50px; flex-direction: row; justify-content: space-around; padding-top: 0; order: 2; }
-      #workspace { height: calc(100% - 50px); width: 100%; order: 1; }
-      #control-panel { width: 94%; left: 3%; top: 5px; max-height: calc(100% - 20px); }
+      #sidebar-menu { width: 100vw; height: 50px; flex-direction: row; justify-content: space-around; padding-top: 0; order: 2; }
+      #workspace { height: calc(100vh - 50px); width: 100vw; order: 1; }
+      #control-panel { width: 94%; left: 3%; top: 5px; max-height: calc(100vh - 70px); }
     }
   </style>
 </head>
@@ -328,7 +328,6 @@
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
-        // Kích hoạt invalidateSize để bản đồ lấp đầy không gian sau khi ẩn modal đăng nhập
         setTimeout(() => { 
           if(map) {
             map.invalidateSize();
@@ -351,14 +350,14 @@
       document.getElementById('loginPass').value = '';
     }
 
-    // --- 5. BẢN ĐỒ LEAFLET & QUẢN LÝ LỚP HIỂN THỊ ---
+    // --- 5. BẢN ĐỒ LEAFLET & QUẢN LÝ LỚP HIỂN THỊ (Sử dụng CartoDB thay thế OSM bị chặn) ---
     function khoiTaoBanDoLeaflet() {
       if (map !== null) return;
 
-      var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
+      var cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 21, maxNativeZoom: 20 });
       var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 19 });
 
-      map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [osm] });
+      map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [cartoLight] });
       
       polylinesLayer.addTo(map); 
       markersLayer.addTo(map); 
@@ -366,7 +365,7 @@
       lyTrinhLayer.addTo(map);
 
       L.control.layers(
-        { "Bản đồ OSM": osm, "Vệ tinh": sat }, 
+        { "Bản đồ Sáng (Carto)": cartoLight, "Vệ tinh Esri": sat }, 
         { "Cáp quang": polylinesLayer, "Mốc & Cột": markersLayer, "Măng xông (MX)": mxLayer, "Lý trình": lyTrinhLayer }, 
         { position: 'topright' }
       ).addTo(map);
@@ -435,8 +434,7 @@
         }
       });
 
-      // Kích hoạt vẽ lại kích thước khi bản đồ sẵn sàng
-      setTimeout(() => { map.invalidateSize(); }, 200);
+      setTimeout(() => { map.invalidateSize(); }, 100);
     }
 
     function clearMeasure() {
