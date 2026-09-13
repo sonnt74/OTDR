@@ -274,46 +274,65 @@
     function closeModals() { document.querySelectorAll('.app-modal').forEach(m => m.style.display = 'none'); }
 
     async function handleSupabaseLogin() {
-      var email = document.getElementById('loginEmail').value.trim();
-      var pass = document.getElementById('loginPass').value;
-      var statusEl = document.getElementById('loginStatus');
+  var email = document.getElementById('loginEmail').value.trim();
+  var pass = document.getElementById('loginPass').value;
+  var statusEl = document.getElementById('loginStatus');
 
-      if (!email || !pass) { statusEl.style.color = 'red'; statusEl.textContent = "Vui lòng nhập email và mật khẩu!"; return; }
+  if (!email || !pass) { 
+    statusEl.style.color = 'red'; 
+    statusEl.textContent = "Vui lòng nhập email và mật khẩu!"; 
+    return; 
+  }
 
-      statusEl.style.color = '#0d6efd'; statusEl.textContent = "Đang xác thực...";
+  statusEl.style.color = '#0d6efd'; 
+  statusEl.textContent = "Đang xác thực...";
 
-      try {
-        const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({ email: email, password: pass });
-        if (authError) throw authError;
+  try {
+    // 1. Xác thực tài khoản với Supabase Auth
+    const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({ email: email, password: pass });
+    if (authError) throw authError;
 
-        var user = authData.user;
-        const { data: roleData, error: roleError } = await supabaseClient.from('user_roles').select('*').eq('id', user.id).single();
+    var user = authData.user;
+    
+    // 2. Truy vấn bảng phân quyền user_roles
+    const { data: roleData, error: roleError } = await supabaseClient.from('user_roles').select('*').eq('id', user.id).single();
 
-        if (roleError) {
-          currentUser = { isLoggedIn: true, role: 'member', idDai: null, idTram: null };
-        } else {
-          currentUser = { isLoggedIn: true, role: roleData.role, idDai: roleData.id_dai, idTram: roleData.id_tram };
-        }
-
-        statusEl.style.color = 'green';
-        statusEl.textContent = "Đăng nhập thành công! Quyền: " + currentUser.role;
-
-        if (currentUser.role === 'sys_admin') {
-          document.getElementById('adminMenuSection').style.display = 'block';
-        }
-
-        document.getElementById('control-panel').style.display = 'block';
-
-        khoiTaoComboDai();
-        taiDuLieuSupabase(false);
-
-        setTimeout(() => { closeModals(); }, 1200);
-
-      } catch (err) {
-        statusEl.style.color = 'red';
-        statusEl.textContent = "Lỗi đăng nhập: " + err.message;
-      }
+    if (roleError) {
+      currentUser = { isLoggedIn: true, role: 'member', idDai: null, idTram: null };
+    } else {
+      currentUser = { isLoggedIn: true, role: roleData.role, idDai: roleData.id_dai, idTram: roleData.id_tram };
     }
+
+    statusEl.style.color = 'green';
+    statusEl.textContent = "Đăng nhập thành công! Quyền: " + currentUser.role;
+
+    // 3. Hiển thị menu Quản lý thành viên trong Cài đặt nếu là sys_admin
+    if (currentUser.role === 'sys_admin') {
+      document.getElementById('adminMenuSection').style.display = 'block';
+    }
+
+    // 4. Hiển thị bảng điều khiển GIS trên giao diện
+    document.getElementById('control-panel').style.display = 'block';
+
+    // 5. Khởi tạo bộ lọc và nạp dữ liệu bản đồ
+    khoiTaoComboDai();
+    taiDuLieuSupabase(false);
+
+    // 6. Đóng modal đăng nhập
+    setTimeout(() => { 
+      closeModals(); 
+      
+      // QUAN TRỌNG: Ép Leaflet vẽ lại bản đồ sau khi modal đóng để hiển thị đầy đủ
+      if (map) {
+        map.invalidateSize();
+      }
+    }, 800);
+
+  } catch (err) {
+    statusEl.style.color = 'red';
+    statusEl.textContent = "Lỗi đăng nhập: " + err.message;
+  }
+}
 
     window.onload = function() {
       var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
