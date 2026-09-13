@@ -81,7 +81,7 @@
     </div>
     <div id="map"></div>
 
-    <!-- Bảng điều khiển gọn gàng, không scroll -->
+    <!-- Bảng điều khiển GIS -->
     <div id="control-panel">
       <div class="panel-header"><span>🗺️ ĐIỀU KHIỂN & PHÂN TÍCH OTDR</span></div>
       <div class="panel-body-content" id="panelBodyContent">
@@ -147,7 +147,7 @@
     </div>
   </div>
 
-  <!-- Modal Cài đặt (Thiết lập hệ thống gọn gàng) -->
+  <!-- Modal Cài đặt -->
   <div id="configModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -166,7 +166,6 @@
           </select>
         </div>
 
-        <!-- Nút quản lý thành viên (chỉ hiện cho admin) -->
         <div id="adminMenuSection" class="form-group" style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 8px; display: none;">
           <button class="btn-action btn-success" onclick="chuanBiFormThemThanhVien()">👥 Thêm tài khoản thành viên</button>
         </div>
@@ -174,7 +173,7 @@
     </div>
   </div>
 
-  <!-- Modal Đăng nhập Supabase Auth -->
+  <!-- Modal Đăng nhập -->
   <div id="loginModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -200,7 +199,7 @@
     </div>
   </div>
 
-  <!-- Modal Thêm Thành Viên (Dành riêng cho Admin) -->
+  <!-- Modal Thêm Thành Viên -->
   <div id="addMemberModal" class="app-modal">
     <div class="modal-content" style="max-width: 380px;">
       <div class="modal-header">
@@ -245,7 +244,8 @@
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.default.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.js"></script>
 
   <script>
     const SUPABASE_URL = 'https://clddwitzwuewwxawuorv.supabase.co';
@@ -261,6 +261,7 @@
     function openModal(id) { closeModals(); var t = document.getElementById(id); if(t) t.style.display = 'flex'; }
     function closeModals() { document.querySelectorAll('.app-modal').forEach(m => m.style.display = 'none'); }
 
+    // HÀM ĐĂNG NHẬP HOÀN CHỈNH (Đã khắc phục lỗi không hiển thị giao diện)
     async function handleSupabaseLogin() {
       var email = document.getElementById('loginEmail').value.trim();
       var pass = document.getElementById('loginPass').value;
@@ -286,13 +287,21 @@
         statusEl.style.color = 'green';
         statusEl.textContent = "Đăng nhập thành công! Quyền: " + currentUser.role;
 
-        // Hiển thị tính năng Quản lý thành viên trong Cài đặt nếu là sys_admin
+        // 1. Hiển thị menu Quản lý thành viên trong Cài đặt nếu là sys_admin
         if (currentUser.role === 'sys_admin') {
           document.getElementById('adminMenuSection').style.display = 'block';
         }
 
+        // 2. Kích hoạt hiển thị bảng điều khiển GIS trên giao diện
+        document.getElementById('control-panel').style.display = 'block';
+
+        // 3. Khởi tạo lại bộ lọc theo phân quyền và nạp dữ liệu bản đồ
         khoiTaoComboDai();
+        taiDuLieuSupabase(false);
+
+        // Đóng modal đăng nhập sau 1.2 giây
         setTimeout(() => { closeModals(); }, 1200);
+
       } catch (err) {
         statusEl.style.color = 'red';
         statusEl.textContent = "Lỗi đăng nhập: " + err.message;
@@ -409,72 +418,41 @@
       openModal('addMemberModal');
     }
 
-    // Hàm xử lý tạo thành viên mới chuẩn xác trực tiếp từ Front-end
-async function handleCreateMember() {
-  var email = document.getElementById('newMemberEmail').value.trim();
-  var password = document.getElementById('newMemberPass').value;
-  var role = document.getElementById('newMemberRole').value;
-  var idDai = document.getElementById('newMemberDai').value || null;
-  var idTram = document.getElementById('newMemberTram').value || null;
-  var statusEl = document.getElementById('createMemberStatus');
+    async function handleCreateMember() {
+      var email = document.getElementById('newMemberEmail').value.trim();
+      var password = document.getElementById('newMemberPass').value;
+      var role = document.getElementById('newMemberRole').value;
+      var idDai = document.getElementById('newMemberDai').value || null;
+      var idTram = document.getElementById('newMemberTram').value || null;
+      var statusEl = document.getElementById('createMemberStatus');
 
-  if (!email || !password) {
-    statusEl.style.color = 'red';
-    statusEl.textContent = "Vui lòng nhập đầy đủ email và mật khẩu!";
-    return;
-  }
+      if (!email || !password) { statusEl.style.color = 'red'; statusEl.textContent = "Nhập đủ email và mật khẩu!"; return; }
 
-  statusEl.style.color = '#0d6efd';
-  statusEl.textContent = "Đang tạo tài khoản trong hệ thống...";
+      statusEl.style.color = '#0d6efd'; statusEl.textContent = "Đang tạo tài khoản...";
 
-  try {
-    // Bước 1: Tạo tài khoản xác thực qua Supabase Auth
-    // (Lưu ý: Thao tác này tạo user trong auth.users)
-    const { data: authData, error: authError } = await supabaseClient.auth.signUp({
-      email: email,
-      password: password
-    });
+      try {
+        const { data: authData, error: authError } = await supabaseClient.auth.signUp({ email: email, password: password });
+        if (authError) throw authError;
 
-    if (authError) throw authError;
+        var newUserId = authData.user ? authData.user.id : null;
+        if (!newUserId) throw new Error("Không lấy được ID tài khoản vừa tạo.");
 
-    var newUserId = authData.user ? authData.user.id : null;
-    if (!newUserId) {
-      throw new Error("Không thể lấy được mã định danh của tài khoản vừa tạo.");
-    }
-
-    statusEl.textContent = "Đang phân quyền cho thành viên...";
-
-    // Bước 2: Thêm dòng phân quyền vào bảng user_roles
-    const { error: roleError } = await supabaseClient
-      .from('user_roles')
-      .insert([
-        {
-          id: newUserId,
-          email: email,
-          role: role,
+        const { error: roleError } = await supabaseClient.from('user_roles').insert([{
+          id: newUserId, email: email, role: role,
           id_dai: idDai ? parseInt(idDai) : null,
           id_tram: idTram ? parseInt(idTram) : null
-        }
-      ]);
+        }]);
 
-    if (roleError) throw roleError;
+        if (roleError) throw roleError;
 
-    statusEl.style.color = 'green';
-    statusEl.textContent = "Tạo thành công tài khoản cho: " + email;
-    
-    // Đóng form sau 1.5 giây và làm sạch ô nhập
-    setTimeout(() => {
-      closeModals();
-      document.getElementById('newMemberEmail').value = '';
-      document.getElementById('newMemberPass').value = '';
-      statusEl.textContent = '';
-    }, 1500);
-
-  } catch (err) {
-    statusEl.style.color = 'red';
-    statusEl.textContent = "Lỗi: " + err.message;
-  }
-}
+        statusEl.style.color = 'green';
+        statusEl.textContent = "Tạo thành công tài khoản: " + email;
+        setTimeout(() => { closeModals(); document.getElementById('newMemberEmail').value = ''; document.getElementById('newMemberPass').value = ''; statusEl.textContent = ''; }, 1500);
+      } catch (err) {
+        statusEl.style.color = 'red';
+        statusEl.textContent = "Lỗi: " + err.message;
+      }
+    }
 
     async function taiDuLieuSupabase(forceRefresh = false) {
       rawDaiList = [{ id_dai: 1, ten_dai: 'Đài Thái Nguyên' }, { id_dai: 2, ten_dai: 'Đài Phổ Yên' }];
