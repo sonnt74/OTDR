@@ -745,7 +745,7 @@
             var isMx = (Number(pt.id_loaidiem) === 4 || loaiName.toLowerCase().includes('măng xông') || loaiName.toLowerCase().includes('mx'));
 
             allEntries.push({
-              id: pt.id_diem, // Được thêm vào để hỗ trợ CRUD Sửa/Xóa
+              id: pt.id_diem, 
               ten: pt.ten_diem,
               lat: parseFloat(pt.lat),
               lng: parseFloat(pt.long),
@@ -1042,7 +1042,6 @@
     }
 
     function veLaiTuyenAB() {
-      // Đã SỬA LỖI clearLayers() bằng cách thêm kiểm tra tồn tại an toàn tuyệt đối
       if (markersLayer) markersLayer.clearLayers(); 
       if (mxLayer) mxLayer.clearLayers(); 
       if (polylinesLayer) polylinesLayer.clearLayers(); 
@@ -1210,7 +1209,6 @@
     }
 
     function xoaTuyenThuCong() {
-      // Đã SỬA LỖI clearLayers()
       if (markersLayer) markersLayer.clearLayers(); 
       if (mxLayer) mxLayer.clearLayers(); 
       if (polylinesLayer) polylinesLayer.clearLayers(); 
@@ -1260,11 +1258,19 @@
       statusEl.textContent = "Đang xác thực...";
 
       try {
+        // Bước 1: Xác thực với Supabase Auth
         const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email, password: pass });
-        if (error) throw error;
+        if (error) {
+           throw new Error("Xác thực thất bại: " + error.message);
+        }
         
-        // Tải quyền hạn người dùng (RBAC)
-        const { data: roleData } = await supabaseClient.from('user_roles').select('*').eq('id', data.user.id).single();
+        // Bước 2: Tải quyền hạn người dùng (RBAC) từ public.user_roles
+        const { data: roleData, error: roleError } = await supabaseClient.from('user_roles').select('*').eq('id', data.user.id).single();
+        
+        if (roleError) {
+          console.warn("Lỗi tải quyền (Schema Error), hệ thống sẽ dùng quyền mặc định:", roleError.message);
+        }
+
         if (roleData) {
           currentUser = { isLoggedIn: true, role: roleData.role, idDai: roleData.id_dai, idTram: roleData.id_tram };
         } else {
