@@ -323,7 +323,7 @@ function getDistanceAlongRoute(targetPt, pathPts) {
   return bestDist;
 }
 
-// Xây dựng tuyến khung tuần tự từ Trạm TNN để tính toán chính xác
+// Xây dựng tuyến khung chuẩn (Backbone) xuất phát từ Trạm TNN và sắp xếp tuần tự
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   var allPts = globalDataPoints.filter(pt => pt.idTuyen == tuyenVal && (tramVal === 'ALL' || pt.idTram == tramVal) && (doanVal === 'ALL' || pt.idDoanCap == doanVal));
   
@@ -333,7 +333,6 @@ function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
     allPts.unshift(basePt);
   }
 
-  // Sắp xếp tuần tự Nearest Neighbor bắt đầu từ Trạm TNN
   let sorted = [basePt];
   let remaining = allPts.filter(p => p !== basePt);
 
@@ -351,7 +350,7 @@ function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   return sorted;
 }
 
-// Nội suy thống nhất toàn tuyến, ưu tiên tuyệt đối măng xông làm mốc neo
+// HÀM NỘI SUY CHUẨN ĐỒNG NHẤT CHO MỌI ĐIỂM (Ưu tiên măng xông làm mốc neo, xử lý HNI từ B về A)
 function precalculateRouteData(pts, backbonePts) {
   if (!pts || pts.length === 0) return pts;
   
@@ -367,7 +366,7 @@ function precalculateRouteData(pts, backbonePts) {
   var baseMeters = 0;
   var foundBase = false;
 
-  // Ưu tiên 1: Tìm măng xông có lý trình chuẩn làm mốc neo
+  // Ưu tiên tuyệt đối tìm măng xông có nhập lý trình làm mốc neo chuẩn
   let mxWithLyTrinh = backbonePts.find(p => isMangXong(p) && parseLyTrinh(p.lyTrinh) !== null);
   if (mxWithLyTrinh) {
     let mVal = parseLyTrinh(mxWithLyTrinh.lyTrinh);
@@ -375,7 +374,7 @@ function precalculateRouteData(pts, backbonePts) {
     baseMeters = mVal - distToMx;
     foundBase = true;
   } else {
-    // Ưu tiên 2: Tìm bất kỳ điểm nào có lý trình
+    // Nếu không có, tìm điểm bất kỳ có lý trình
     for (let i = 0; i < backbonePts.length; i++) {
       var m = parseLyTrinh(backbonePts[i].lyTrinh);
       if (m !== null) {
@@ -389,6 +388,7 @@ function precalculateRouteData(pts, backbonePts) {
 
   if (!foundBase) baseMeters = 0;
 
+  // Gán thông số khoảng cách từ A và lý trình chuẩn hóa (hỗ trợ hướng ngược từ B về A khi bật HNI)
   pts.forEach(pt => {
     let distFromA = getDistanceAlongRoute(pt, backbonePts) * heSo;
     
@@ -421,8 +421,7 @@ function getPointsCuaTuyenHienTai() {
   var basePt = backbone.find(p => p.id === 'TNN_BASE' || Math.abs(p.lat - 21.593365) < 0.0001);
   if (basePt && !nonMxPts.includes(basePt)) nonMxPts.unshift(basePt);
 
-  var ordered = document.getElementById('chkNghichHuong').checked ? nonMxPts.slice().reverse() : nonMxPts;
-  return precalculateRouteData(ordered, backbone);
+  return precalculateRouteData(nonMxPts, backbone);
 }
 
 function veLaiTuyenAB() {
@@ -432,6 +431,8 @@ function veLaiTuyenAB() {
   if (tuyenVal === 'ALL') return;
 
   var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  precalculateRouteData(backbone, backbone); // Tính toán đồng bộ cho toàn bộ backbone trước
+
   var pts = getPointsCuaTuyenHienTai();
   if (pts.length === 0) return;
   
@@ -454,9 +455,10 @@ function veLaiTuyenAB() {
     } else { e.target.setLatLng([ptObj.lat, ptObj.lng]); }
   }
 
+  // Vẽ các điểm mốc, bể, cột
   pts.forEach((pt, index) => {
     bounds.push([pt.lat, pt.lng]);
-    var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : ((index === pts.length - 1 && !document.getElementById('chkNghichHuong').checked) ? '<div class="point-b-marker">B</div>' : '<div class="standard-marker"></div>');
+    var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : '<div class="standard-marker"></div>';
     var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
     
     var popupHtml = `<b>${pt.ten}</b><br>` +
@@ -470,18 +472,16 @@ function veLaiTuyenAB() {
     markersLayer.addLayer(marker);
   });
 
-  // Render Măng xông sử dụng chung backbone đã chuẩn hóa
+  // Vẽ các điểm măng xông với cùng tập dữ liệu đã đồng bộ
   var mxList = backbone.filter(p => isMangXong(p));
-  precalculateRouteData(mxList, backbone);
-
   mxList.forEach(mx => {
     bounds.push([mx.lat, mx.lng]);
     var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
     var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}')">📝 Ghi chú</button>`;
     
     var popupHtml = `<b>${mx.ten}</b><br>` +
-                    `Lý trình QL: <b>${mx.calculatedLyTrinhText}</b><br>` +
-                    `📏 Cách gốc: <b>${mx.distanceFromAText}</b><br>` +
+                    `📍 Lý trình QL: <b>${mx.calculatedLyTrinhText}</b><br>` +
+                    `📏 Cự ly từ Trạm A: <b>${mx.distanceFromAText}</b><br>` +
                     taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng) + ghiChuBtn;
 
     mxMarker.bindPopup(popupHtml);
@@ -526,7 +526,6 @@ function timViTriDut() {
 
   if (backbone.length < 2) { alert("Tuyến cáp chưa đủ dữ liệu!"); return; }
 
-  var mxList = backbone.filter(p => isMangXong(p));
   var routeStops = [];
   backbone.forEach(p => routeStops.push({ pt: p, dist: p.distanceFromAMeters / heSo, duTru: p.duTru || 0, isMX: isMangXong(p) }));
   routeStops.sort((a, b) => a.dist - b.dist);
