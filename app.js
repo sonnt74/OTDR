@@ -263,7 +263,7 @@ function updateTuyenOptions() {
 }
 
 function onTuyenChange() {
-  var tuyenVal = document.getElementById('selectTuyen'].value;
+  var tuyenVal = document.getElementById('selectTuyen').value;
   var selectDoanCap = document.getElementById('selectDoanCap');
   selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
   if (tuyenVal !== 'ALL') {
@@ -313,8 +313,8 @@ function calculateHaversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// HÀM TÍNH KHOẢNG CÁCH QUANG HỌC TỪ A (BAO GỒM HỆ SỐ CHÙNG VÀ CỘNG DỒN ĐỘ DỰ TRỮ CỦA CÁC ĐIỂM)
-function getOpticalDistanceAlongRoute(targetPt, pathPts, heSo) {
+// HÀM TÍNH KHOẢNG CÁCH QUANG HỌC TỪ A (TÍNH HỆ SỐ CHÙNG VÀ CỘNG DỒN ĐỘ DỰ TRỮ)
+function getOpticalDistanceFromA(targetPt, pathPts, heSo) {
   var bestDist = 0, currentDist = 0, minDst = Infinity;
   for (var i = 0; i < pathPts.length - 1; i++) {
     var p1 = pathPts[i], p2 = pathPts[i+1];
@@ -327,7 +327,6 @@ function getOpticalDistanceAlongRoute(targetPt, pathPts, heSo) {
     
     if (distToProj < minDst) { 
       minDst = distToProj; 
-      // Cự ly quang học đến điểm chiếu = cự ly tích lũy từ đầu + phần đoạn t + độ dự trữ cộng dồn
       bestDist = currentDist + (t * segLen); 
     }
     currentDist += segLen + (p2.duTru || 0);
@@ -361,71 +360,62 @@ function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   return sorted;
 }
 
-// THUẬT TOÁN TÍNH TOÁN HOÀN CHỈNH (CÓ TÍNH HỆ SỐ CHÙNG VÀ ĐỘ DỰ TRỮ CHO KHOẢNG CÁCH TỪ A)
+// THUẬT TOÁN TÍNH TOÁN: GIỮ NGUYÊN LOGIC LÝ TRÌNH CŨ, CẬP NHẬT KHOẢNG CÁCH TỪ A CÓ TÍNH DỰ TRỮ VÀ ĐỘ CHÙNG
 function precalculateRouteDataForPoints(pts, backbonePts) {
   if (!pts || pts.length === 0) return pts;
   
   var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
   var isNghichHuong = document.getElementById('chkNghichHuong')?.checked || false;
 
-  // Tính tổng chiều dài quang học toàn tuyến (bao gồm hệ số chùng và dự trữ)
   let totalRouteOpticalDist = 0;
   for (let i = 0; i < backbonePts.length - 1; i++) {
     var segPhys = calculateHaversine(backbonePts[i].lat, backbonePts[i].lng, backbonePts[i+1].lat, backbonePts[i+1].lng);
     totalRouteOpticalDist += (segPhys * heSo) + (backbonePts[i+1].duTru || 0);
   }
 
-  // PHÂN NHÓM CÁC ĐIỂM THEO TỪNG ĐOẠN CÁP (DOAN_CAP)
-  var segmentsMap = {};
-  backbonePts.forEach(p => {
-    var segId = p.idDoanCap || 'default';
-    if (!segmentsMap[segId]) segmentsMap[segId] = [];
-    segmentsMap[segId].push(p);
-  });
+  // TÌM ĐIỂM NEO GỐC TỪ PHÍA XA NHẤT (ĐIỂM B) LÙI VỀ THEO LOGIC CHUẨN CỦA ANH
+  var baseMeters = 0;
+  var currentSuffix = '';
+  var foundBase = false;
+  let sortedBackboneDesc = [...backbonePts].reverse();
 
-  // TÍNH TOÁN ĐỘC LẬP CHO TỪNG ĐOẠN CÁP
-  Object.keys(segmentsMap).forEach(segId => {
-    var segPoints = segmentsMap[segId];
+  for (let i = 0; i < sortedBackboneDesc.length; i++) {
+    var parsed = parseLyTrinhWithSuffix(sortedBackboneDesc[i].lyTrinh);
+    if (parsed !== null) {
+      let distToThisFromA = getOpticalDistanceFromA(sortedBackboneDesc[i], backbonePts, heSo);
+      currentSuffix = parsed.suffix;
+      baseMeters = parsed.meters - distToThisFromA;
+      foundBase = true;
+      break;
+    }
+  }
+
+  if (!foundBase) baseMeters = 0;
+
+  // TÍNH TOÁN CHO TỪNG ĐIỂM
+  pts.forEach(pt => {
+    let distFromA = getOpticalDistanceFromA(pt, backbonePts, heSo);
     
-    // Tìm mốc neo ưu tiên từ phía xa nhất (điểm B của đoạn) lùi về
-    var segBaseMeters = 0;
-    var segSuffix = '';
-    let sortedSegDesc = [...segPoints].reverse();
+    // 1. KHOẢNG CÁCH TỪ A (Đã bao gồm hệ số chùng cáp và tổng độ dự trữ cộng dồn)
+    pt.distanceFromAMeters = distFromA;
+    let distAVal = Math.round(pt.distanceFromAMeters);
+    pt.distanceFromAText = (distAVal >= 1000) ? (distAVal / 1000).toFixed(2) + " km" : distAVal + " m";
 
-    for (let i = 0; i < sortedSegDesc.length; i++) {
-      var parsed = parseLyTrinhWithSuffix(sortedSegDesc[i].lyTrinh);
-      if (parsed !== null) {
-        let distToThisFromA = getOpticalDistanceAlongRoute(sortedSegDesc[i], backbonePts, heSo);
-        segSuffix = parsed.suffix;
-        segBaseMeters = parsed.meters - distToThisFromA;
-        break;
-      }
+    // 2. XỬ LÝ ĐIỂM NEO HOẶC ĐỔI HẬU TỐ NẾU ĐIỂM NÀY KHAI BÁO MỚI
+    var parsedPt = parseLyTrinhWithSuffix(pt.lyTrinh);
+    if (parsedPt !== null && parsedPt.suffix) {
+      currentSuffix = parsedPt.suffix;
+      baseMeters = parsedPt.meters - distFromA;
     }
 
-    // Gán thông số cho các điểm thuộc đoạn cáp này
-    segPoints.forEach(pt => {
-      // 1. KHOẢNG CÁCH TỪ A (Đã bao gồm hệ số chùng và độ dự trữ cộng dồn)
-      let distFromA = getOpticalDistanceAlongRoute(pt, backbonePts, heSo);
-      pt.distanceFromAMeters = distFromA;
-      let distAVal = Math.round(pt.distanceFromAMeters);
-      pt.distanceFromAText = (distAVal >= 1000) ? (distAVal / 1000).toFixed(2) + " km" : distAVal + " m";
+    // 3. LÝ TRÌNH QUỐC LỘ (Giữ nguyên logic chuẩn từ B lùi về / HNI xuôi ngược)
+    let effectiveLyTrinhMeters = isNghichHuong ? (baseMeters + totalRouteOpticalDist - distFromA) : (baseMeters + distFromA);
 
-      // 2. XỬ LÝ ĐỔI HẬU TỐ HOẶC MỐC RIÊNG CỦA ĐIỂM NẾU CÓ
-      var parsedPt = parseLyTrinhWithSuffix(pt.lyTrinh);
-      if (parsedPt !== null && parsedPt.suffix) {
-        segSuffix = parsedPt.suffix;
-        segBaseMeters = parsedPt.meters - distFromA;
-      }
-
-      // 3. TÍNH LÝ TRÌNH QUỐC LỘ (Xuôi chiều tăng dần từ A ra B, HNI giảm dần từ B về A)
-      let effectiveLyTrinhMeters = isNghichHuong ? (segBaseMeters + totalRouteOpticalDist - distFromA) : (segBaseMeters + distFromA);
-
-      pt.calculatedLyTrinhMeters = effectiveLyTrinhMeters;
-      let totalMeters = Math.round(pt.calculatedLyTrinhMeters);
-      let km = Math.floor(totalMeters / 1000);
-      let m = totalMeters % 1000;
-      pt.calculatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}` + (segSuffix ? ` (${segSuffix})` : '');
-    });
+    pt.calculatedLyTrinhMeters = effectiveLyTrinhMeters;
+    let totalMeters = Math.round(pt.calculatedLyTrinhMeters);
+    let km = Math.floor(totalMeters / 1000);
+    let m = totalMeters % 1000;
+    pt.calculatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}` + (currentSuffix ? ` (${currentSuffix})` : '');
   });
 
   return pts;
@@ -627,7 +617,7 @@ function timLyTrinhBanDo() {
   }
 
   var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
-  var distToA = getOpticalDistanceAlongRoute({lat: targetLat, lng: targetLng}, getMasterRouteBackbone(document.getElementById('selectTuyen').value, document.getElementById('selectTram').value, document.getElementById('selectDoanCap').value), heSo);
+  var distToA = getOpticalDistanceFromA({lat: targetLat, lng: targetLng}, getMasterRouteBackbone(document.getElementById('selectTuyen').value, document.getElementById('selectTram').value, document.getElementById('selectDoanCap').value), heSo);
   var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
 
   if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
