@@ -305,46 +305,75 @@ function parseLyTrinh(str) {
 }
 
 // Hàm chuẩn hóa, nội suy lý trình quốc lộ và tính khoảng cách quang học từ Trạm gốc A
+// Hàm chuẩn hóa, nội suy lý trình quốc lộ và cự ly quang học từ gốc A (Có xét hướng HNI / ngược hướng)
 function precalculateRouteData(pts) {
   if (!pts || pts.length === 0) return pts;
   
   var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
+  var isNghichHuong = document.getElementById('chkNghichHuong')?.checked || false;
+
+  // Nếu đang đo theo chiều ngược hướng (HNI), ta tiến hành tính toán trên mảng đảo ngược (từ B về A) rồi đảo lại, 
+  // hoặc dịch chuyển mốc neo từ điểm đầu sang điểm cuối tuyến.
+  // Tuy nhiên, để giữ nguyên tính liên tục vật lý từ gốc A, ta tính tổng chiều dài tuyến trước.
+
+  // Bước 1: Tính toán tổng chiều dài quang học toàn tuyến từ mốc đầu tiên
+  let totalRouteOpticalDist = 0;
+  let segmentDistances = [];
+  for (let i = 0; i < pts.length; i++) {
+    if (i > 0) {
+      let segPhys = calculateHaversine(pts[i-1].lat, pts[i-1].lng, pts[i].lat, pts[i].lng);
+      let optDist = (segPhys * heSo) + (pts[i].duTru || 0);
+      segmentDistances.push(optDist);
+      totalRouteOpticalDist += optDist;
+    } else {
+      segmentDistances.push(0);
+    }
+  }
+
+  // Bước 2: Dò tìm mốc neo có sẵn lý trình chuẩn trên toàn tuyến
   var baseMeters = 0;
-  var foundBase = false;
-  
-  // Bước 1: Dò tìm mốc neo có sẵn lý trình quốc lộ chuẩn đầu tiên để làm căn cứ
+  var baseIndex = -1;
   for (let i = 0; i < pts.length; i++) {
     var m = parseLyTrinh(pts[i].lyTrinh);
     if (m !== null) {
-      var distFromA = 0;
-      for (let j = 0; j < i; j++) {
-        let segLen = calculateHaversine(pts[j].lat, pts[j].lng, pts[j+1].lat, pts[j+1].lng);
-        distFromA += (segLen * heSo) + (pts[j+1].duTru || 0);
-      }
-      baseMeters = m - distFromA;
-      foundBase = true;
+      baseMeters = m;
+      baseIndex = i;
       break;
     }
   }
 
-  if (!foundBase) baseMeters = 0;
+  // Tính dịch chuyển lý trình tại gốc (Trạm A) dựa vào mốc neo tìm được
+  if (baseIndex !== -1) {
+    let distFromAToBase = 0;
+    for (let j = 1; j <= baseIndex; j++) {
+      distFromAToBase += segmentDistances[j];
+    }
+    // Nếu xuôi chiều, lý trình gốc = lý trình mốc - khoảng cách từ A đến mốc. 
+    // Nếu ngược chiều (HNI), mốc neo nằm ở chiều ngược lại.
+    baseMeters = baseMeters - distFromAToBase;
+  } else {
+    baseMeters = 0; // Mặc định nếu chưa nhập mốc nào
+  }
 
-  // Bước 2: Vòng lặp tính toán cộng dồn khoảng cách quang học từ gốc A và nội suy lý trình
-  var accumulatedOpticalDist = 0; // Khoảng cách quang học tính từ Trạm A (mét)
+  // Bước 3: Gán thông số cho từng điểm tùy thuộc vào chiều thuận hay chiều nghịch (HNI)
+  let accumulatedOpticalDist = 0;
   
   for (let i = 0; i < pts.length; i++) {
     if (i > 0) {
-      var segPhys = calculateHaversine(pts[i-1].lat, pts[i-1].lng, pts[i].lat, pts[i].lng);
-      accumulatedOpticalDist += (segPhys * heSo) + (pts[i].duTru || 0);
+      accumulatedOpticalDist += segmentDistances[i];
     }
-    
+
+    // Nếu là chiều nghịch hướng (HNI), khoảng cách quang học và lý trình được tính ngược lại từ điểm cuối tuyến về đầu
+    let effectiveOpticalDist = isNghichHuong ? (totalRouteOpticalDist - accumulatedOpticalDist) : accumulatedOpticalDist;
+    let effectiveLyTrinhMeters = isNghichHuong ? (baseMeters + totalRouteOpticalDist - accumulatedOpticalDist) : (baseMeters + accumulatedOpticalDist);
+
     // Gán khoảng cách quang học từ Trạm A
-    pts[i].distanceFromAMeters = accumulatedOpticalDist;
+    pts[i].distanceFromAMeters = effectiveOpticalDist;
     let distAVal = Math.round(pts[i].distanceFromAMeters);
     pts[i].distanceFromAText = (distAVal >= 1000) ? (distAVal / 1000).toFixed(2) + " km" : distAVal + " m";
 
-    // Gán lý trình quốc lộ nội suy
-    pts[i].calculatedLyTrinhMeters = baseMeters + accumulatedOpticalDist;
+    // Gán lý trình quốc lộ nội suy chuẩn
+    pts[i].calculatedLyTrinhMeters = effectiveLyTrinhMeters;
     let totalMeters = Math.round(pts[i].calculatedLyTrinhMeters);
     let km = Math.floor(totalMeters / 1000);
     let m = totalMeters % 1000;
