@@ -292,20 +292,16 @@ function isMangXong(pt) {
   return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
 }
 
-// HÀM BÓC TÁCH CHUỖI THÔ LÝ TRÌNH (Hỗ trợ định dạng: "Km 54+100 QL3" hoặc "54+100 (QL3)")
+// HÀM BÓC TÁCH CHUỖI LÝ TRÌNH (Trích xuất số mét và hậu tố)
 function parseLyTrinhWithSuffix(str) {
   if (!str) return null;
   var cleanStr = str.toString().trim();
-  // Regex tìm kiếm số km, số mét và phần hậu tố phía sau
   var match = cleanStr.match(/(?:km\s*)?(\d+)\s*\+\s*(\d+)(?:\s*[\(\)]?\s*([a-zA-Z0-9\-_]+))?/i);
   if (match) {
     var km = parseInt(match[1]);
     var m = parseInt(match[2]);
     var suffix = match[3] ? match[3].trim().toUpperCase() : '';
-    return {
-      meters: km * 1000 + m,
-      suffix: suffix
-    };
+    return { meters: km * 1000 + m, suffix: suffix };
   }
   var num = parseFloat(cleanStr);
   return isNaN(num) ? null : { meters: num, suffix: '' };
@@ -357,7 +353,7 @@ function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   return sorted;
 }
 
-// THUẬT TOÁN TÍNH TOÁN KHOẢNG CÁCH VÀ LÝ TRÌNH (HỖ TRỢ ĐIỂM NEO ĐỔI HẬU TỐ VÀ HƯỚNG HNI TỪ B VỀ A)
+// THUẬT TOÁN TÍNH TOÁN PHÂN ĐOẠN THEO HẬU TỐ VÀ HƯỚNG HNI TỪ B VỀ A
 function precalculateRouteDataForPoints(pts, backbonePts) {
   if (!pts || pts.length === 0) return pts;
   
@@ -370,57 +366,64 @@ function precalculateRouteDataForPoints(pts, backbonePts) {
   }
   let totalRouteOpticalDist = totalRoutePhysDist * heSo;
 
-  // TÌM ĐIỂM NEO ĐẦU TIÊN CÓ LÝ TRÌNH
-  var baseMeters = 0;
-  var currentSuffix = '';
-  var foundBase = false;
+  // 1. QUÉT VÀ THU THẬP TẤT CẢ CÁC ĐIỂM NEO (ANCHORS) TRÊN BACKBONE
+  var anchors = [];
+  backbonePts.forEach(p => {
+    var parsed = parseLyTrinhWithSuffix(p.lyTrinh);
+    if (parsed !== null) {
+      let distFromA = getDistanceAlongRoute(p, backbonePts) * heSo;
+      anchors.push({
+        distFromA: distFromA,
+        meters: parsed.meters,
+        suffix: parsed.suffix,
+        point: p
+      });
+    }
+  });
 
-  let mxWithLyTrinh = backbonePts.find(p => isMangXong(p) && parseLyTrinhWithSuffix(p.lyTrinh) !== null);
-  if (mxWithLyTrinh) {
-    let parsed = parseLyTrinhWithSuffix(mxWithLyTrinh.lyTrinh);
-    let distToMx = getDistanceAlongRoute(mxWithLyTrinh, backbonePts) * heSo;
-    
-    currentSuffix = parsed.suffix;
-    baseMeters = isNghichHuong ? (parsed.meters - (totalRouteOpticalDist - distToMx)) : (parsed.meters - distToMx);
-    foundBase = true;
-  } else {
-    for (let i = 0; i < backbonePts.length; i++) {
-      var parsed = parseLyTrinhWithSuffix(backbonePts[i].lyTrinh);
-      if (parsed !== null) {
-        let distToThis = getDistanceAlongRoute(backbonePts[i], backbonePts) * heSo;
-        currentSuffix = parsed.suffix;
-        baseMeters = isNghichHuong ? (parsed.meters - (totalRouteOpticalDist - distToThis)) : (parsed.meters - distToThis);
-        foundBase = true;
+  // Sắp xếp các điểm neo theo thứ tự khoảng cách từ A ra
+  anchors.sort((a, b) => a.distFromA - b.distFromA);
+
+  // Nếu không có mốc neo nào, tạo mặc định mốc gốc tại 0
+  if (anchors.length === 0) {
+    anchors.push({ distFromA: 0, meters: 0, suffix: '', point: backbonePts[0] });
+  }
+
+  // Hàm phụ trợ để lấy mốc neo và hậu tố phù hợp cho một cự ly `distFromA` bất kỳ
+  function getAnchorForDistance(distFromA) {
+    let currentAnchor = anchors[0];
+    for (let i = 0; i < anchors.length; i++) {
+      if (distFromA >= anchors[i].distFromA) {
+        currentAnchor = anchors[i];
+      } else {
         break;
       }
     }
+    return currentAnchor;
   }
-  if (!foundBase) baseMeters = 0;
 
-  // GÁN THÔNG SỐ CHO TỪNG ĐIỂM (KHOẢNG CÁCH VÀ LÝ TRÌNH CÓ XÉT ĐỔI HẬU TỐ)
+  // 2. TÍNH TOÁN CHO TỪNG ĐIỂM DỰA TRÊN PHÂN ĐOẠN ĐỘC LẬP
   pts.forEach(pt => {
     let distFromA = getDistanceAlongRoute(pt, backbonePts) * heSo;
     
-    // 1. KHOẢNG CÁCH TỪ A (Luôn tăng dần từ 0 ra đến hết tuyến)
+    // A. KHOẢNG CÁCH TỪ A (Luôn tăng dần từ 0 đến hết tuyến)
     pt.distanceFromAMeters = distFromA;
     let distAVal = Math.round(pt.distanceFromAMeters);
     pt.distanceFromAText = (distAVal >= 1000) ? (distAVal / 1000).toFixed(2) + " km" : distAVal + " m";
 
-    // 2. XỬ LÝ ĐIỂM NEO ĐỔI HẬU TỐ NẾU ĐIỂM NÀY CÓ KHAI BÁO LÝ TRÌNH MỚI
-    var parsedPt = parseLyTrinhWithSuffix(pt.lyTrinh);
-    if (parsedPt !== null && parsedPt.suffix && parsedPt.suffix !== currentSuffix) {
-      currentSuffix = parsedPt.suffix;
-      baseMeters = isNghichHuong ? (parsedPt.meters - (totalRouteOpticalDist - distFromA)) : (parsedPt.meters - distFromA);
-    }
+    // B. LÝ TRÌNH QUỐC LỘ (Xác định mốc neo và phân đoạn theo vị trí hiện tại)
+    let activeAnchor = getAnchorForDistance(distFromA);
+    let baseMeters = isNghichHuong 
+      ? (activeAnchor.meters - (totalRouteOpticalDist - activeAnchor.distFromA)) 
+      : (activeAnchor.meters - activeAnchor.distFromA);
 
-    // 3. TÍNH LÝ TRÌNH QUỐC LỘ (Xuôi chiều tăng dần từ A ra B, HNI giảm dần từ B về A theo hậu tố tương ứng)
     let effectiveLyTrinhMeters = isNghichHuong ? (baseMeters + totalRouteOpticalDist - distFromA) : (baseMeters + distFromA);
 
     pt.calculatedLyTrinhMeters = effectiveLyTrinhMeters;
     let totalMeters = Math.round(pt.calculatedLyTrinhMeters);
     let km = Math.floor(totalMeters / 1000);
     let m = totalMeters % 1000;
-    pt.calculatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}` + (currentSuffix ? ` (${currentSuffix})` : '');
+    pt.calculatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}` + (activeAnchor.suffix ? ` (${activeAnchor.suffix})` : '');
   });
 
   return pts;
@@ -622,7 +625,7 @@ function timLyTrinhBanDo() {
     bestDescription = `Gần điểm mốc: ${closest.ten}`;
   }
 
-  var heSo = parseFloat(document.getElementById('txtDoChung').value) || 1.075;
+  var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
   var distToA = calculateHaversine(pts[0].lat, pts[0].lng, targetLat, targetLng) * heSo;
   var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
 
