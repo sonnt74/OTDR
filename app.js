@@ -612,9 +612,15 @@ function timLyTrinhBanDo() {
     return;
   }
 
-  var isNghichHuong = document.getElementById('chkNghichHuong')?.checked || false;
+  // TỰ ĐỘNG XÁC ĐỊNH CHIỀU TĂNG HAY GIẢM CỦA TUYẾN DỰA TRÊN 2 ĐIỂM ĐẦU TIÊN
+  var isNghichHuong = false;
+  if (pts.length >= 2) {
+    if (pts[1].calculatedLyTrinhMeters < pts[0].calculatedLyTrinhMeters) {
+      isNghichHuong = true; // Nếu điểm sau nhỏ hơn điểm trước -> Chiều nghịch (HNI)
+    }
+  }
 
-  // Sắp xếp mảng theo đúng chiều lý trình
+  // Sắp xếp mảng điểm theo đúng chiều lý trình đã nhận diện
   var sortedPts = [...pts].sort((a, b) => {
     return isNghichHuong 
       ? b.calculatedLyTrinhMeters - a.calculatedLyTrinhMeters 
@@ -624,7 +630,7 @@ function timLyTrinhBanDo() {
   var targetSeg = null;
   var foundLat = null, foundLng = null, bestDescription = "";
 
-  // Duyệt qua tất cả các đoạn để tìm đoạn khớp và thỏa mãn kiểm tra sai số
+  // Duyệt qua các đoạn để tìm đoạn chứa lý trình cần tìm
   for (var i = 0; i < sortedPts.length - 1; i++) {
     var p1 = sortedPts[i];
     var p2 = sortedPts[i+1];
@@ -634,7 +640,6 @@ function timLyTrinhBanDo() {
     var minLt = Math.min(startLt, endLt);
     var maxLt = Math.max(startLt, endLt);
     
-    // Kiểm tra xem lý trình cần tìm có nằm trong khoảng của đoạn này không
     if (targetMeters >= minLt && targetMeters <= maxLt) {
       var span = endLt - startLt;
       var ratio = (span !== 0) ? (targetMeters - startLt) / span : 0;
@@ -642,33 +647,28 @@ function timLyTrinhBanDo() {
       var testLat = p1.lat + ratio * (p2.lat - p1.lat);
       var testLng = p1.lng + ratio * (p2.lng - p1.lng);
       
-      // Kiểm tra khoảng cách từ điểm nội suy đến các điểm đầu/cuối đoạn (để đảm bảo không bị lệch quá xa - ví dụ > 10000m hoặc bất thường)
       var distToP1 = calculateHaversine(testLat, testLng, p1.lat, p1.lng);
       var distToP2 = calculateHaversine(testLat, testLng, p2.lat, p2.lng);
       var segmentRealLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
 
-      // Nếu độ dài đoạn nội suy hợp lý so với đoạn thực tế (không bị nhảy cóc tọa độ ảo)
-      if (distToP1 <= segmentRealLen + 50 && distToP2 <= segmentRealLen + 50) {
+      if (distToP1 <= segmentRealLen + 100 && distToP2 <= segmentRealLen + 100) {
         targetSeg = { p1: p1, p2: p2 };
         foundLat = testLat;
         foundLng = testLng;
         bestDescription = `Nằm giữa [${p1.ten}] và [${p2.ten}]`;
-        break; // Tìm thấy đoạn hợp lệ chuẩn xác thì dừng lại
+        break;
       }
     }
   }
 
-  // Nếu không tìm được đoạn nội suy chuẩn qua bộ lọc, dùng điểm mốc gần nhất có kiểm tra sai số
+  // Nếu không tìm được đoạn nội suy qua bộ lọc, dùng điểm mốc gần nhất có kiểm tra sai số 100m
   if (!targetSeg) {
     var closest = sortedPts.reduce((prev, curr) => 
       Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev
     );
     
-    // Tính sai số giữa lý trình của điểm mốc gần nhất với lý trình cần tìm (1 đơn vị lý trình ~ 1 mét)
     var deviationMeters = Math.abs(closest.calculatedLyTrinhMeters - targetMeters);
-    
-    // Nếu sai số lệch quá 100m mà không có đoạn nội suy phù hợp thì báo lỗi theo yêu cầu của anh
-    if (deviationMeters > 50) {
+    if (deviationMeters > 100) {
       alert(`Không tìm thấy vị trí lý trình ${txt} chính xác (Sai số quá ${Math.round(deviationMeters)}m so với mốc gần nhất ${closest.ten}). Vui lòng kiểm tra lại mốc neo!`);
       return;
     }
