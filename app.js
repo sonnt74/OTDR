@@ -76,24 +76,50 @@ function openModal(id, tabId = null) {
 async function handleCustomLogin() {
   var email = document.getElementById('loginEmail').value.trim();
   var pass = document.getElementById('loginPass').value;
-  if (!email || !pass) { alert("Vui lòng nhập đủ email và mật khẩu!"); return; }
+  if (!email || !pass) { 
+    alert("Vui lòng nhập đủ email và mật khẩu!"); 
+    return; 
+  }
   
   showLoading("Đang xác thực thông tin...");
   try {
-    const { data, error } = await supabaseClient.from('tai_khoan').select('*').eq('email', email).eq('password', pass).single();
-    if (error || !data) throw new Error("Sai thông tin tài khoản hoặc mật khẩu!");
+    const { data, error } = await supabaseClient
+      .from('tai_khoan')
+      .select('*')
+      .eq('email', email)
+      .eq('password', pass)
+      .limit(1);
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      throw new Error("Sai thông tin tài khoản hoặc mật khẩu!");
+    }
+
+    var account = data[0];
+    currentUser = { 
+      isLoggedIn: true, 
+      role: account.role || 'member', 
+      idDai: account.id_dai, 
+      idTram: account.id_tram, 
+      canEditMap: account.can_edit_map === true 
+    };
     
-    currentUser = { isLoggedIn: true, role: data.role || 'member', idDai: data.id_dai, idTram: data.id_tram, canEditMap: data.can_edit_map === true };
     localStorage.setItem('tnn_user', JSON.stringify(currentUser));
     
     document.getElementById('loginModal').style.display = 'none';
     document.getElementById('sidebar-menu').style.display = 'flex';
     document.getElementById('control-panel').style.display = 'block';
-    if (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin') document.getElementById('adminMenuIcon').style.display = 'flex';
+    
+    if (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin') {
+      document.getElementById('adminMenuIcon').style.display = 'flex';
+    }
     
     khoiTaoBanDoLeaflet();
     await taiDuLieuSupabase();
-  } catch (err) { alert("Lỗi: " + err.message); hideLoading(); }
+  } catch (err) { 
+    alert("Lỗi đăng nhập: " + err.message); 
+    hideLoading(); 
+  }
 }
 
 function handleLogout() {
