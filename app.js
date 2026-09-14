@@ -896,7 +896,7 @@ async function executeCrudAction() {
   var loaiMoi = parseInt(document.getElementById('crudObjectLoai').value);
   var ltMoi = document.getElementById('crudObjectLyTrinh').value;
   
-  showLoading("Đang xử lý và sắp xếp thứ tự tuyến...");
+  showLoading("Đang xử lý và sắp xếp chuẩn hóa tuyến...");
   
   try {
     var targetLat = null, targetLng = null;
@@ -924,11 +924,11 @@ async function executeCrudAction() {
         }
       }
 
-      // Quy đổi lý trình mới sang số mét để so sánh vị trí
+      // 1. Quy đổi lý trình mới sang số mét để so sánh
       var parsedNewLt = parseLyTrinhWithSuffix(ltMoi);
       var newMeters = parsedNewLt ? parsedNewLt.meters : 0;
 
-      // Lấy danh sách thứ tự hiện tại của đoạn cáp từ database
+      // 2. Lấy danh sách liên kết hiện tại của đoạn cáp sắp xếp theo thu_tu tăng dần
       const { data: existingLinks, error: linkErr } = await supabaseClient
         .from('doan_cap_diem')
         .select('id_diem, thu_tu')
@@ -936,9 +936,10 @@ async function executeCrudAction() {
         .order('thu_tu', { ascending: true });
 
       var targetThuTu = 1;
+      let linksWithLyTrinh = [];
 
       if (!linkErr && existingLinks && existingLinks.length > 0) {
-        var linksWithLyTrinh = existingLinks.map(link => {
+        linksWithLyTrinh = existingLinks.map(link => {
           var pt = globalDataPoints.find(p => p.id == link.id_diem);
           var ltParsed = pt ? parseLyTrinhWithSuffix(pt.lyTrinh) : null;
           return {
@@ -955,16 +956,6 @@ async function executeCrudAction() {
           targetThuTu = maxThuTu + 1;
         } else {
           targetThuTu = linksWithLyTrinh[insertIndex].thu_tu;
-          
-          // Dịch chuyển thứ tự các điểm phía sau BẰNG VÒNG LẶP ĐẾM NGƯỢC
-          // Cách này giúp tránh hoàn toàn lỗi trùng lặp khóa độc nhất (unique constraint)
-          for (var i = linksWithLyTrinh.length - 1; i >= insertIndex; i--) {
-            await supabaseClient
-              .from('doan_cap_diem')
-              .update({ thu_tu: linksWithLyTrinh[i].thu_tu + 1 })
-              .eq('id_doan_cap', targetDoanId)
-              .eq('id_diem', linksWithLyTrinh[i].id_diem);
-          }
         }
       }
 
@@ -977,15 +968,29 @@ async function executeCrudAction() {
         id_tram: currentUser.idTram || 2
       };
       
-      // Thêm điểm mới vào bảng diem_ha_tang
+      // 3. Thêm điểm mới vào bảng diem_ha_tang trước để lấy ID
       const { data: diemData, error: diemErr } = await supabaseClient.from('diem_ha_tang').insert([payload]).select();
       if (diemErr) throw new Error(diemErr.message);
       
       if (diemData && diemData[0]) {
         var newRec = diemData[0];
         var newIdDiem = newRec.id_diem || newRec.id;
+
+        // 4. Nếu chèn vào giữa, thực hiện dời số thứ tự các điểm phía sau lên +1 (đếm ngược từ dưới lên để tránh trùng khóa)
+        if (linksWithLyTrinh.length > 0) {
+          var insertIndex = linksWithLyTrinh.findIndex(item => item.meters > newMeters);
+          if (insertIndex !== -1) {
+            for (var i = linksWithLyTrinh.length - 1; i >= insertIndex; i--) {
+              await supabaseClient
+                .from('doan_cap_diem')
+                .update({ thu_tu: linksWithLyTrinh[i].thu_tu + 1 })
+                .eq('id_doan_cap', targetDoanId)
+                .eq('id_diem', linksWithLyTrinh[i].id_diem);
+            }
+          }
+        }
         
-        // Thêm liên kết vào doan_cap_diem với số thứ tự đã được dọn chỗ sạch sẽ
+        // 5. Thêm liên kết mới vào bảng doan_cap_diem với số thứ tự chuẩn xác
         var dcdPayload = {
           id_doan_cap: targetDoanId,
           id_diem: newIdDiem,
@@ -994,6 +999,7 @@ async function executeCrudAction() {
         const { error: dcdErr } = await supabaseClient.from('doan_cap_diem').insert([dcdPayload]);
         if (dcdErr) throw new Error("Lỗi liên kết đoạn tuyến: " + dcdErr.message);
 
+        // 6. Cập nhật mảng RAM cục bộ và đồng bộ lại stt của toàn bộ điểm trong đoạn
         globalDataPoints.push({
           id: newIdDiem,
           ten: newRec.ten_diem,
@@ -1033,7 +1039,7 @@ async function executeCrudAction() {
     
     closeModals();
     hideLoading();
-    showToast("Đã chèn và sắp xếp thứ tự tuyến thành công!", "success");
+    showToast("Đã cập nhật tuyến và vẽ lại bản đồ chuẩn xác!", "success");
     
     veLaiTuyenAB();
     if (targetLat && targetLng && act !== 'DELETE') {
