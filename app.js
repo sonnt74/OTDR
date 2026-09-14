@@ -23,24 +23,39 @@ var rawLoaiDiemList = [];
 var globalDataPoints = [];
 
 window.onload = function() {
+  var savedEmail = localStorage.getItem('tnn_saved_email');
+  var savedPass = localStorage.getItem('tnn_saved_pass');
+  if (savedEmail && savedPass) {
+    document.getElementById('loginEmail').value = savedEmail;
+    document.getElementById('loginPass').value = savedPass;
+    document.getElementById('chkRememberMe').checked = true;
+  }
+
   var savedSession = localStorage.getItem('tnn_user');
   if (savedSession) {
     currentUser = JSON.parse(savedSession);
     document.getElementById('loginModal').style.display = 'none';
     document.getElementById('sidebar-menu').style.display = 'flex';
     document.getElementById('control-panel').style.display = 'block';
-    
-    // Kiểm tra phân quyền để hiện nút Quản trị ở cả Sidebar và Mobile
     if (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin') {
       document.getElementById('adminMenuIcon').style.display = 'flex';
       var adminMob = document.getElementById('adminMobileBtn');
       if (adminMob) adminMob.style.display = 'block';
     }
-    
     khoiTaoBanDoLeaflet();
     taiDuLieuSupabase();
   }
 };
+
+// Hàm chuyển đổi ẩn/hiện mật khẩu
+function togglePasswordVisibility() {
+  var passInput = document.getElementById('loginPass');
+  if (passInput.type === 'password') {
+    passInput.type = 'text';
+  } else {
+    passInput.type = 'password';
+  }
+}
 
 function toggleGISPanel() {
   var panel = document.getElementById('control-panel');
@@ -88,8 +103,10 @@ function openModal(id, tabId = null) {
 async function handleCustomLogin() {
   var email = document.getElementById('loginEmail').value.trim();
   var pass = document.getElementById('loginPass').value;
+  var rememberMe = document.getElementById('chkRememberMe').checked;
+  
   if (!email || !pass) { 
-    alert("Vui lòng nhập đủ email và mật khẩu!"); 
+    alert("Vui lòng nhập đầy đủ email và mật khẩu!"); 
     return; 
   }
   
@@ -117,12 +134,20 @@ async function handleCustomLogin() {
     };
     
     localStorage.setItem('tnn_user', JSON.stringify(currentUser));
+
+    // Xử lý lưu hoặc xóa thông tin nhớ mật khẩu
+    if (rememberMe) {
+      localStorage.setItem('tnn_saved_email', email);
+      localStorage.setItem('tnn_saved_pass', pass);
+    } else {
+      localStorage.removeItem('tnn_saved_email');
+      localStorage.removeItem('tnn_saved_pass');
+    }
     
     document.getElementById('loginModal').style.display = 'none';
     document.getElementById('sidebar-menu').style.display = 'flex';
     document.getElementById('control-panel').style.display = 'block';
     
-    // Kiểm tra phân quyền để hiện nút Quản trị ở cả Sidebar và Mobile
     if (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin') {
       document.getElementById('adminMenuIcon').style.display = 'flex';
       var adminMob = document.getElementById('adminMobileBtn');
