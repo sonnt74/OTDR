@@ -8,7 +8,7 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
 #workspace { flex: 1; position: relative; height: 100vh; overflow: hidden; }
 #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
 
-#control-panel { position: absolute; top: 10px; left: 10px; z-index: 3000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 290px; display: none; max-height: calc(100vh - 20px); overflow-y: auto; box-sizing: border-box; }
+#control-panel { position: absolute; top: 10px; left: 10px; z-index: 3000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 290px; display: none; max-height: calc(100vh - 20px); overflow-y: auto; box-sizing: border-box; transition: max-height 0.3s ease-in-out; }
 .panel-header { background-color: #0d6efd; color: white; padding: 6px 8px; font-weight: bold; font-size: 12px; border-radius: 4px; margin-bottom: 6px; text-align: center; cursor: pointer; }
 .form-group { margin-bottom: 6px; }
 .form-group label { display: block; font-size: 9px; font-weight: bold; margin-bottom: 2px; color: #333; text-transform: uppercase; }
@@ -56,12 +56,33 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
     bottom: 0;
     left: 0;
     width: 100vw;
-    max-height: 50vh; /* Giới hạn độ cao chiếm 50% màn hình */
-    border-radius: 15px 15px 0 0; /* Bo tròn mượt mà 2 góc trên */
+    max-height: 60vh; /* Độ cao tối đa khi mở rộng */
+    border-radius: 15px 15px 0 0;
     box-shadow: 0 -4px 15px rgba(0,0,0,0.2);
   }
   
-  /* Di chuyển các nút công cụ bản đồ lên cao hơn để không bị khay trượt che khuất */
-  #gps-btn { bottom: calc(50vh + 15px); }
-  #measure-btn { bottom: calc(50vh + 60px); }
+  /* Trạng thái thu gọn (chỉ hiện tiêu đề) */
+  #control-panel.collapsed {
+    max-height: 40px !important; 
+    overflow: hidden;
+  }
+  
+  /* Cố định tiêu đề khi cuộn và thêm hướng dẫn vuốt */
+  .panel-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .panel-header::after {
+    content: " (Vuốt ↕)";
+    font-size: 10px;
+    font-weight: normal;
+  }
+
+  #gps-btn { bottom: calc(60vh + 15px); transition: bottom 0.3s ease; }
+  #measure-btn { bottom: calc(60vh + 60px); transition: bottom 0.3s ease; }
+  
+  /* Nút công cụ hạ thấp xuống khi bảng điều khiển thu gọn */
+  #control-panel.collapsed ~ #gps-btn { bottom: 55px; }
+  #control-panel.collapsed ~ #measure-btn { bottom: 100px; }
 }
