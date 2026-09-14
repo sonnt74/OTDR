@@ -592,7 +592,9 @@ function timViTriDut() {
 
 function timLyTrinhBanDo() {
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
-  var targetMeters = parseLyTrinhWithSuffix(txt)?.meters;
+  var parsedTarget = parseLyTrinhWithSuffix(txt);
+  var targetMeters = parsedTarget ? parsedTarget.meters : null;
+  var targetSuffix = parsedTarget ? parsedTarget.suffix : '';
   
   if (targetMeters === null || isNaN(targetMeters)) {
     alert("Sai định dạng lý trình! Vui lòng nhập theo mẫu: 54+100 hoặc km 54+100");
@@ -610,7 +612,11 @@ function timLyTrinhBanDo() {
     var startLt = pts[i].calculatedLyTrinhMeters;
     var endLt = pts[i+1].calculatedLyTrinhMeters;
     
-    if ((targetMeters >= Math.min(startLt, endLt)) && (targetMeters <= Math.max(startLt, endLt))) {
+    // Kiểm tra khoảng giá trị lý trình nằm trong đoạn (hỗ trợ cả chiều tăng lẫn chiều giảm của HNI)
+    var minLt = Math.min(startLt, endLt);
+    var maxLt = Math.max(startLt, endLt);
+    
+    if (targetMeters >= minLt && targetMeters <= maxLt) {
       targetSeg = { p1: pts[i], p2: pts[i+1] };
       break;
     }
@@ -626,6 +632,7 @@ function timLyTrinhBanDo() {
     targetLng = targetSeg.p1.lng + ratio * (targetSeg.p2.lng - targetSeg.p1.lng);
     bestDescription = `Nằm giữa [${targetSeg.p1.ten}] và [${targetSeg.p2.ten}]`;
   } else {
+    // Nếu vượt quá giới hạn, chọn điểm gần nhất có cùng hậu tố hoặc trên cùng đoạn cáp
     var closest = pts.reduce((prev, curr) => 
       Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev
     );
@@ -634,8 +641,7 @@ function timLyTrinhBanDo() {
     bestDescription = `Gần điểm mốc: ${closest.ten}`;
   }
 
-  var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
-  var distToA = calculateHaversine(pts[0].lat, pts[0].lng, targetLat, targetLng) * heSo;
+  var distToA = getDistanceAlongRoute({lat: targetLat, lng: targetLng}, getMasterRouteBackbone(document.getElementById('selectTuyen').value, document.getElementById('selectTram').value, document.getElementById('selectDoanCap').value));
   var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
 
   if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
