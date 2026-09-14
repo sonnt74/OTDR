@@ -924,7 +924,7 @@ async function executeCrudAction() {
         }
       }
 
-      // Quy đổi lý trình mới sang số mét để tìm vị trí chèn chính xác
+      // Quy đổi lý trình mới sang số mét để so sánh vị trí
       var parsedNewLt = parseLyTrinhWithSuffix(ltMoi);
       var newMeters = parsedNewLt ? parsedNewLt.meters : 0;
 
@@ -948,7 +948,6 @@ async function executeCrudAction() {
           };
         });
 
-        // Tìm vị trí chèn dựa theo giá trị lý trình
         var insertIndex = linksWithLyTrinh.findIndex(item => item.meters > newMeters);
         
         if (insertIndex === -1) {
@@ -957,8 +956,9 @@ async function executeCrudAction() {
         } else {
           targetThuTu = linksWithLyTrinh[insertIndex].thu_tu;
           
-          // Dịch chuyển thứ tự các điểm phía sau lên +1 để nhường chỗ cho điểm mới
-          for (var i = insertIndex; i < linksWithLyTrinh.length; i++) {
+          // Dịch chuyển thứ tự các điểm phía sau BẰNG VÒNG LẶP ĐẾM NGƯỢC
+          // Cách này giúp tránh hoàn toàn lỗi trùng lặp khóa độc nhất (unique constraint)
+          for (var i = linksWithLyTrinh.length - 1; i >= insertIndex; i--) {
             await supabaseClient
               .from('doan_cap_diem')
               .update({ thu_tu: linksWithLyTrinh[i].thu_tu + 1 })
@@ -977,7 +977,7 @@ async function executeCrudAction() {
         id_tram: currentUser.idTram || 2
       };
       
-      // Thêm điểm vào bảng diem_ha_tang
+      // Thêm điểm mới vào bảng diem_ha_tang
       const { data: diemData, error: diemErr } = await supabaseClient.from('diem_ha_tang').insert([payload]).select();
       if (diemErr) throw new Error(diemErr.message);
       
@@ -985,7 +985,7 @@ async function executeCrudAction() {
         var newRec = diemData[0];
         var newIdDiem = newRec.id_diem || newRec.id;
         
-        // Thêm liên kết vào doan_cap_diem kèm số thứ tự chuẩn xác
+        // Thêm liên kết vào doan_cap_diem với số thứ tự đã được dọn chỗ sạch sẽ
         var dcdPayload = {
           id_doan_cap: targetDoanId,
           id_diem: newIdDiem,
@@ -994,7 +994,6 @@ async function executeCrudAction() {
         const { error: dcdErr } = await supabaseClient.from('doan_cap_diem').insert([dcdPayload]);
         if (dcdErr) throw new Error("Lỗi liên kết đoạn tuyến: " + dcdErr.message);
 
-        // Cập nhật vào mảng RAM cục bộ
         globalDataPoints.push({
           id: newIdDiem,
           ten: newRec.ten_diem,
@@ -1034,7 +1033,7 @@ async function executeCrudAction() {
     
     closeModals();
     hideLoading();
-    showToast("Đã lưu và sắp xếp vị trí tuyến thành công!", "success");
+    showToast("Đã chèn và sắp xếp thứ tự tuyến thành công!", "success");
     
     veLaiTuyenAB();
     if (targetLat && targetLng && act !== 'DELETE') {
