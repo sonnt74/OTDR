@@ -313,13 +313,17 @@ function calculateHaversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// HÀM TÍNH KHOẢNG CÁCH QUANG HỌC TỪ A (TÍNH HỆ SỐ CHÙNG VÀ CỘNG DỒN ĐỘ DỰ TRỮ)
-function getOpticalDistanceFromA(targetPt, pathPts, heSo) {
+function getDistanceAlongRoute(targetPt, pathPts) {
+  var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
   var bestDist = 0, currentDist = 0, minDst = Infinity;
+  
   for (var i = 0; i < pathPts.length - 1; i++) {
     var p1 = pathPts[i], p2 = pathPts[i+1];
-    var segLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng) * heSo;
-    if (segLen === 0) continue;
+    var segPhys = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
+    if (segPhys === 0) continue;
+    
+    // Tính cự ly quang học của đoạn: (Khoảng cách hình học * Hệ số chùng) + Cáp dự trữ tại điểm đích (p2)
+    var segOpt = (segPhys * heSo) + (p2.duTru || 0);
     
     var dx = p2.lng - p1.lng, dy = p2.lat - p1.lat, lenSq = dx * dx + dy * dy;
     var t = Math.max(0, Math.min(1, ((targetPt.lng - p1.lng) * dx + (targetPt.lat - p1.lat) * dy) / lenSq));
@@ -327,9 +331,9 @@ function getOpticalDistanceFromA(targetPt, pathPts, heSo) {
     
     if (distToProj < minDst) { 
       minDst = distToProj; 
-      bestDist = currentDist + (t * segLen); 
+      bestDist = currentDist + (t * segOpt); 
     }
-    currentDist += segLen + (p2.duTru || 0);
+    currentDist += segOpt;
   }
   return bestDist;
 }
@@ -360,62 +364,73 @@ function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   return sorted;
 }
 
-// THUẬT TOÁN TÍNH TOÁN: GIỮ NGUYÊN LOGIC LÝ TRÌNH CŨ, CẬP NHẬT KHOẢNG CÁCH TỪ A CÓ TÍNH DỰ TRỮ VÀ ĐỘ CHÙNG
+// THUẬT TOÁN TÍNH TOÁN THEO ĐOẠN CÁP (ID DOAN CAP), MỐC NEO TỪ B LÙI VỀ VÀ HƯỚNG HNI
 function precalculateRouteDataForPoints(pts, backbonePts) {
   if (!pts || pts.length === 0) return pts;
   
   var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
   var isNghichHuong = document.getElementById('chkNghichHuong')?.checked || false;
 
-  let totalRouteOpticalDist = 0;
+  let totalRoutePhysDist = 0;
   for (let i = 0; i < backbonePts.length - 1; i++) {
-    var segPhys = calculateHaversine(backbonePts[i].lat, backbonePts[i].lng, backbonePts[i+1].lat, backbonePts[i+1].lng);
-    totalRouteOpticalDist += (segPhys * heSo) + (backbonePts[i+1].duTru || 0);
+    totalRoutePhysDist += calculateHaversine(backbonePts[i].lat, backbonePts[i].lng, backbonePts[i+1].lat, backbonePts[i+1].lng);
   }
+  let totalRouteOpticalDist = totalRoutePhysDist * heSo;
 
-  // TÌM ĐIỂM NEO GỐC TỪ PHÍA XA NHẤT (ĐIỂM B) LÙI VỀ THEO LOGIC CHUẨN CỦA ANH
-  var baseMeters = 0;
-  var currentSuffix = '';
-  var foundBase = false;
-  let sortedBackboneDesc = [...backbonePts].reverse();
+  // PHÂN NHÓM CÁC ĐIỂM TRÊN BACKBONE THEO TỪNG ĐOẠN CÁP (DOAN_CAP)
+  var segmentsMap = {};
+  backbonePts.forEach(p => {
+    var segId = p.idDoanCap || 'default';
+    if (!segmentsMap[segId]) segmentsMap[segId] = [];
+    segmentsMap[segId].push(p);
+  });
 
-  for (let i = 0; i < sortedBackboneDesc.length; i++) {
-    var parsed = parseLyTrinhWithSuffix(sortedBackboneDesc[i].lyTrinh);
-    if (parsed !== null) {
-      let distToThisFromA = getOpticalDistanceFromA(sortedBackboneDesc[i], backbonePts, heSo);
-      currentSuffix = parsed.suffix;
-      baseMeters = parsed.meters - distToThisFromA;
-      foundBase = true;
-      break;
-    }
-  }
-
-  if (!foundBase) baseMeters = 0;
-
-  // TÍNH TOÁN CHO TỪNG ĐIỂM
-  pts.forEach(pt => {
-    let distFromA = getOpticalDistanceFromA(pt, backbonePts, heSo);
+  // TÍNH TOÁN ĐỘC LẬP CHO TỪNG ĐOẠN CÁP
+  Object.keys(segmentsMap).forEach(segId => {
+    var segPoints = segmentsMap[segId];
     
-    // 1. KHOẢNG CÁCH TỪ A (Đã bao gồm hệ số chùng cáp và tổng độ dự trữ cộng dồn)
-    pt.distanceFromAMeters = distFromA;
-    let distAVal = Math.round(pt.distanceFromAMeters);
-    pt.distanceFromAText = (distAVal >= 1000) ? (distAVal / 1000).toFixed(2) + " km" : distAVal + " m";
+    // Tìm mốc neo ưu tiên từ phía xa nhất (điểm B của đoạn) lùi dần về phía gần trạm
+    var segBaseMeters = 0;
+    var segSuffix = '';
+    var foundSegBase = false;
+    let sortedSegDesc = [...segPoints].reverse();
 
-    // 2. XỬ LÝ ĐIỂM NEO HOẶC ĐỔI HẬU TỐ NẾU ĐIỂM NÀY KHAI BÁO MỚI
-    var parsedPt = parseLyTrinhWithSuffix(pt.lyTrinh);
-    if (parsedPt !== null && parsedPt.suffix) {
-      currentSuffix = parsedPt.suffix;
-      baseMeters = parsedPt.meters - distFromA;
+    for (let i = 0; i < sortedSegDesc.length; i++) {
+      var parsed = parseLyTrinhWithSuffix(sortedSegDesc[i].lyTrinh);
+      if (parsed !== null) {
+        let distToThisFromA = getDistanceAlongRoute(sortedSegDesc[i], backbonePts) * heSo;
+        segSuffix = parsed.suffix;
+        segBaseMeters = parsed.meters - distToThisFromA;
+        foundSegBase = true;
+        break;
+      }
     }
 
-    // 3. LÝ TRÌNH QUỐC LỘ (Giữ nguyên logic chuẩn từ B lùi về / HNI xuôi ngược)
-    let effectiveLyTrinhMeters = isNghichHuong ? (baseMeters + totalRouteOpticalDist - distFromA) : (baseMeters + distFromA);
+    // Gán thông số cho các điểm thuộc đoạn cáp này
+    segPoints.forEach(pt => {
+      let distFromA = getDistanceAlongRoute(pt, backbonePts) * heSo;
+      
+      // 1. KHOẢNG CÁCH TỪ A (Luôn tăng dần từ 0 ra đến hết tuyến)
+      pt.distanceFromAMeters = distFromA;
+      let distAVal = Math.round(pt.distanceFromAMeters);
+      pt.distanceFromAText = (distAVal >= 1000) ? (distAVal / 1000).toFixed(2) + " km" : distAVal + " m";
 
-    pt.calculatedLyTrinhMeters = effectiveLyTrinhMeters;
-    let totalMeters = Math.round(pt.calculatedLyTrinhMeters);
-    let km = Math.floor(totalMeters / 1000);
-    let m = totalMeters % 1000;
-    pt.calculatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}` + (currentSuffix ? ` (${currentSuffix})` : '');
+      // 2. XỬ LÝ ĐỔI HẬU TỐ HOẶC MỐC RIÊNG CỦA ĐIỂM NẾU CÓ
+      var parsedPt = parseLyTrinhWithSuffix(pt.lyTrinh);
+      if (parsedPt !== null && parsedPt.suffix) {
+        segSuffix = parsedPt.suffix;
+        segBaseMeters = parsedPt.meters - distFromA;
+      }
+
+      // 3. TÍNH LÝ TRÌNH QUỐC LỘ (Xuôi chiều tăng dần từ A ra B, HNI giảm dần từ B về A)
+      let effectiveLyTrinhMeters = isNghichHuong ? (segBaseMeters + totalRouteOpticalDist - distFromA) : (segBaseMeters + distFromA);
+
+      pt.calculatedLyTrinhMeters = effectiveLyTrinhMeters;
+      let totalMeters = Math.round(pt.calculatedLyTrinhMeters);
+      let km = Math.floor(totalMeters / 1000);
+      let m = totalMeters % 1000;
+      pt.calculatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}` + (segSuffix ? ` (${segSuffix})` : '');
+    });
   });
 
   return pts;
@@ -537,24 +552,25 @@ function timViTriDut() {
   if (backbone.length < 2) { alert("Tuyến cáp chưa đủ dữ liệu!"); return; }
 
   var routeStops = [];
-  backbone.forEach(p => routeStops.push({ pt: p, dist: p.distanceFromAMeters, duTru: p.duTru || 0, isMX: isMangXong(p) }));
+  backbone.forEach(p => routeStops.push({ pt: p, dist: p.distanceFromAMeters / heSo, duTru: p.duTru || 0, isMX: isMangXong(p) }));
   routeStops.sort((a, b) => a.dist - b.dist);
 
-  var targetLat = backbone[backbone.length - 1].lat, targetLng = backbone[backbone.length - 1].lng;
+  var cumDist = 0, targetLat = backbone[backbone.length - 1].lat, targetLng = backbone[backbone.length - 1].lng;
   var closestPrevMX = "Chưa xác định", closestNextMX = "Chưa xác định";
 
   for (var i = 0; i < routeStops.length - 1; i++) {
     if (routeStops[i].isMX) closestPrevMX = routeStops[i].pt.ten;
-    var segOptDist = routeStops[i+1].dist - routeStops[i].dist;
+    var physSeg = routeStops[i+1].dist - routeStops[i].dist;
+    var opticalSeg = (physSeg * heSo) + routeStops[i+1].duTru; 
     
-    if (kcOtdrMeters <= routeStops[i+1].dist) {
-      var segStartDist = routeStops[i].dist;
-      var ratio = (segOptDist > 0) ? ((kcOtdrMeters - segStartDist) / segOptDist) : 0;
+    if (cumDist + opticalSeg >= kcOtdrMeters) {
+      var ratio = (opticalSeg > 0) ? ((kcOtdrMeters - cumDist) / opticalSeg) : 0;
       targetLat = routeStops[i].pt.lat + ratio * (routeStops[i+1].pt.lat - routeStops[i].pt.lat);
       targetLng = routeStops[i].pt.lng + ratio * (routeStops[i+1].pt.lng - routeStops[i].pt.lng);
       for (var j = i + 1; j < routeStops.length; j++) { if (routeStops[j].isMX) { closestNextMX = routeStops[j].pt.ten; break; } }
       break;
     }
+    cumDist += opticalSeg;
   }
 
   if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
@@ -617,7 +633,7 @@ function timLyTrinhBanDo() {
   }
 
   var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
-  var distToA = getOpticalDistanceFromA({lat: targetLat, lng: targetLng}, getMasterRouteBackbone(document.getElementById('selectTuyen').value, document.getElementById('selectTram').value, document.getElementById('selectDoanCap').value), heSo);
+  var distToA = calculateHaversine(pts[0].lat, pts[0].lng, targetLat, targetLng) * heSo;
   var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
 
   if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
