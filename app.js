@@ -608,7 +608,7 @@ function timLyTrinhBanDo() {
 
   var isNghichHuong = document.getElementById('chkNghichHuong')?.checked || false;
 
-  // SẮP XẾP LẠI MẢNG THEO ĐÚNG CHIỀU LÝ TRÌNH (HNI: GIẢM DẦN, XUÔI: TĂNG DẦN)
+  // Sắp xếp mảng theo đúng chiều lý trình
   var sortedPts = [...pts].sort((a, b) => {
     return isNghichHuong 
       ? b.calculatedLyTrinhMeters - a.calculatedLyTrinhMeters 
@@ -616,47 +616,70 @@ function timLyTrinhBanDo() {
   });
 
   var targetSeg = null;
+  var foundLat = null, foundLng = null, bestDescription = "";
 
-  // Duyệt tìm đoạn chứa lý trình trên mảng đã được sắp xếp chuẩn xác
+  // Duyệt qua tất cả các đoạn để tìm đoạn khớp và thỏa mãn kiểm tra sai số
   for (var i = 0; i < sortedPts.length - 1; i++) {
-    var startLt = sortedPts[i].calculatedLyTrinhMeters;
-    var endLt = sortedPts[i+1].calculatedLyTrinhMeters;
+    var p1 = sortedPts[i];
+    var p2 = sortedPts[i+1];
+    var startLt = p1.calculatedLyTrinhMeters;
+    var endLt = p2.calculatedLyTrinhMeters;
     
     var minLt = Math.min(startLt, endLt);
     var maxLt = Math.max(startLt, endLt);
     
+    // Kiểm tra xem lý trình cần tìm có nằm trong khoảng của đoạn này không
     if (targetMeters >= minLt && targetMeters <= maxLt) {
-      targetSeg = { p1: sortedPts[i], p2: sortedPts[i+1] };
-      break;
+      var span = endLt - startLt;
+      var ratio = (span !== 0) ? (targetMeters - startLt) / span : 0;
+      
+      var testLat = p1.lat + ratio * (p2.lat - p1.lat);
+      var testLng = p1.lng + ratio * (p2.lng - p1.lng);
+      
+      // Kiểm tra khoảng cách từ điểm nội suy đến các điểm đầu/cuối đoạn (để đảm bảo không bị lệch quá xa - ví dụ > 10000m hoặc bất thường)
+      var distToP1 = calculateHaversine(testLat, testLng, p1.lat, p1.lng);
+      var distToP2 = calculateHaversine(testLat, testLng, p2.lat, p2.lng);
+      var segmentRealLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
+
+      // Nếu độ dài đoạn nội suy hợp lý so với đoạn thực tế (không bị nhảy cóc tọa độ ảo)
+      if (distToP1 <= segmentRealLen + 100 && distToP2 <= segmentRealLen + 100) {
+        targetSeg = { p1: p1, p2: p2 };
+        foundLat = testLat;
+        foundLng = testLng;
+        bestDescription = `Nằm giữa [${p1.ten}] và [${p2.ten}]`;
+        break; // Tìm thấy đoạn hợp lệ chuẩn xác thì dừng lại
+      }
     }
   }
 
-  var targetLat, targetLng, bestDescription;
-
-  if (targetSeg) {
-    var span = targetSeg.p2.calculatedLyTrinhMeters - targetSeg.p1.calculatedLyTrinhMeters;
-    var ratio = (span !== 0) ? (targetMeters - targetSeg.p1.calculatedLyTrinhMeters) / span : 0;
-    
-    targetLat = targetSeg.p1.lat + ratio * (targetSeg.p2.lat - targetSeg.p1.lat);
-    targetLng = targetSeg.p1.lng + ratio * (targetSeg.p2.lng - targetSeg.p1.lng);
-    bestDescription = `Nằm giữa [${targetSeg.p1.ten}] và [${targetSeg.p2.ten}]`;
-  } else {
-    var closest = pts.reduce((prev, curr) => 
+  // Nếu không tìm được đoạn nội suy chuẩn qua bộ lọc, dùng điểm mốc gần nhất có kiểm tra sai số
+  if (!targetSeg) {
+    var closest = sortedPts.reduce((prev, curr) => 
       Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev
     );
-    targetLat = closest.lat;
-    targetLng = closest.lng;
-    bestDescription = `Gần điểm mốc: ${closest.ten}`;
+    
+    // Tính sai số giữa lý trình của điểm mốc gần nhất với lý trình cần tìm (1 đơn vị lý trình ~ 1 mét)
+    var deviationMeters = Math.abs(closest.calculatedLyTrinhMeters - targetMeters);
+    
+    // Nếu sai số lệch quá 100m mà không có đoạn nội suy phù hợp thì báo lỗi theo yêu cầu của anh
+    if (deviationMeters > 100) {
+      alert(`Không tìm thấy vị trí lý trình ${txt} chính xác (Sai số quá ${Math.round(deviationMeters)}m so với mốc gần nhất ${closest.ten}). Vui lòng kiểm tra lại mốc neo!`);
+      return;
+    }
+
+    foundLat = closest.lat;
+    foundLng = closest.lng;
+    bestDescription = `Gần điểm mốc: ${closest.ten} (Sai số ~${Math.round(deviationMeters)}m)`;
   }
 
-  var distToA = getDistanceAlongRoute({lat: targetLat, lng: targetLng}, getMasterRouteBackbone(document.getElementById('selectTuyen').value, document.getElementById('selectTram').value, document.getElementById('selectDoanCap').value));
+  var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, getMasterRouteBackbone(document.getElementById('selectTuyen').value, document.getElementById('selectTram').value, document.getElementById('selectDoanCap').value));
   var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
 
   if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
-  map.setView([targetLat, targetLng], 19, { animate: true });
+  map.setView([foundLat, foundLng], 19, { animate: true });
   
   var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
-  foundMarkerLayer = L.marker([targetLat, targetLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
+  foundMarkerLayer = L.marker([foundLat, foundLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
   
   var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
                      `- Vị trí: <b>${bestDescription}</b><br>` +
@@ -665,7 +688,7 @@ function timLyTrinhBanDo() {
                      
   foundMarkerLayer.bindPopup(popupContent).openPopup();
   
-  fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${targetLat}&lon=${targetLng}&accept-language=vi`)
+  fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${foundLat}&lon=${foundLng}&accept-language=vi`)
     .then(r => r.json())
     .then(data => {
       var addressText = data.display_name || "Không rõ địa chỉ chi tiết";
