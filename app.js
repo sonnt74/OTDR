@@ -343,12 +343,12 @@ function onTuyenChange() {
   selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
   
   if (tuyenVal !== 'ALL') {
-    var validDoans = rawDoanCapList.filter(doan => doan.id_tuyen == tuyenVal);
+    var validDoans = rawDoanCapList.filter(doan => String(doan.id_tuyen) === String(tuyenVal));
     
     // Nếu là nhân viên/admin trạm, chỉ lọc các đoạn cáp thực tế thuộc trạm quản lý
     if (currentUser.role === 'tram_admin' && currentUser.idTram) {
       validDoans = validDoans.filter(doan => {
-        return globalDataPoints.some(pt => pt.idDoanCap == doan.id_doan_cap && pt.idTram == currentUser.idTram);
+        return globalDataPoints.some(pt => String(pt.idDoanCap) === String(doan.id_doan_cap) && String(pt.idTram) === String(currentUser.idTram));
       });
     }
 
@@ -357,10 +357,13 @@ function onTuyenChange() {
     });
     
     // Tự động chọn đoạn cáp đầu tiên nếu có danh sách hợp lệ
-    if (validDoans.length > 0 && (selectDoanCap.value === 'ALL' || !validDoans.some(d => d.id_doan_cap == selectDoanCap.value))) {
+    if (validDoans.length > 0 && (selectDoanCap.value === 'ALL' || !validDoans.some(d => String(d.id_doan_cap) === String(selectDoanCap.value)))) {
       selectDoanCap.value = validDoans[0].id_doan_cap;
     }
   }
+  
+  // Cập nhật lại combo điểm đo A ngay khi tuyến cáp thay đổi
+  capNhatComboDiemA();
   veLaiTuyenAB();
 }
 
@@ -372,15 +375,19 @@ function onDiemAChange() {
   veLaiTuyenAB(); 
 }
 
-function capNhatComboDiemA() {
-  var tuyenVal = document.getElementById('selectTuyen').value;
-  var combo = document.getElementById('comboDiemA');
-  if (!combo) return;
-  
+// 1. Khởi tạo giá trị mặc định ban đầu là Trạm Gốc
   combo.innerHTML = '<option value="DEFAULT">📍 Trạm Gốc (TNN)</option>';
   
-  globalDataPoints.filter(pt => isMangXong(pt) && (tuyenVal === 'ALL' || pt.idTuyen == tuyenVal)).forEach(mx => {
-    combo.innerHTML += `<option value="${mx.ten}">🔀 ${mx.ten}</option>`;
+  // 2. Lọc các điểm thuộc tuyến đang chọn (chuyển đổi kiểu dữ liệu an toàn bằng String)
+  var matchedPoints = globalDataPoints.filter(pt => {
+    var matchTuyen = (tuyenVal === 'ALL' || String(pt.idTuyen) === String(tuyenVal));
+    return matchTuyen && (isMangXong(pt) || Number(pt.idLoaiDiem) === 1 || Number(pt.idLoaiDiem) === 2);
+  });
+
+  // 3. Đổ dữ liệu vào combobox phân biệt rõ măng xông và điểm mốc
+  matchedPoints.forEach(pt => {
+    var iconLabel = isMangXong(pt) ? '🔀' : '📍';
+    combo.innerHTML += `<option value="${pt.ten}">${iconLabel} ${pt.ten} (${pt.lyTrinh || 'Chưa có LT'})</option>`;
   });
 }
 
