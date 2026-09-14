@@ -304,6 +304,7 @@ function parseLyTrinh(str) {
   return isNaN(num) ? null : num;
 }
 
+// Hàm chuẩn hóa, nội suy lý trình quốc lộ và tính khoảng cách quang học từ Trạm gốc A
 function precalculateRouteData(pts) {
   if (!pts || pts.length === 0) return pts;
   
@@ -311,7 +312,7 @@ function precalculateRouteData(pts) {
   var baseMeters = 0;
   var foundBase = false;
   
-  // 1. Tìm mốc neo có lý trình chuẩn đầu tiên để làm căn cứ
+  // Bước 1: Dò tìm mốc neo có sẵn lý trình quốc lộ chuẩn đầu tiên để làm căn cứ
   for (let i = 0; i < pts.length; i++) {
     var m = parseLyTrinh(pts[i].lyTrinh);
     if (m !== null) {
@@ -328,15 +329,22 @@ function precalculateRouteData(pts) {
 
   if (!foundBase) baseMeters = 0;
 
-  // 2. Chạy vòng lặp nội suy và gán lý trình chuẩn cho từng điểm
-  var accumulatedDist = 0;
+  // Bước 2: Vòng lặp tính toán cộng dồn khoảng cách quang học từ gốc A và nội suy lý trình
+  var accumulatedOpticalDist = 0; // Khoảng cách quang học tính từ Trạm A (mét)
+  
   for (let i = 0; i < pts.length; i++) {
     if (i > 0) {
       var segPhys = calculateHaversine(pts[i-1].lat, pts[i-1].lng, pts[i].lat, pts[i].lng);
-      accumulatedDist += (segPhys * heSo) + (pts[i].duTru || 0);
+      accumulatedOpticalDist += (segPhys * heSo) + (pts[i].duTru || 0);
     }
     
-    pts[i].calculatedLyTrinhMeters = baseMeters + accumulatedDist;
+    // Gán khoảng cách quang học từ Trạm A
+    pts[i].distanceFromAMeters = accumulatedOpticalDist;
+    let distAVal = Math.round(pts[i].distanceFromAMeters);
+    pts[i].distanceFromAText = (distAVal >= 1000) ? (distAVal / 1000).toFixed(2) + " km" : distAVal + " m";
+
+    // Gán lý trình quốc lộ nội suy
+    pts[i].calculatedLyTrinhMeters = baseMeters + accumulatedOpticalDist;
     let totalMeters = Math.round(pts[i].calculatedLyTrinhMeters);
     let km = Math.floor(totalMeters / 1000);
     let m = totalMeters % 1000;
@@ -368,55 +376,22 @@ function getPointsCuaTuyenHienTai() {
   return precalculateRouteData(ordered);
 }
 
-function veLaiTuyenAB() {
-  if (!map) return;
-  markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
-  var pts = getPointsCuaTuyenHienTai(), bounds = [];
-  if (pts.length === 0) return;
-  
-  var tuyenVal = document.getElementById('selectTuyen').value, tramVal = document.getElementById('selectTram').value, doanVal = document.getElementById('selectDoanCap').value;
-  var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
-
-  function taoNutHanhDong(id, ten, lat, lng) {
-    return isDraggable ? `<hr style="margin:4px 0;"><button class="btn-small" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa Tên</button><button class="btn-small del" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>` : '';
-  }
-
-  async function handleDragEnd(e, ptObj) {
-    var newPos = e.target.getLatLng();
-    if (confirm(`Lưu tọa độ mới cho [${ptObj.ten}]?`)) {
-      showLoading("Đang lưu tọa độ...");
-      try {
-        const { error } = await supabaseClient.from('diem_ha_tang').update({ lat: newPos.lat, long: newPos.lng }).eq('id_diem', ptObj.id);
-        if (error) throw error;
-        hideLoading(); taiDuLieuSupabase();
-      } catch (err) { alert("Lỗi: " + err.message); hideLoading(); e.target.setLatLng([ptObj.lat, ptObj.lng]); }
-    } else { e.target.setLatLng([ptObj.lat, ptObj.lng]); }
-  }
-
-  pts.forEach((pt, index) => {
+pts.forEach((pt, index) => {
     bounds.push([pt.lat, pt.lng]);
     var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : ((index === pts.length - 1) ? '<div class="point-b-marker">B</div>' : '<div class="standard-marker"></div>');
     var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
-    marker.bindPopup(`<b>${pt.ten}</b><br>Loại: ${pt.loai}<br>Lý trình gốc: ${pt.lyTrinh || 'Chưa nhập'}<br>Lý trình nội suy: <b>${pt.calculatedLyTrinhText}</b>` + taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng));
+    
+    // Hiển thị cả Lý trình quốc lộ và Cự ly quang học từ Trạm A
+    var popupHtml = `<b>${pt.ten}</b><br>` +
+                    `Loại: ${pt.loai}<br>` +
+                    `📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b> (Gốc: ${pt.lyTrinh || 'Chưa nhập'})<br>` +
+                    `📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText}</b>` + 
+                    taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng);
+
+    marker.bindPopup(popupHtml);
     marker.on('dragend', e => handleDragEnd(e, pt));
     markersLayer.addLayer(marker);
   });
-
-  globalDataPoints.filter(p => isMangXong(p) && p.idTuyen == tuyenVal && (tramVal === 'ALL' || p.idTram == tramVal) && (doanVal === 'ALL' || p.idDoanCap == doanVal)).forEach(mx => {
-    bounds.push([mx.lat, mx.lng]);
-    var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
-    var distToA = getDistanceAlongRoute(mx, pts);
-    var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
-    var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}')">📝 Ghi chú</button>`;
-    mxMarker.bindPopup(`<b>${mx.ten}</b><br>Lý trình: ${mx.lyTrinh || 'Không có'}<br>📏 Cách gốc: <b>${distStr}</b><br>` + taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng) + ghiChuBtn);
-    mxMarker.on('dragend', e => handleDragEnd(e, mx));
-    mxLayer.addLayer(mxMarker);
-  });
-
-  var lineCoordinates = pts.map(p => [p.lat, p.lng]);
-  if (lineCoordinates.length > 1) polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: '#0d6efd', weight: 3 }));
-  if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
-}
 
 async function suaGhiChu(id, oldGhiChu) {
   if (!currentUser.canEditMap && currentUser.role !== 'sys_admin') { alert("Không có quyền!"); return; }
