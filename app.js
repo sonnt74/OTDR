@@ -277,15 +277,18 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 
 function khoiTaoComboDaiTheoPhanCap() {
   var selectDai = document.getElementById('selectDai');
-  selectDai.innerHTML = '';
-  
-  // Nếu là tài khoản cấp Trạm, khóa và hiển thị đúng tên Đài của user
-  if (currentUser.role === 'tram_admin' && currentUser.idDai) {
-    var daiObj = rawDaiList.find(d => d.id_dai == currentUser.idDai);
-    selectDai.innerHTML = `<option value="${currentUser.idDai}">${daiObj ? daiObj.ten_dai : 'Đài của bạn'}</option>`;
-    selectDai.value = currentUser.idDai;
-    selectDai.disabled = true;
+  var groupDai = selectDai.closest('.form-group');
+  var selectTram = document.getElementById('selectTram');
+  var groupTram = selectTram.closest('.form-group');
+
+  // Nếu là tài khoản cấp Trạm, ẩn luôn dòng chọn Đài và chọn Trạm cho gọn giao diện
+  if (currentUser.role === 'tram_admin') {
+    if (groupDai) groupDai.style.display = 'none';
+    if (groupTram) groupTram.style.display = 'none';
   } else {
+    if (groupDai) groupDai.style.display = 'block';
+    if (groupTram) groupTram.style.display = 'block';
+    
     selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
     rawDaiList.forEach(dai => {
       selectDai.innerHTML += `<option value="${dai.id_dai}">${dai.ten_dai}</option>`;
@@ -301,15 +304,8 @@ function khoiTaoComboDaiTheoPhanCap() {
 function onDaiChange() {
   var daiVal = document.getElementById('selectDai').value;
   var selectTram = document.getElementById('selectTram');
-  selectTram.innerHTML = '';
-
-  // Nếu là tài khoản cấp Trạm, khóa và hiển thị đúng tên Trạm của user
-  if (currentUser.role === 'tram_admin' && currentUser.idTram) {
-    var tramObj = rawTramList.find(t => t.id_tram == currentUser.idTram);
-    selectTram.innerHTML = `<option value="${currentUser.idTram}">${tramObj ? tramObj.ten_tram : 'Trạm của bạn'}</option>`;
-    selectTram.value = currentUser.idTram;
-    selectTram.disabled = true;
-  } else {
+  
+  if (currentUser.role !== 'tram_admin') {
     selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
     var validTrams = rawTramList.filter(tram => daiVal === 'ALL' || tram.id_dai == daiVal);
     validTrams.forEach(tram => {
@@ -319,6 +315,7 @@ function onDaiChange() {
   
   updateTuyenOptions();
 }
+  
 
 function onTramChange() { 
   updateTuyenOptions(); 
@@ -378,6 +375,8 @@ function onDiemAChange() {
 function capNhatComboDiemA() {
   var tuyenVal = document.getElementById('selectTuyen').value;
   var combo = document.getElementById('comboDiemA');
+  if (!combo) return;
+  
   combo.innerHTML = '<option value="DEFAULT">📍 Trạm Gốc (TNN)</option>';
   
   globalDataPoints.filter(pt => isMangXong(pt) && (tuyenVal === 'ALL' || pt.idTuyen == tuyenVal)).forEach(mx => {
