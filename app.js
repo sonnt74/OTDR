@@ -29,9 +29,14 @@ window.onload = function() {
     document.getElementById('loginModal').style.display = 'none';
     document.getElementById('sidebar-menu').style.display = 'flex';
     document.getElementById('control-panel').style.display = 'block';
+    
+    // Kiểm tra phân quyền để hiện nút Quản trị ở cả Sidebar và Mobile
     if (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin') {
       document.getElementById('adminMenuIcon').style.display = 'flex';
+      var adminMob = document.getElementById('adminMobileBtn');
+      if (adminMob) adminMob.style.display = 'block';
     }
+    
     khoiTaoBanDoLeaflet();
     taiDuLieuSupabase();
   }
@@ -117,8 +122,11 @@ async function handleCustomLogin() {
     document.getElementById('sidebar-menu').style.display = 'flex';
     document.getElementById('control-panel').style.display = 'block';
     
+    // Kiểm tra phân quyền để hiện nút Quản trị ở cả Sidebar và Mobile
     if (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin') {
       document.getElementById('adminMenuIcon').style.display = 'flex';
+      var adminMob = document.getElementById('adminMobileBtn');
+      if (adminMob) adminMob.style.display = 'block';
     }
     
     khoiTaoBanDoLeaflet();
