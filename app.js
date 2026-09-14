@@ -527,15 +527,16 @@ function veLaiTuyenAB() {
   async function handleDragEnd(e, ptObj) {
     var newPos = e.target.getLatLng();
     
-    // Sử dụng hộp thoại xác nhận chuyên nghiệp thay cho confirm() mặc định
     var isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu tọa độ mới cho điểm [${ptObj.ten}] không?`);
     
     if (isConfirmed) {
       showLoading("Đang lưu tọa độ...");
       try {
+        // 1. Lưu dữ liệu xuống Supabase
         const { error } = await supabaseClient.from('diem_ha_tang').update({ lat: newPos.lat, long: newPos.lng }).eq('id_diem', ptObj.id);
         if (error) throw error;
         
+        // 2. Cập nhật trực tiếp trong bộ nhớ RAM (globalDataPoints)
         var localPt = globalDataPoints.find(p => p.id == ptObj.id);
         if (localPt) {
           localPt.lat = newPos.lat;
@@ -543,8 +544,12 @@ function veLaiTuyenAB() {
         }
         
         hideLoading();
-        showToast("Đã lưu tọa độ thành công!", "success");
+        showToast("Đã lưu và cập nhật tọa độ thành công!", "success");
+        
+        // 3. Vẽ lại bản đồ và Zoom trọng tâm tới điểm vừa kéo thả
         veLaiTuyenAB();
+        map.setView([newPos.lat, newPos.lng], 19, { animate: true });
+        
       } catch (err) { 
         showToast("Lỗi: " + err.message, "error"); 
         hideLoading(); 
@@ -906,19 +911,22 @@ async function executeCrudAction() {
   showLoading("Đang xử lý...");
   
   try {
+    var targetLat = null, targetLng = null;
+
     if (act === 'ADD') {
-      var latVal = parseFloat(document.getElementById('crudObjectLat').value);
-      var lngVal = parseFloat(document.getElementById('crudObjectLng').value);
-      payload.lat = latVal; 
-      payload.long = lngVal;
+      targetLat = parseFloat(document.getElementById('crudObjectLat').value);
+      targetLng = parseFloat(document.getElementById('crudObjectLng').value);
+      payload.lat = targetLat; 
+      payload.long = targetLng;
       
       var tuyenH = document.getElementById('selectTuyen').value;
       if (tuyenH !== 'ALL') payload.id_tuyen_cap = parseInt(tuyenH);
       
+      // 1. Lưu điểm mới xuống Supabase và yêu cầu trả về bản ghi
       const { data, error } = await supabaseClient.from('diem_ha_tang').insert([payload]).select();
       if (error) throw error;
       
-      // Thêm điểm mới vào mảng cục bộ
+      // 2. Thêm vào mảng RAM cục bộ
       if (data && data[0]) {
         var newRec = data[0];
         globalDataPoints.push({
@@ -933,28 +941,41 @@ async function executeCrudAction() {
         });
       }
     } else if (act === 'EDIT') { 
+      // 1. Cập nhật xuống Supabase
       const { error } = await supabaseClient.from('diem_ha_tang').update(payload).eq('id_diem', id);
       if (error) throw error;
       
-      // Cập nhật mảng cục bộ
+      // 2. Cập nhật trong mảng RAM
       var localPt = globalDataPoints.find(p => p.id == id);
       if (localPt) {
         localPt.ten = tenMoi;
         localPt.idLoaiDiem = loaiMoi;
         localPt.lyTrinh = ltMoi;
+        targetLat = localPt.lat;
+        targetLng = localPt.lng;
       }
     } else if (act === 'DELETE') { 
+      // Lấy tọa độ trước khi xóa để có thể canh tầm nhìn nếu cần
+      var delPt = globalDataPoints.find(p => p.id == id);
+      if (delPt) { targetLat = delPt.lat; targetLng = delPt.lng; }
+
+      // 1. Xóa khỏi Supabase
       const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id);
       if (error) throw error;
       
-      // Xóa khỏi mảng cục bộ
+      // 2. Xóa khỏi mảng RAM
       globalDataPoints = globalDataPoints.filter(p => p.id != id);
     }
     
     closeModals();
     hideLoading();
-    showToast("Thực hiện thành công!", "success");
-    veLaiTuyenAB(); // Vẽ lại bản đồ ngay lập tức mà không gọi API tải lại toàn bộ database
+    showToast("Thực hiện lưu dữ liệu thành công!", "success");
+    
+    // 3. Vẽ lại bản đồ và Zoom vào vị trí đối tượng nếu có tọa độ hợp lệ
+    veLaiTuyenAB();
+    if (targetLat && targetLng && act !== 'DELETE') {
+      map.setView([targetLat, targetLng], 19, { animate: true });
+    }
   } catch (err) { 
     showToast("Lỗi: " + err.message, "error"); 
     hideLoading(); 
