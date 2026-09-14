@@ -51,38 +51,26 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
 
 /* Tối ưu giao diện cho màn hình điện thoại (Mobile) */
 @media (max-width: 768px) {
+  /* Ẩn hoàn toàn thanh sidebar bên trái để tối đa hóa không gian bản đồ */
+  #sidebar-menu { display: none !important; }
+
   #control-panel {
     top: auto;
     bottom: 0;
     left: 0;
     width: 100vw;
-    max-height: 60vh; /* Độ cao tối đa khi mở rộng */
+    max-height: 65vh; /* Tăng nhẹ độ cao để chứa thanh công cụ mới */
     border-radius: 15px 15px 0 0;
     box-shadow: 0 -4px 15px rgba(0,0,0,0.2);
   }
   
-  /* Trạng thái thu gọn (chỉ hiện tiêu đề) */
-  #control-panel.collapsed {
-    max-height: 40px !important; 
-    overflow: hidden;
-  }
-  
-  /* Cố định tiêu đề khi cuộn và thêm hướng dẫn vuốt */
-  .panel-header {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
-  .panel-header::after {
-    content: " (Vuốt ↕)";
-    font-size: 10px;
-    font-weight: normal;
-  }
+  #control-panel.collapsed { max-height: 40px !important; overflow: hidden; }
+  .panel-header { position: sticky; top: 0; z-index: 10; }
+  .panel-header::after { content: " (Vuốt ↕)"; font-size: 10px; font-weight: normal; }
 
-  #gps-btn { bottom: calc(60vh + 15px); transition: bottom 0.3s ease; }
-  #measure-btn { bottom: calc(60vh + 60px); transition: bottom 0.3s ease; }
+  #gps-btn { bottom: calc(65vh + 15px); transition: bottom 0.3s ease; }
+  #measure-btn { bottom: calc(65vh + 60px); transition: bottom 0.3s ease; }
   
-  /* Nút công cụ hạ thấp xuống khi bảng điều khiển thu gọn */
   #control-panel.collapsed ~ #gps-btn { bottom: 55px; }
   #control-panel.collapsed ~ #measure-btn { bottom: 100px; }
 }
