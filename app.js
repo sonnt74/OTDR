@@ -292,7 +292,6 @@ function isMangXong(pt) {
   return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
 }
 
-// CÁC HÀM XỬ LÝ LÝ TRÌNH, NỘI SUY HÌNH HỌC VÀ ƯU TIÊN MỐC MĂNG XÔNG
 function parseLyTrinh(str) {
   if (!str) return null;
   var cleanStr = str.toString().trim();
@@ -324,39 +323,63 @@ function getDistanceAlongRoute(targetPt, pathPts) {
   return bestDist;
 }
 
-// Hàm nội suy thống nhất cho tất cả các điểm, ưu tiên măng xông làm mốc neo
-function precalculateRouteData(pts) {
+// Xây dựng tuyến khung tuần tự từ Trạm TNN để tính toán chính xác
+function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
+  var allPts = globalDataPoints.filter(pt => pt.idTuyen == tuyenVal && (tramVal === 'ALL' || pt.idTram == tramVal) && (doanVal === 'ALL' || pt.idDoanCap == doanVal));
+  
+  var basePt = allPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
+  if (!basePt) {
+    basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, lyTrinh: "0+000", idTuyen: tuyenVal, stt: -9999, loai: "Trạm", idLoaiDiem: 0, duTru: 0 };
+    allPts.unshift(basePt);
+  }
+
+  // Sắp xếp tuần tự Nearest Neighbor bắt đầu từ Trạm TNN
+  let sorted = [basePt];
+  let remaining = allPts.filter(p => p !== basePt);
+
+  while (remaining.length > 0) {
+    let current = sorted[sorted.length - 1];
+    let nearestIdx = 0, minDist = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      let dist = calculateHaversine(current.lat, current.lng, remaining[i].lat, remaining[i].lng);
+      if (dist < minDist) { minDist = dist; nearestIdx = i; }
+    }
+    sorted.push(remaining[nearestIdx]);
+    remaining.splice(nearestIdx, 1);
+  }
+
+  return sorted;
+}
+
+// Nội suy thống nhất toàn tuyến, ưu tiên tuyệt đối măng xông làm mốc neo
+function precalculateRouteData(pts, backbonePts) {
   if (!pts || pts.length === 0) return pts;
   
   var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
   var isNghichHuong = document.getElementById('chkNghichHuong')?.checked || false;
 
-  // Tính tổng chiều dài hình học tuyến
   let totalRoutePhysDist = 0;
-  for (let i = 0; i < pts.length - 1; i++) {
-    totalRoutePhysDist += calculateHaversine(pts[i].lat, pts[i].lng, pts[i+1].lat, pts[i+1].lng);
+  for (let i = 0; i < backbonePts.length - 1; i++) {
+    totalRoutePhysDist += calculateHaversine(backbonePts[i].lat, backbonePts[i].lng, backbonePts[i+1].lat, backbonePts[i+1].lng);
   }
   let totalRouteOpticalDist = totalRoutePhysDist * heSo;
 
-  // ƯU TIÊN TÌM MỐC NEO TỪ MĂNG XÔNG CÓ NHẬP LÝ TRÌNH HOẶC ĐIỂM ĐẦU TIÊN CÓ LÝ TRÌNH
   var baseMeters = 0;
   var foundBase = false;
 
-  // Tìm trong các điểm măng xông trước
-  let allTuyenPts = globalDataPoints.filter(p => p.idTuyen == pts[0]?.idTuyen);
-  let mxWithLyTrinh = allTuyenPts.find(p => isMangXong(p) && parseLyTrinh(p.lyTrinh) !== null);
-
+  // Ưu tiên 1: Tìm măng xông có lý trình chuẩn làm mốc neo
+  let mxWithLyTrinh = backbonePts.find(p => isMangXong(p) && parseLyTrinh(p.lyTrinh) !== null);
   if (mxWithLyTrinh) {
     let mVal = parseLyTrinh(mxWithLyTrinh.lyTrinh);
-    let distToMx = getDistanceAlongRoute(mxWithLyTrinh, pts) * heSo;
+    let distToMx = getDistanceAlongRoute(mxWithLyTrinh, backbonePts) * heSo;
     baseMeters = mVal - distToMx;
     foundBase = true;
   } else {
-    // Nếu không có măng xông nào có lý trình, tìm bất kỳ điểm nào có lý trình
-    for (let i = 0; i < pts.length; i++) {
-      var m = parseLyTrinh(pts[i].lyTrinh);
+    // Ưu tiên 2: Tìm bất kỳ điểm nào có lý trình
+    for (let i = 0; i < backbonePts.length; i++) {
+      var m = parseLyTrinh(backbonePts[i].lyTrinh);
       if (m !== null) {
-        let distToThis = getDistanceAlongRoute(pts[i], pts) * heSo;
+        let distToThis = getDistanceAlongRoute(backbonePts[i], backbonePts) * heSo;
         baseMeters = m - distToThis;
         foundBase = true;
         break;
@@ -366,9 +389,8 @@ function precalculateRouteData(pts) {
 
   if (!foundBase) baseMeters = 0;
 
-  // Gán thông số cho từng điểm dựa trên hình chiếu
   pts.forEach(pt => {
-    let distFromA = getDistanceAlongRoute(pt, pts) * heSo;
+    let distFromA = getDistanceAlongRoute(pt, backbonePts) * heSo;
     
     let effectiveOpticalDist = isNghichHuong ? (totalRouteOpticalDist - distFromA) : distFromA;
     let effectiveLyTrinhMeters = isNghichHuong ? (baseMeters + totalRouteOpticalDist - distFromA) : (baseMeters + distFromA);
@@ -393,28 +415,27 @@ function getPointsCuaTuyenHienTai() {
   var doanVal = document.getElementById('selectDoanCap').value;
   if (tuyenVal === 'ALL') return [];
   
-  var filteredPts = globalDataPoints.filter(pt => !isMangXong(pt) && pt.idTuyen == tuyenVal && (tramVal === 'ALL' || pt.idTram == tramVal) && (doanVal === 'ALL' || pt.idDoanCap == doanVal));
-  filteredPts.sort((a, b) => a.stt - b.stt);
+  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  var nonMxPts = backbone.filter(pt => !isMangXong(pt) && pt.idLoaiDiem !== 0);
   
-  if (filteredPts.length > 0) {
-    var hasBase = filteredPts.some(p => Math.abs(p.lat - 21.593365) < 0.0001);
-    if (!hasBase) {
-      filteredPts.unshift({ ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, lyTrinh: "0+000", idTuyen: tuyenVal, stt: -9999, loai: "Trạm" });
-    }
-  }
-  
-  var ordered = document.getElementById('chkNghichHuong').checked ? filteredPts.slice().reverse() : filteredPts;
-  return precalculateRouteData(ordered);
+  var basePt = backbone.find(p => p.id === 'TNN_BASE' || Math.abs(p.lat - 21.593365) < 0.0001);
+  if (basePt && !nonMxPts.includes(basePt)) nonMxPts.unshift(basePt);
+
+  var ordered = document.getElementById('chkNghichHuong').checked ? nonMxPts.slice().reverse() : nonMxPts;
+  return precalculateRouteData(ordered, backbone);
 }
 
-// HÀM VẼ LẠI TUYẾN TRÊN BẢN ĐỒ
 function veLaiTuyenAB() {
   if (!map) return;
   markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
-  var pts = getPointsCuaTuyenHienTai(), bounds = [];
+  var tuyenVal = document.getElementById('selectTuyen').value, tramVal = document.getElementById('selectTram').value, doanVal = document.getElementById('selectDoanCap').value;
+  if (tuyenVal === 'ALL') return;
+
+  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  var pts = getPointsCuaTuyenHienTai();
   if (pts.length === 0) return;
   
-  var tuyenVal = document.getElementById('selectTuyen').value, tramVal = document.getElementById('selectTram').value, doanVal = document.getElementById('selectDoanCap').value;
+  var bounds = [];
   var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
 
   function taoNutHanhDong(id, ten, lat, lng) {
@@ -435,7 +456,7 @@ function veLaiTuyenAB() {
 
   pts.forEach((pt, index) => {
     bounds.push([pt.lat, pt.lng]);
-    var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : ((index === pts.length - 1) ? '<div class="point-b-marker">B</div>' : '<div class="standard-marker"></div>');
+    var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : ((index === pts.length - 1 && !document.getElementById('chkNghichHuong').checked) ? '<div class="point-b-marker">B</div>' : '<div class="standard-marker"></div>');
     var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
     
     var popupHtml = `<b>${pt.ten}</b><br>` +
@@ -449,26 +470,26 @@ function veLaiTuyenAB() {
     markersLayer.addLayer(marker);
   });
 
-  globalDataPoints.filter(p => isMangXong(p) && p.idTuyen == tuyenVal && (tramVal === 'ALL' || p.idTram == tramVal) && (doanVal === 'ALL' || p.idDoanCap == doanVal)).forEach(mx => {
+  // Render Măng xông sử dụng chung backbone đã chuẩn hóa
+  var mxList = backbone.filter(p => isMangXong(p));
+  precalculateRouteData(mxList, backbone);
+
+  mxList.forEach(mx => {
     bounds.push([mx.lat, mx.lng]);
     var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
-    var distToA = getDistanceAlongRoute(mx, pts);
-    let isNghichHuong = document.getElementById('chkNghichHuong')?.checked || false;
-    let totalRouteOpticalDist = (function() {
-      let d = 0; let h = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
-      for (let i = 0; i < pts.length - 1; i++) d += calculateHaversine(pts[i].lat, pts[i].lng, pts[i+1].lat, pts[i+1].lng);
-      return d * h;
-    })();
-    let effDist = isNghichHuong ? (totalRouteOpticalDist - distToA) : distToA;
-    var distStr = (effDist >= 1000) ? (effDist / 1000).toFixed(2) + " km" : Math.round(effDist) + " m";
-    
     var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}')">📝 Ghi chú</button>`;
-    mxMarker.bindPopup(`<b>${mx.ten}</b><br>Lý trình: ${mx.lyTrinh || 'Không có'}<br>📏 Cách gốc: <b>${distStr}</b><br>` + taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng) + ghiChuBtn);
+    
+    var popupHtml = `<b>${mx.ten}</b><br>` +
+                    `Lý trình QL: <b>${mx.calculatedLyTrinhText}</b><br>` +
+                    `📏 Cách gốc: <b>${mx.distanceFromAText}</b><br>` +
+                    taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng) + ghiChuBtn;
+
+    mxMarker.bindPopup(popupHtml);
     mxMarker.on('dragend', e => handleDragEnd(e, mx));
     mxLayer.addLayer(mxMarker);
   });
 
-  var lineCoordinates = pts.map(p => [p.lat, p.lng]);
+  var lineCoordinates = backbone.map(p => [p.lat, p.lng]);
   if (lineCoordinates.length > 1) polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: '#0d6efd', weight: 3 }));
   if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
 }
@@ -497,18 +518,20 @@ function timViTriDut() {
   var heSo = parseFloat(document.getElementById('txtDoChung').value) || 1.075;
   if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { alert("Nhập cự ly đo hợp lệ!"); return; }
   
-  var pts = getPointsCuaTuyenHienTai();
-  if (pts.length < 2) { alert("Tuyến cáp chưa đủ dữ liệu!"); return; }
-
   var tuyenVal = document.getElementById('selectTuyen').value;
-  var mxList = globalDataPoints.filter(p => isMangXong(p) && p.idTuyen == tuyenVal);
-  
+  var tramVal = document.getElementById('selectTram').value;
+  var doanVal = document.getElementById('selectDoanCap').value;
+  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  precalculateRouteData(backbone, backbone);
+
+  if (backbone.length < 2) { alert("Tuyến cáp chưa đủ dữ liệu!"); return; }
+
+  var mxList = backbone.filter(p => isMangXong(p));
   var routeStops = [];
-  pts.forEach(p => routeStops.push({ pt: p, dist: getDistanceAlongRoute(p, pts), duTru: 0, isMX: false }));
-  mxList.forEach(m => routeStops.push({ pt: m, dist: getDistanceAlongRoute(m, pts), duTru: m.duTru || 0, isMX: true }));
+  backbone.forEach(p => routeStops.push({ pt: p, dist: p.distanceFromAMeters / heSo, duTru: p.duTru || 0, isMX: isMangXong(p) }));
   routeStops.sort((a, b) => a.dist - b.dist);
 
-  var cumDist = 0, targetLat = pts[pts.length - 1].lat, targetLng = pts[pts.length - 1].lng;
+  var cumDist = 0, targetLat = backbone[backbone.length - 1].lat, targetLng = backbone[backbone.length - 1].lng;
   var closestPrevMX = "Chưa xác định", closestNextMX = "Chưa xác định";
 
   for (var i = 0; i < routeStops.length - 1; i++) {
