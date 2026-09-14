@@ -277,11 +277,11 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 
 function khoiTaoComboDaiTheoPhanCap() {
   var selectDai = document.getElementById('selectDai');
-  var groupDai = selectDai.closest('.form-group');
+  var groupDai = selectDai ? selectDai.closest('.form-group') : null;
   var selectTram = document.getElementById('selectTram');
-  var groupTram = selectTram.closest('.form-group');
+  var groupTram = selectTram ? selectTram.closest('.form-group') : null;
 
-  // Nếu là tài khoản cấp Trạm, ẩn luôn dòng chọn Đài và chọn Trạm cho gọn giao diện
+  // Nếu là tài khoản cấp Trạm, ẩn nhóm chọn Đài và Trạm cho gọn giao diện
   if (currentUser.role === 'tram_admin') {
     if (groupDai) groupDai.style.display = 'none';
     if (groupTram) groupTram.style.display = 'none';
@@ -298,6 +298,7 @@ function khoiTaoComboDaiTheoPhanCap() {
       selectDai.disabled = true;
     }
   }
+  // Bắt buộc gọi onDaiChange để tiếp tục chuỗi nạp dữ liệu trạm và tuyến
   onDaiChange();
 }
 
@@ -323,14 +324,15 @@ function onTramChange() {
 
 function updateTuyenOptions() {
   var selectTuyen = document.getElementById('selectTuyen');
-  selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
+  if (!selectTuyen) return;
   
+  selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
   rawTuyenList.forEach(tuyen => {
     selectTuyen.innerHTML += `<option value="${tuyen.id_tuyen_cap}">${tuyen.ma_tuyencap}</option>`;
   });
   
-  // Tự động chọn tuyến cáp đầu tiên cho sys_admin và dai_admin khi mới đăng nhập
-  if ((currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin') && rawTuyenList.length > 0 && selectTuyen.value === 'ALL') {
+  // Tự động chọn tuyến cáp đầu tiên để vẽ ngay lên bản đồ sau khi đăng nhập
+  if (rawTuyenList.length > 0 && selectTuyen.value === 'ALL') {
     selectTuyen.value = rawTuyenList[0].id_tuyen_cap;
   }
   
