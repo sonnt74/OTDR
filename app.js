@@ -916,7 +916,6 @@ async function executeCrudAction() {
       targetLat = parseFloat(document.getElementById('crudObjectLat').value);
       targetLng = parseFloat(document.getElementById('crudObjectLng').value);
       
-      // Payload chuẩn khớp với các cột thực tế của bảng diem_ha_tang
       var payload = { 
         ten_diem: tenMoi, 
         id_loaidiem: loaiMoi, 
@@ -926,18 +925,20 @@ async function executeCrudAction() {
         id_tram: currentUser.idTram || 2
       };
       
-      // 1. Thêm bản ghi vào bảng diem_ha_tang trên Supabase
+      console.log("Đang gửi dữ liệu INSERT lên Supabase:", payload);
       const { data: diemData, error: diemErr } = await supabaseClient.from('diem_ha_tang').insert([payload]).select();
-      if (diemErr) throw diemErr;
+      
+      if (diemErr) {
+        console.error("Lỗi chi tiết từ Supabase (INSERT):", diemErr);
+        throw new Error(diemErr.message);
+      }
       
       if (diemData && diemData[0]) {
         var newRec = diemData[0];
         var newIdDiem = newRec.id_diem || newRec.id;
-        
         var doanVal = document.getElementById('selectDoanCap').value;
         var tuyenVal = document.getElementById('selectTuyen').value;
         
-        // 2. Liên kết điểm mới vào đoạn cáp hiện tại qua bảng doan_cap_diem
         if (doanVal && doanVal !== 'ALL') {
           var dcdPayload = {
             id_doan_cap: parseInt(doanVal),
@@ -948,12 +949,11 @@ async function executeCrudAction() {
           if (dcdErr) console.warn("Cảnh báo liên kết đoạn tuyến:", dcdErr.message);
         }
 
-        // 3. Cập nhật mảng RAM cục bộ
         globalDataPoints.push({
           id: newIdDiem,
           ten: newRec.ten_diem,
           lat: newRec.lat,
-          lng: newRec.long,
+          lng: newRec.long || newRec.lng,
           lyTrinh: newRec.ly_trinh || '',
           idTuyen: tuyenVal !== 'ALL' ? tuyenVal : null,
           idDoanCap: doanVal !== 'ALL' ? parseInt(doanVal) : null,
@@ -963,8 +963,13 @@ async function executeCrudAction() {
       }
     } else if (act === 'EDIT') { 
       var payload = { ten_diem: tenMoi, id_loaidiem: loaiMoi, ly_trinh: ltMoi };
+      console.log("Đang gửi dữ liệu UPDATE lên Supabase cho ID:", id, payload);
+      
       const { error } = await supabaseClient.from('diem_ha_tang').update(payload).eq('id_diem', id);
-      if (error) throw error;
+      if (error) {
+        console.error("Lỗi chi tiết từ Supabase (UPDATE):", error);
+        throw new Error(error.message);
+      }
       
       var localPt = globalDataPoints.find(p => p.id == id);
       if (localPt) {
@@ -978,12 +983,14 @@ async function executeCrudAction() {
       var delPt = globalDataPoints.find(p => p.id == id);
       if (delPt) { targetLat = delPt.lat; targetLng = delPt.lng; }
 
-      // Xóa liên kết trong bảng trung gian doan_cap_diem trước để tránh lỗi khóa ngoại
+      console.log("Đang xóa liên kết và bản ghi cho ID:", id);
       await supabaseClient.from('doan_cap_diem').delete().eq('id_diem', id);
-
-      // Sau đó tiến hành xóa điểm chính trong diem_ha_tang
+      
       const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id);
-      if (error) throw error;
+      if (error) {
+        console.error("Lỗi chi tiết từ Supabase (DELETE):", error);
+        throw new Error(error.message);
+      }
       
       globalDataPoints = globalDataPoints.filter(p => p.id != id);
     }
