@@ -92,3 +92,34 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
   #control-panel.collapsed ~ #gps-btn { bottom: 80px; }
   #control-panel.collapsed ~ #measure-btn { bottom: 125px; }
 }
+
+/* --- HỆ THỐNG THÔNG BÁO TOAST HIỆN ĐẠI --- */
+#toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 999999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast-msg {
+  background: #343a40;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  pointer-events: auto;
+  animation: toastIn 0.3s ease forwards;
+  max-width: 300px;
+}
+.toast-msg.error { background-color: #dc3545; }
+.toast-msg.success { background-color: #198754; }
+
+@keyframes toastIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
