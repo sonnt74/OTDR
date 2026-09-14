@@ -1009,3 +1009,23 @@ function showToast(message, type = 'info') {
     setTimeout(() => toast.remove(), 300);
   }, 3000);
 }
+
+// --- HỆ THỐNG XÁC NHẬN TÙY CHỈNH (THAY THẾ CONFIRM MẶC ĐỊNH) ---
+let confirmResolveCallback = null;
+
+function showConfirmDialog(message, title = "⚠️ Xác nhận thao tác") {
+  return new Promise((resolve) => {
+    document.getElementById('confirmModalMessage').innerText = message;
+    document.getElementById('confirmModalTitle').innerText = title;
+    document.getElementById('customConfirmModal').style.display = 'flex';
+    confirmResolveCallback = resolve;
+  });
+}
+
+function resolveConfirm(result) {
+  document.getElementById('customConfirmModal').style.display = 'none';
+  if (confirmResolveCallback) {
+    confirmResolveCallback(result);
+    confirmResolveCallback = null;
+  }
+}
