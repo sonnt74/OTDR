@@ -400,27 +400,16 @@ function getDistanceAlongRoute(targetPt, pathPts) {
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   var allPts = globalDataPoints.filter(pt => pt.idTuyen == tuyenVal && (tramVal === 'ALL' || pt.idTram == tramVal) && (doanVal === 'ALL' || pt.idDoanCap == doanVal));
   
-  var basePt = allPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
+  var basePt = allPts.find(p => p.id === 'TNN_BASE' || Math.abs(p.lat - 21.593365) < 0.0001);
   if (!basePt) {
     basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, lyTrinh: "0+000", idTuyen: tuyenVal, stt: -9999, loai: "Trạm", idLoaiDiem: 0, duTru: 0 };
     allPts.unshift(basePt);
   }
 
-  let sorted = [basePt];
-  let remaining = allPts.filter(p => p !== basePt);
+  // Sắp xếp các điểm theo đúng số thứ tự (thu_tu) được lưu trong database để giữ nguyên hình dạng tuyến
+  allPts.sort((a, b) => (a.stt || 0) - (b.stt || 0));
 
-  while (remaining.length > 0) {
-    let current = sorted[sorted.length - 1];
-    let nearestIdx = 0, minDist = Infinity;
-    for (let i = 0; i < remaining.length; i++) {
-      let dist = calculateHaversine(current.lat, current.lng, remaining[i].lat, remaining[i].lng);
-      if (dist < minDist) { minDist = dist; nearestIdx = i; }
-    }
-    sorted.push(remaining[nearestIdx]);
-    remaining.splice(nearestIdx, 1);
-  }
-
-  return sorted;
+  return allPts;
 }
 
 function precalculateRouteDataForPoints(pts, backbonePts) {
@@ -907,7 +896,7 @@ async function executeCrudAction() {
   var loaiMoi = parseInt(document.getElementById('crudObjectLoai').value);
   var ltMoi = document.getElementById('crudObjectLyTrinh').value;
   
-  showLoading("Đang xử lý dữ liệu...");
+  showLoading("Đang xử lý và sắp xếp thứ tự tuyến...");
   
   try {
     var targetLat = null, targetLng = null;
@@ -923,7 +912,6 @@ async function executeCrudAction() {
         throw new Error("Vui lòng chọn Tuyến cáp ở bảng điều khiển bên trái trước khi thêm điểm!");
       }
 
-      // Xác định id_doan_cap: Nếu đang chọn ALL, tự động lấy đoạn cáp đầu tiên thuộc tuyến hiện tại
       var targetDoanId = null;
       if (doanVal && doanVal !== 'ALL') {
         targetDoanId = parseInt(doanVal);
@@ -932,7 +920,51 @@ async function executeCrudAction() {
         if (firstDoan) {
           targetDoanId = firstDoan.id_doan_cap || firstDoan.id;
         } else {
-          throw new Error("Tuyến cáp này chưa có Đoạn cáp nào được khai báo trong hệ thống!");
+          throw new Error("Tuyến cáp này chưa có Đoạn cáp nào được khai báo!");
+        }
+      }
+
+      // Quy đổi lý trình mới sang số mét để tìm vị trí chèn chính xác
+      var parsedNewLt = parseLyTrinhWithSuffix(ltMoi);
+      var newMeters = parsedNewLt ? parsedNewLt.meters : 0;
+
+      // Lấy danh sách thứ tự hiện tại của đoạn cáp từ database
+      const { data: existingLinks, error: linkErr } = await supabaseClient
+        .from('doan_cap_diem')
+        .select('id_diem, thu_tu')
+        .eq('id_doan_cap', targetDoanId)
+        .order('thu_tu', { ascending: true });
+
+      var targetThuTu = 1;
+
+      if (!linkErr && existingLinks && existingLinks.length > 0) {
+        var linksWithLyTrinh = existingLinks.map(link => {
+          var pt = globalDataPoints.find(p => p.id == link.id_diem);
+          var ltParsed = pt ? parseLyTrinhWithSuffix(pt.lyTrinh) : null;
+          return {
+            id_diem: link.id_diem,
+            thu_tu: link.thu_tu || 1,
+            meters: ltParsed ? ltParsed.meters : 0
+          };
+        });
+
+        // Tìm vị trí chèn dựa theo giá trị lý trình
+        var insertIndex = linksWithLyTrinh.findIndex(item => item.meters > newMeters);
+        
+        if (insertIndex === -1) {
+          var maxThuTu = Math.max(...linksWithLyTrinh.map(i => i.thu_tu));
+          targetThuTu = maxThuTu + 1;
+        } else {
+          targetThuTu = linksWithLyTrinh[insertIndex].thu_tu;
+          
+          // Dịch chuyển thứ tự các điểm phía sau lên +1 để nhường chỗ cho điểm mới
+          for (var i = insertIndex; i < linksWithLyTrinh.length; i++) {
+            await supabaseClient
+              .from('doan_cap_diem')
+              .update({ thu_tu: linksWithLyTrinh[i].thu_tu + 1 })
+              .eq('id_doan_cap', targetDoanId)
+              .eq('id_diem', linksWithLyTrinh[i].id_diem);
+          }
         }
       }
 
@@ -945,7 +977,7 @@ async function executeCrudAction() {
         id_tram: currentUser.idTram || 2
       };
       
-      // 1. Thêm điểm vào bảng chính diem_ha_tang
+      // Thêm điểm vào bảng diem_ha_tang
       const { data: diemData, error: diemErr } = await supabaseClient.from('diem_ha_tang').insert([payload]).select();
       if (diemErr) throw new Error(diemErr.message);
       
@@ -953,16 +985,16 @@ async function executeCrudAction() {
         var newRec = diemData[0];
         var newIdDiem = newRec.id_diem || newRec.id;
         
-        // 2. Bắt buộc thêm liên kết vào bảng trung gian doan_cap_diem
+        // Thêm liên kết vào doan_cap_diem kèm số thứ tự chuẩn xác
         var dcdPayload = {
           id_doan_cap: targetDoanId,
           id_diem: newIdDiem,
-          thu_tu: 99
+          thu_tu: targetThuTu
         };
         const { error: dcdErr } = await supabaseClient.from('doan_cap_diem').insert([dcdPayload]);
         if (dcdErr) throw new Error("Lỗi liên kết đoạn tuyến: " + dcdErr.message);
 
-        // 3. Đẩy vào mảng RAM cục bộ để vẽ lại giao diện
+        // Cập nhật vào mảng RAM cục bộ
         globalDataPoints.push({
           id: newIdDiem,
           ten: newRec.ten_diem,
@@ -972,12 +1004,12 @@ async function executeCrudAction() {
           idTuyen: tuyenVal,
           idDoanCap: targetDoanId,
           idLoaiDiem: loaiMoi,
-          loai: 'Điểm mới'
+          loai: 'Điểm mới',
+          stt: targetThuTu
         });
       }
     } else if (act === 'EDIT') { 
       var payload = { ten_diem: tenMoi, id_loaidiem: loaiMoi, ly_trinh: ltMoi };
-      
       const { error } = await supabaseClient.from('diem_ha_tang').update(payload).eq('id_diem', id);
       if (error) throw new Error(error.message);
       
@@ -993,10 +1025,7 @@ async function executeCrudAction() {
       var delPt = globalDataPoints.find(p => p.id == id);
       if (delPt) { targetLat = delPt.lat; targetLng = delPt.lng; }
 
-      // Xóa liên kết trong bảng trung gian trước
       await supabaseClient.from('doan_cap_diem').delete().eq('id_diem', id);
-      
-      // Xóa bản ghi chính
       const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id);
       if (error) throw new Error(error.message);
       
@@ -1005,7 +1034,7 @@ async function executeCrudAction() {
     
     closeModals();
     hideLoading();
-    showToast("Đã lưu dữ liệu và liên kết Database thành công!", "success");
+    showToast("Đã lưu và sắp xếp vị trí tuyến thành công!", "success");
     
     veLaiTuyenAB();
     if (targetLat && targetLng && act !== 'DELETE') {
