@@ -369,7 +369,6 @@ function precalculateRouteDataForPoints(pts, backbonePts) {
   if (!pts || pts.length === 0) return pts;
   
   var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
-  var isNghichHuong = document.getElementById('chkNghichHuong')?.checked || false;
 
   // PHÂN NHÓM CÁC ĐIỂM TRÊN BACKBONE THEO TỪNG ĐOẠN CÁP (DOAN_CAP)
   var segmentsMap = {};
@@ -383,21 +382,28 @@ function precalculateRouteDataForPoints(pts, backbonePts) {
   Object.keys(segmentsMap).forEach(segId => {
     var segPoints = segmentsMap[segId];
     
-    // Tìm mốc neo ưu tiên từ phía xa nhất (điểm B của đoạn) lùi dần về phía gần trạm
-    var segBaseMeters = 0;
-    var segAnchorDistFromA = 0;
-    var segSuffix = '';
-    let sortedSegDesc = [...segPoints].reverse();
-
-    for (let i = 0; i < sortedSegDesc.length; i++) {
-      var parsed = parseLyTrinhWithSuffix(sortedSegDesc[i].lyTrinh);
+    // Tìm 2 mốc neo liên tiếp trong đoạn để xác định chiều tăng hay giảm của lý trình
+    var anchors = [];
+    segPoints.forEach((pt, idx) => {
+      var parsed = parseLyTrinhWithSuffix(pt.lyTrinh);
       if (parsed !== null) {
-        segAnchorDistFromA = getDistanceAlongRoute(sortedSegDesc[i], backbonePts);
-        segSuffix = parsed.suffix;
-        segBaseMeters = parsed.meters; // Lưu trực tiếp giá trị mét tại mốc neo
-        break;
+        anchors.push({ index: idx, meters: parsed.meters, suffix: parsed.suffix, pt: pt });
+      }
+    });
+
+    // Mặc định chiều xuôi (tăng dần)
+    var isSegmentNghich = false;
+    if (anchors.length >= 2) {
+      // So sánh 2 mốc neo đầu tiên tìm thấy trên đoạn
+      if (anchors[1].meters < anchors[0].meters) {
+        isSegmentNghich = true; // Mốc sau nhỏ hơn mốc trước -> Chiều nghịch (HNI)
       }
     }
+
+    // Chọn mốc neo chuẩn làm gốc cho đoạn
+    var segBaseMeters = anchors.length > 0 ? anchors[0].meters : 0;
+    var segSuffix = anchors.length > 0 ? anchors[0].suffix : '';
+    var segAnchorDistFromA = anchors.length > 0 ? getDistanceAlongRoute(anchors[0].pt, backbonePts) : 0;
 
     // Gán thông số cho các điểm thuộc đoạn cáp này
     segPoints.forEach(pt => {
@@ -416,13 +422,13 @@ function precalculateRouteDataForPoints(pts, backbonePts) {
         segAnchorDistFromA = distFromA;
       }
 
-      // 3. TÍNH LÝ TRÌNH QUỐC LỘ (Xuôi chiều tăng dần, Nghịch hướng HNI giảm dần từ mốc neo)
+      // 3. TÍNH LÝ TRÌNH DỰA TRÊN CHIỀU ĐÃ ĐƯỢC SUY RA TỪ MỐC NEO
       let effectiveLyTrinhMeters;
-      if (isNghichHuong) {
-        // Hướng nghịch: Càng ra xa A thì lý trình càng GIẢM so với mốc neo
+      if (isSegmentNghich) {
+        // Chiều nghịch: Càng đi ra xa A thì lý trình càng GIẢM
         effectiveLyTrinhMeters = segBaseMeters - (distFromA - segAnchorDistFromA);
       } else {
-        // Hướng xuôi: Càng ra xa A thì lý trình càng TĂNG so với mốc neo
+        // Chiều xuôi: Càng đi ra xa A thì lý trình càng TĂNG
         let baseOffsetMeters = segBaseMeters - segAnchorDistFromA;
         effectiveLyTrinhMeters = baseOffsetMeters + distFromA;
       }
