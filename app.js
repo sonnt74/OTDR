@@ -292,15 +292,23 @@ function isMangXong(pt) {
   return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
 }
 
-function parseLyTrinh(str) {
+// HÀM BÓC TÁCH CHUỖI THÔ LÝ TRÌNH (Hỗ trợ định dạng: "Km 54+100 QL3" hoặc "54+100 (QL3)")
+function parseLyTrinhWithSuffix(str) {
   if (!str) return null;
   var cleanStr = str.toString().trim();
-  var match = cleanStr.match(/(?:km\s*)?(\d+)\s*\+\s*(\d+)/i);
+  // Regex tìm kiếm số km, số mét và phần hậu tố phía sau
+  var match = cleanStr.match(/(?:km\s*)?(\d+)\s*\+\s*(\d+)(?:\s*[\(\)]?\s*([a-zA-Z0-9\-_]+))?/i);
   if (match) {
-    return parseInt(match[1]) * 1000 + parseInt(match[2]);
+    var km = parseInt(match[1]);
+    var m = parseInt(match[2]);
+    var suffix = match[3] ? match[3].trim().toUpperCase() : '';
+    return {
+      meters: km * 1000 + m,
+      suffix: suffix
+    };
   }
   var num = parseFloat(cleanStr);
-  return isNaN(num) ? null : num;
+  return isNaN(num) ? null : { meters: num, suffix: '' };
 }
 
 function calculateHaversine(lat1, lon1, lat2, lon2) {
@@ -323,7 +331,6 @@ function getDistanceAlongRoute(targetPt, pathPts) {
   return bestDist;
 }
 
-// Xây dựng tuyến khung chuẩn (Backbone) xuất phát từ Trạm TNN và sắp xếp tuần tự
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   var allPts = globalDataPoints.filter(pt => pt.idTuyen == tuyenVal && (tramVal === 'ALL' || pt.idTram == tramVal) && (doanVal === 'ALL' || pt.idDoanCap == doanVal));
   
@@ -350,8 +357,8 @@ function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   return sorted;
 }
 
-// HÀM NỘI SUY CHUẨN ĐỒNG NHẤT CHO MỌI ĐIỂM (Ưu tiên măng xông làm mốc neo, xử lý HNI từ B về A)
-function precalculateRouteData(pts, backbonePts) {
+// THUẬT TOÁN TÍNH TOÁN KHOẢNG CÁCH VÀ LÝ TRÌNH (HỖ TRỢ ĐIỂM NEO ĐỔI HẬU TỐ VÀ HƯỚNG HNI TỪ B VỀ A)
+function precalculateRouteDataForPoints(pts, backbonePts) {
   if (!pts || pts.length === 0) return pts;
   
   var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
@@ -363,47 +370,57 @@ function precalculateRouteData(pts, backbonePts) {
   }
   let totalRouteOpticalDist = totalRoutePhysDist * heSo;
 
+  // TÌM ĐIỂM NEO ĐẦU TIÊN CÓ LÝ TRÌNH
   var baseMeters = 0;
+  var currentSuffix = '';
   var foundBase = false;
 
-  // Ưu tiên tuyệt đối tìm măng xông có nhập lý trình làm mốc neo chuẩn
-  let mxWithLyTrinh = backbonePts.find(p => isMangXong(p) && parseLyTrinh(p.lyTrinh) !== null);
+  let mxWithLyTrinh = backbonePts.find(p => isMangXong(p) && parseLyTrinhWithSuffix(p.lyTrinh) !== null);
   if (mxWithLyTrinh) {
-    let mVal = parseLyTrinh(mxWithLyTrinh.lyTrinh);
+    let parsed = parseLyTrinhWithSuffix(mxWithLyTrinh.lyTrinh);
     let distToMx = getDistanceAlongRoute(mxWithLyTrinh, backbonePts) * heSo;
-    baseMeters = mVal - distToMx;
+    
+    currentSuffix = parsed.suffix;
+    baseMeters = isNghichHuong ? (parsed.meters - (totalRouteOpticalDist - distToMx)) : (parsed.meters - distToMx);
     foundBase = true;
   } else {
-    // Nếu không có, tìm điểm bất kỳ có lý trình
     for (let i = 0; i < backbonePts.length; i++) {
-      var m = parseLyTrinh(backbonePts[i].lyTrinh);
-      if (m !== null) {
+      var parsed = parseLyTrinhWithSuffix(backbonePts[i].lyTrinh);
+      if (parsed !== null) {
         let distToThis = getDistanceAlongRoute(backbonePts[i], backbonePts) * heSo;
-        baseMeters = m - distToThis;
+        currentSuffix = parsed.suffix;
+        baseMeters = isNghichHuong ? (parsed.meters - (totalRouteOpticalDist - distToThis)) : (parsed.meters - distToThis);
         foundBase = true;
         break;
       }
     }
   }
-
   if (!foundBase) baseMeters = 0;
 
-  // Gán thông số khoảng cách từ A và lý trình chuẩn hóa (hỗ trợ hướng ngược từ B về A khi bật HNI)
+  // GÁN THÔNG SỐ CHO TỪNG ĐIỂM (KHOẢNG CÁCH VÀ LÝ TRÌNH CÓ XÉT ĐỔI HẬU TỐ)
   pts.forEach(pt => {
     let distFromA = getDistanceAlongRoute(pt, backbonePts) * heSo;
     
-    let effectiveOpticalDist = isNghichHuong ? (totalRouteOpticalDist - distFromA) : distFromA;
-    let effectiveLyTrinhMeters = isNghichHuong ? (baseMeters + totalRouteOpticalDist - distFromA) : (baseMeters + distFromA);
-
-    pt.distanceFromAMeters = effectiveOpticalDist;
+    // 1. KHOẢNG CÁCH TỪ A (Luôn tăng dần từ 0 ra đến hết tuyến)
+    pt.distanceFromAMeters = distFromA;
     let distAVal = Math.round(pt.distanceFromAMeters);
     pt.distanceFromAText = (distAVal >= 1000) ? (distAVal / 1000).toFixed(2) + " km" : distAVal + " m";
+
+    // 2. XỬ LÝ ĐIỂM NEO ĐỔI HẬU TỐ NẾU ĐIỂM NÀY CÓ KHAI BÁO LÝ TRÌNH MỚI
+    var parsedPt = parseLyTrinhWithSuffix(pt.lyTrinh);
+    if (parsedPt !== null && parsedPt.suffix && parsedPt.suffix !== currentSuffix) {
+      currentSuffix = parsedPt.suffix;
+      baseMeters = isNghichHuong ? (parsedPt.meters - (totalRouteOpticalDist - distFromA)) : (parsedPt.meters - distFromA);
+    }
+
+    // 3. TÍNH LÝ TRÌNH QUỐC LỘ (Xuôi chiều tăng dần từ A ra B, HNI giảm dần từ B về A theo hậu tố tương ứng)
+    let effectiveLyTrinhMeters = isNghichHuong ? (baseMeters + totalRouteOpticalDist - distFromA) : (baseMeters + distFromA);
 
     pt.calculatedLyTrinhMeters = effectiveLyTrinhMeters;
     let totalMeters = Math.round(pt.calculatedLyTrinhMeters);
     let km = Math.floor(totalMeters / 1000);
     let m = totalMeters % 1000;
-    pt.calculatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}`;
+    pt.calculatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}` + (currentSuffix ? ` (${currentSuffix})` : '');
   });
 
   return pts;
@@ -421,7 +438,7 @@ function getPointsCuaTuyenHienTai() {
   var basePt = backbone.find(p => p.id === 'TNN_BASE' || Math.abs(p.lat - 21.593365) < 0.0001);
   if (basePt && !nonMxPts.includes(basePt)) nonMxPts.unshift(basePt);
 
-  return precalculateRouteData(nonMxPts, backbone);
+  return precalculateRouteDataForPoints(nonMxPts, backbone);
 }
 
 function veLaiTuyenAB() {
@@ -431,7 +448,7 @@ function veLaiTuyenAB() {
   if (tuyenVal === 'ALL') return;
 
   var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
-  precalculateRouteData(backbone, backbone); // Tính toán đồng bộ cho toàn bộ backbone trước
+  precalculateRouteDataForPoints(backbone, backbone);
 
   var pts = getPointsCuaTuyenHienTai();
   if (pts.length === 0) return;
@@ -455,7 +472,6 @@ function veLaiTuyenAB() {
     } else { e.target.setLatLng([ptObj.lat, ptObj.lng]); }
   }
 
-  // Vẽ các điểm mốc, bể, cột
   pts.forEach((pt, index) => {
     bounds.push([pt.lat, pt.lng]);
     var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : '<div class="standard-marker"></div>';
@@ -472,7 +488,6 @@ function veLaiTuyenAB() {
     markersLayer.addLayer(marker);
   });
 
-  // Vẽ các điểm măng xông với cùng tập dữ liệu đã đồng bộ
   var mxList = backbone.filter(p => isMangXong(p));
   mxList.forEach(mx => {
     bounds.push([mx.lat, mx.lng]);
@@ -522,7 +537,7 @@ function timViTriDut() {
   var tramVal = document.getElementById('selectTram').value;
   var doanVal = document.getElementById('selectDoanCap').value;
   var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
-  precalculateRouteData(backbone, backbone);
+  precalculateRouteDataForPoints(backbone, backbone);
 
   if (backbone.length < 2) { alert("Tuyến cáp chưa đủ dữ liệu!"); return; }
 
@@ -565,9 +580,9 @@ function timViTriDut() {
 
 function timLyTrinhBanDo() {
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
-  var targetMeters = parseLyTrinh(txt);
+  var targetMeters = parseLyTrinhWithSuffix(txt)?.meters;
   
-  if (targetMeters === null) {
+  if (targetMeters === null || isNaN(targetMeters)) {
     alert("Sai định dạng lý trình! Vui lòng nhập theo mẫu: 54+100 hoặc km 54+100");
     return;
   }
