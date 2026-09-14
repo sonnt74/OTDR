@@ -292,7 +292,7 @@ function isMangXong(pt) {
   return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
 }
 
-// HÀM CHUẨN HÓA & NỘI SUY TẬP TRUNG TOÀN TUYẾN
+// CÁC HÀM XỬ LÝ LÝ TRÌNH, NỘI SUY VÀ HƯỚNG HNI
 function parseLyTrinh(str) {
   if (!str) return null;
   var cleanStr = str.toString().trim();
@@ -304,19 +304,12 @@ function parseLyTrinh(str) {
   return isNaN(num) ? null : num;
 }
 
-// Hàm chuẩn hóa, nội suy lý trình quốc lộ và tính khoảng cách quang học từ Trạm gốc A
-// Hàm chuẩn hóa, nội suy lý trình quốc lộ và cự ly quang học từ gốc A (Có xét hướng HNI / ngược hướng)
 function precalculateRouteData(pts) {
   if (!pts || pts.length === 0) return pts;
   
   var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
   var isNghichHuong = document.getElementById('chkNghichHuong')?.checked || false;
 
-  // Nếu đang đo theo chiều ngược hướng (HNI), ta tiến hành tính toán trên mảng đảo ngược (từ B về A) rồi đảo lại, 
-  // hoặc dịch chuyển mốc neo từ điểm đầu sang điểm cuối tuyến.
-  // Tuy nhiên, để giữ nguyên tính liên tục vật lý từ gốc A, ta tính tổng chiều dài tuyến trước.
-
-  // Bước 1: Tính toán tổng chiều dài quang học toàn tuyến từ mốc đầu tiên
   let totalRouteOpticalDist = 0;
   let segmentDistances = [];
   for (let i = 0; i < pts.length; i++) {
@@ -330,7 +323,6 @@ function precalculateRouteData(pts) {
     }
   }
 
-  // Bước 2: Dò tìm mốc neo có sẵn lý trình chuẩn trên toàn tuyến
   var baseMeters = 0;
   var baseIndex = -1;
   for (let i = 0; i < pts.length; i++) {
@@ -342,37 +334,29 @@ function precalculateRouteData(pts) {
     }
   }
 
-  // Tính dịch chuyển lý trình tại gốc (Trạm A) dựa vào mốc neo tìm được
   if (baseIndex !== -1) {
     let distFromAToBase = 0;
     for (let j = 1; j <= baseIndex; j++) {
       distFromAToBase += segmentDistances[j];
     }
-    // Nếu xuôi chiều, lý trình gốc = lý trình mốc - khoảng cách từ A đến mốc. 
-    // Nếu ngược chiều (HNI), mốc neo nằm ở chiều ngược lại.
     baseMeters = baseMeters - distFromAToBase;
   } else {
-    baseMeters = 0; // Mặc định nếu chưa nhập mốc nào
+    baseMeters = 0;
   }
 
-  // Bước 3: Gán thông số cho từng điểm tùy thuộc vào chiều thuận hay chiều nghịch (HNI)
   let accumulatedOpticalDist = 0;
-  
   for (let i = 0; i < pts.length; i++) {
     if (i > 0) {
       accumulatedOpticalDist += segmentDistances[i];
     }
 
-    // Nếu là chiều nghịch hướng (HNI), khoảng cách quang học và lý trình được tính ngược lại từ điểm cuối tuyến về đầu
     let effectiveOpticalDist = isNghichHuong ? (totalRouteOpticalDist - accumulatedOpticalDist) : accumulatedOpticalDist;
     let effectiveLyTrinhMeters = isNghichHuong ? (baseMeters + totalRouteOpticalDist - accumulatedOpticalDist) : (baseMeters + accumulatedOpticalDist);
 
-    // Gán khoảng cách quang học từ Trạm A
     pts[i].distanceFromAMeters = effectiveOpticalDist;
     let distAVal = Math.round(pts[i].distanceFromAMeters);
     pts[i].distanceFromAText = (distAVal >= 1000) ? (distAVal / 1000).toFixed(2) + " km" : distAVal + " m";
 
-    // Gán lý trình quốc lộ nội suy chuẩn
     pts[i].calculatedLyTrinhMeters = effectiveLyTrinhMeters;
     let totalMeters = Math.round(pts[i].calculatedLyTrinhMeters);
     let km = Math.floor(totalMeters / 1000);
@@ -400,20 +384,43 @@ function getPointsCuaTuyenHienTai() {
   }
   
   var ordered = document.getElementById('chkNghichHuong').checked ? filteredPts.slice().reverse() : filteredPts;
-  
-  // Trả về danh sách điểm đã được nội suy chuẩn hóa sẵn
   return precalculateRouteData(ordered);
 }
 
-pts.forEach((pt, index) => {
+// HÀM VẼ LẠI TUYẾN TRÊN BẢN ĐỒ (Đã được định nghĩa đầy đủ)
+function veLaiTuyenAB() {
+  if (!map) return;
+  markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
+  var pts = getPointsCuaTuyenHienTai(), bounds = [];
+  if (pts.length === 0) return;
+  
+  var tuyenVal = document.getElementById('selectTuyen').value, tramVal = document.getElementById('selectTram').value, doanVal = document.getElementById('selectDoanCap').value;
+  var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
+
+  function taoNutHanhDong(id, ten, lat, lng) {
+    return isDraggable ? `<hr style="margin:4px 0;"><button class="btn-small" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa Tên</button><button class="btn-small del" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>` : '';
+  }
+
+  async function handleDragEnd(e, ptObj) {
+    var newPos = e.target.getLatLng();
+    if (confirm(`Lưu tọa độ mới cho [${ptObj.ten}]?`)) {
+      showLoading("Đang lưu tọa độ...");
+      try {
+        const { error } = await supabaseClient.from('diem_ha_tang').update({ lat: newPos.lat, long: newPos.lng }).eq('id_diem', ptObj.id);
+        if (error) throw error;
+        hideLoading(); taiDuLieuSupabase();
+      } catch (err) { alert("Lỗi: " + err.message); hideLoading(); e.target.setLatLng([ptObj.lat, ptObj.lng]); }
+    } else { e.target.setLatLng([ptObj.lat, ptObj.lng]); }
+  }
+
+  pts.forEach((pt, index) => {
     bounds.push([pt.lat, pt.lng]);
     var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : ((index === pts.length - 1) ? '<div class="point-b-marker">B</div>' : '<div class="standard-marker"></div>');
     var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
     
-    // Hiển thị cả Lý trình quốc lộ và Cự ly quang học từ Trạm A
     var popupHtml = `<b>${pt.ten}</b><br>` +
                     `Loại: ${pt.loai}<br>` +
-                    `📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b> (Gốc: ${pt.lyTrinh || 'Chưa nhập'})<br>` +
+                    `📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b><br>` +
                     `📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText}</b>` + 
                     taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng);
 
@@ -421,6 +428,22 @@ pts.forEach((pt, index) => {
     marker.on('dragend', e => handleDragEnd(e, pt));
     markersLayer.addLayer(marker);
   });
+
+  globalDataPoints.filter(p => isMangXong(p) && p.idTuyen == tuyenVal && (tramVal === 'ALL' || p.idTram == tramVal) && (doanVal === 'ALL' || p.idDoanCap == doanVal)).forEach(mx => {
+    bounds.push([mx.lat, mx.lng]);
+    var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
+    var distToA = getDistanceAlongRoute(mx, pts);
+    var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
+    var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}')">📝 Ghi chú</button>`;
+    mxMarker.bindPopup(`<b>${mx.ten}</b><br>Lý trình: ${mx.lyTrinh || 'Không có'}<br>📏 Cách gốc: <b>${distStr}</b><br>` + taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng) + ghiChuBtn);
+    mxMarker.on('dragend', e => handleDragEnd(e, mx));
+    mxLayer.addLayer(mxMarker);
+  });
+
+  var lineCoordinates = pts.map(p => [p.lat, p.lng]);
+  if (lineCoordinates.length > 1) polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: '#0d6efd', weight: 3 }));
+  if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
+}
 
 async function suaGhiChu(id, oldGhiChu) {
   if (!currentUser.canEditMap && currentUser.role !== 'sys_admin') { alert("Không có quyền!"); return; }
@@ -509,7 +532,6 @@ function timViTriDut() {
     .then(res => res.json()).then(data => faultMarker.setPopupContent(popupHtml.replace("Đang tra cứu...", data.display_name || "Không rõ")));
 }
 
-// HÀM TÌM NHANH LÝ TRÌNH SỬ DỤNG DỮ LIỆU ĐÃ NỘI SUY SẴN
 function timLyTrinhBanDo() {
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var targetMeters = parseLyTrinh(txt);
