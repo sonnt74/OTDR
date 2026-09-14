@@ -277,13 +277,23 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 
 function khoiTaoComboDaiTheoPhanCap() {
   var selectDai = document.getElementById('selectDai');
-  selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
-  rawDaiList.forEach(dai => selectDai.innerHTML += `<option value="${dai.id_dai}">${dai.ten_dai}</option>`);
+  selectDai.innerHTML = '';
   
-  // Phân quyền khóa Đài: dai_admin hoặc tram_admin bị khóa theo đúng đài quản lý
-  if ((currentUser.role === 'dai_admin' || currentUser.role === 'tram_admin') && currentUser.idDai) { 
-    selectDai.value = currentUser.idDai; 
-    selectDai.disabled = true; 
+  // Nếu là tài khoản cấp Trạm, khóa và hiển thị đúng tên Đài của user
+  if (currentUser.role === 'tram_admin' && currentUser.idDai) {
+    var daiObj = rawDaiList.find(d => d.id_dai == currentUser.idDai);
+    selectDai.innerHTML = `<option value="${currentUser.idDai}">${daiObj ? daiObj.ten_dai : 'Đài của bạn'}</option>`;
+    selectDai.value = currentUser.idDai;
+    selectDai.disabled = true;
+  } else {
+    selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
+    rawDaiList.forEach(dai => {
+      selectDai.innerHTML += `<option value="${dai.id_dai}">${dai.ten_dai}</option>`;
+    });
+    if (currentUser.role === 'dai_admin' && currentUser.idDai) {
+      selectDai.value = currentUser.idDai;
+      selectDai.disabled = true;
+    }
   }
   onDaiChange();
 }
@@ -291,15 +301,20 @@ function khoiTaoComboDaiTheoPhanCap() {
 function onDaiChange() {
   var daiVal = document.getElementById('selectDai').value;
   var selectTram = document.getElementById('selectTram');
-  selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
-  
-  var validTrams = rawTramList.filter(tram => daiVal === 'ALL' || tram.id_dai == daiVal);
-  validTrams.forEach(tram => selectTram.innerHTML += `<option value="${tram.id_tram}">${tram.ten_tram}</option>`);
-  
-  // Phân quyền khóa Trạm: tram_admin bị khóa cố định vào trạm của mình
-  if (currentUser.role === 'tram_admin' && currentUser.idTram) { 
-    selectTram.value = currentUser.idTram; 
-    selectTram.disabled = true; 
+  selectTram.innerHTML = '';
+
+  // Nếu là tài khoản cấp Trạm, khóa và hiển thị đúng tên Trạm của user
+  if (currentUser.role === 'tram_admin' && currentUser.idTram) {
+    var tramObj = rawTramList.find(t => t.id_tram == currentUser.idTram);
+    selectTram.innerHTML = `<option value="${currentUser.idTram}">${tramObj ? tramObj.ten_tram : 'Trạm của bạn'}</option>`;
+    selectTram.value = currentUser.idTram;
+    selectTram.disabled = true;
+  } else {
+    selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
+    var validTrams = rawTramList.filter(tram => daiVal === 'ALL' || tram.id_dai == daiVal);
+    validTrams.forEach(tram => {
+      selectTram.innerHTML += `<option value="${tram.id_tram}">${tram.ten_tram}</option>`;
+    });
   }
   
   updateTuyenOptions();
@@ -313,9 +328,11 @@ function updateTuyenOptions() {
   var selectTuyen = document.getElementById('selectTuyen');
   selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
   
-  rawTuyenList.forEach(tuyen => selectTuyen.innerHTML += `<option value="${tuyen.id_tuyen_cap}">${tuyen.ma_tuyencap}</option>`);
+  rawTuyenList.forEach(tuyen => {
+    selectTuyen.innerHTML += `<option value="${tuyen.id_tuyen_cap}">${tuyen.ma_tuyencap}</option>`;
+  });
   
-  // Riêng sys_admin và dai_admin: tự động chọn tuyến cáp đầu tiên để hiển thị ngay lên bản đồ
+  // Tự động chọn tuyến cáp đầu tiên cho sys_admin và dai_admin khi mới đăng nhập
   if ((currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin') && rawTuyenList.length > 0 && selectTuyen.value === 'ALL') {
     selectTuyen.value = rawTuyenList[0].id_tuyen_cap;
   }
@@ -325,32 +342,38 @@ function updateTuyenOptions() {
 
 function onTuyenChange() {
   var tuyenVal = document.getElementById('selectTuyen').value;
-  var tramVal = document.getElementById('selectTram').value;
   var selectDoanCap = document.getElementById('selectDoanCap');
   selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
   
   if (tuyenVal !== 'ALL') {
     var validDoans = rawDoanCapList.filter(doan => doan.id_tuyen == tuyenVal);
     
-    // Nếu là tram_admin, chỉ lọc các đoạn cáp thực tế có chứa điểm thuộc trạm quản lý
+    // Nếu là nhân viên/admin trạm, chỉ lọc các đoạn cáp thực tế thuộc trạm quản lý
     if (currentUser.role === 'tram_admin' && currentUser.idTram) {
       validDoans = validDoans.filter(doan => {
         return globalDataPoints.some(pt => pt.idDoanCap == doan.id_doan_cap && pt.idTram == currentUser.idTram);
       });
     }
 
-    validDoans.forEach(doan => selectDoanCap.innerHTML += `<option value="${doan.id_doan_cap}">${doan.ma_doancap}</option>`);
+    validDoans.forEach(doan => {
+      selectDoanCap.innerHTML += `<option value="${doan.id_doan_cap}">${doan.ma_doancap}</option>`;
+    });
     
-    // Tự động chọn đoạn cáp đầu tiên cho sys_admin và dai_admin
-    if ((currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin') && validDoans.length > 0 && selectDoanCap.value === 'ALL') {
+    // Tự động chọn đoạn cáp đầu tiên nếu có danh sách hợp lệ
+    if (validDoans.length > 0 && (selectDoanCap.value === 'ALL' || !validDoans.some(d => d.id_doan_cap == selectDoanCap.value))) {
       selectDoanCap.value = validDoans[0].id_doan_cap;
     }
   }
   veLaiTuyenAB();
 }
 
-function onDoanCapChange() { veLaiTuyenAB(); }
-function onDiemAChange() { veLaiTuyenAB(); }
+function onDoanCapChange() { 
+  veLaiTuyenAB(); 
+}
+
+function onDiemAChange() { 
+  veLaiTuyenAB(); 
+}
 
 function capNhatComboDiemA() {
   var tuyenVal = document.getElementById('selectTuyen').value;
