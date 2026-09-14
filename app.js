@@ -526,13 +526,16 @@ function veLaiTuyenAB() {
 
   async function handleDragEnd(e, ptObj) {
     var newPos = e.target.getLatLng();
-    if (confirm(`Lưu tọa độ mới cho [${ptObj.ten}]?`)) {
+    
+    // Sử dụng hộp thoại xác nhận chuyên nghiệp thay cho confirm() mặc định
+    var isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu tọa độ mới cho điểm [${ptObj.ten}] không?`);
+    
+    if (isConfirmed) {
       showLoading("Đang lưu tọa độ...");
       try {
         const { error } = await supabaseClient.from('diem_ha_tang').update({ lat: newPos.lat, long: newPos.lng }).eq('id_diem', ptObj.id);
         if (error) throw error;
         
-        // Cập nhật trực tiếp vào bộ nhớ cục bộ thay vì tải lại toàn bộ database
         var localPt = globalDataPoints.find(p => p.id == ptObj.id);
         if (localPt) {
           localPt.lat = newPos.lat;
@@ -541,7 +544,7 @@ function veLaiTuyenAB() {
         
         hideLoading();
         showToast("Đã lưu tọa độ thành công!", "success");
-        veLaiTuyenAB(); // Vẽ lại bản đồ từ dữ liệu cục bộ
+        veLaiTuyenAB();
       } catch (err) { 
         showToast("Lỗi: " + err.message, "error"); 
         hideLoading(); 
