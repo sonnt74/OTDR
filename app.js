@@ -106,7 +106,7 @@ async function handleCustomLogin() {
   var rememberMe = document.getElementById('chkRememberMe').checked;
   
   if (!email || !pass) { 
-    alert("Vui lòng nhập đầy đủ email và mật khẩu!"); 
+    showToast("Vui lòng nhập đầy đủ email và mật khẩu!"); 
     return; 
   }
   
@@ -157,7 +157,7 @@ async function handleCustomLogin() {
     khoiTaoBanDoLeaflet();
     await taiDuLieuSupabase();
   } catch (err) { 
-    alert("Lỗi đăng nhập: " + err.message); 
+    showToast("Lỗi đăng nhập: " + err.message); 
     hideLoading(); 
   }
 }
@@ -168,7 +168,7 @@ function handleLogout() {
 }
 
 function triggerUserLocation() {
-  if (!navigator.geolocation) { alert("Trình duyệt không hỗ trợ GPS."); return; }
+  if (!navigator.geolocation) { showToast("Trình duyệt không hỗ trợ GPS."); return; }
   showLoading("Đang lấy vị trí GPS...");
   navigator.geolocation.getCurrentPosition(position => {
     hideLoading();
@@ -180,7 +180,7 @@ function triggerUserLocation() {
     userLocationLayer.addLayer(marker); userLocationLayer.addLayer(circle);
     map.setView([lat, lng], 18, { animate: true });
     marker.openPopup();
-  }, error => { hideLoading(); alert("Lỗi GPS: " + error.message); }, { enableHighAccuracy: true, timeout: 10000 });
+  }, error => { hideLoading(); showToast("Lỗi GPS: " + error.message); }, { enableHighAccuracy: true, timeout: 10000 });
 }
 
 function toggleMeasureTool() {
@@ -188,10 +188,10 @@ function toggleMeasureTool() {
   var btn = document.getElementById('measure-btn');
   if (isMeasuring) {
     btn.style.background = '#0d6efd'; btn.style.color = 'white'; measurePoints = []; measureLayer.clearLayers();
-    alert("Đã BẬT đo khoảng cách. Click các điểm trên bản đồ.");
+    showToast("Đã BẬT đo khoảng cách. Click các điểm trên bản đồ.");
   } else {
     btn.style.background = 'white'; btn.style.color = 'black'; measureLayer.clearLayers(); measurePoints = [];
-    alert("Đã TẮT đo khoảng cách.");
+    showToast("Đã TẮT đo khoảng cách.");
   }
 }
 
@@ -223,7 +223,7 @@ function khoiTaoBanDoLeaflet() {
   
   map.on('contextmenu', e => {
     if (currentUser.canEditMap || currentUser.role === 'sys_admin') moFormCrud('ADD', null, '', e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6));
-    else alert("Không có quyền thêm điểm.");
+    else showToast("Không có quyền thêm điểm.");
   });
   map.on('click', e => { if (isMeasuring) { measurePoints.push(e.latlng); redrawMeasureLayer(); } });
 }
@@ -271,8 +271,8 @@ async function taiDuLieuSupabase(forceRefresh = false) {
     });
 
     khoiTaoComboDaiTheoPhanCap();
-    if (forceRefresh) alert("Đã làm mới dữ liệu!");
-  } catch (err) { alert("Lỗi: " + err.message); } finally { hideLoading(); if (map) map.invalidateSize(); }
+    if (forceRefresh) showToast("Đã làm mới dữ liệu!");
+  } catch (err) { showToast("Lỗi: " + err.message); } finally { hideLoading(); if (map) map.invalidateSize(); }
 }
 
 function khoiTaoComboDaiTheoPhanCap() {
@@ -511,7 +511,7 @@ function veLaiTuyenAB() {
         const { error } = await supabaseClient.from('diem_ha_tang').update({ lat: newPos.lat, long: newPos.lng }).eq('id_diem', ptObj.id);
         if (error) throw error;
         hideLoading(); taiDuLieuSupabase();
-      } catch (err) { alert("Lỗi: " + err.message); hideLoading(); e.target.setLatLng([ptObj.lat, ptObj.lng]); }
+      } catch (err) { showToast("Lỗi: " + err.message); hideLoading(); e.target.setLatLng([ptObj.lat, ptObj.lng]); }
     } else { e.target.setLatLng([ptObj.lat, ptObj.lng]); }
   }
 
@@ -554,19 +554,19 @@ function veLaiTuyenAB() {
 window.veLaiTuyenAB = veLaiTuyenAB;
 
 async function suaGhiChu(id, oldGhiChu) {
-  if (!currentUser.canEditMap && currentUser.role !== 'sys_admin') { alert("Không có quyền!"); return; }
+  if (!currentUser.canEditMap && currentUser.role !== 'sys_admin') { showToast("Không có quyền!"); return; }
   var newVal = prompt("Nhập nội dung ghi chú:", (oldGhiChu === 'undefined' || oldGhiChu === 'null') ? '' : oldGhiChu);
   if (newVal !== null) {
     showLoading("Đang lưu...");
     await supabaseClient.from('diem_ha_tang').update({ ghi_chu: newVal }).eq('id_diem', id);
-    alert("Đã lưu!"); taiDuLieuSupabase();
+    showToast("Đã lưu!"); taiDuLieuSupabase();
   }
 }
 
 function chiaSeSuCo(lat, lng, khoangCachKm, prevMX, nextMX, shareType) {
   var message = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n- Tọa độ: ${lat}, ${lng}\n- Cự ly đo OTDR: ${khoangCachKm} km\n- Vị trí: Nằm giữa [${prevMX}] và [${nextMX}]\n- Bản đồ: https://maps.google.com/?q=${lat},${lng}`;
   var encoded = encodeURIComponent(message);
-  if (shareType === 'copy') { navigator.clipboard.writeText(message); alert("Đã sao chép nội dung!"); }
+  if (shareType === 'copy') { navigator.clipboard.writeText(message); showToast("Đã sao chép nội dung!"); }
   else if (shareType === 'sms') window.open(`sms:?&body=${encoded}`, '_blank');
   else if (shareType === 'viber') window.open(`viber://forward?text=${encoded}`, '_blank');
 }
@@ -574,7 +574,7 @@ function chiaSeSuCo(lat, lng, khoangCachKm, prevMX, nextMX, shareType) {
 function timViTriDut() {
   var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value), kcOtdrMeters = kcOtdrKm * 1000; 
   var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
-  if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { alert("Nhập cự ly đo hợp lệ!"); return; }
+  if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { showToast("Nhập cự ly đo hợp lệ!"); return; }
   
   var tuyenVal = document.getElementById('selectTuyen').value;
   var tramVal = document.getElementById('selectTram').value;
@@ -582,7 +582,7 @@ function timViTriDut() {
   var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
   precalculateRouteDataForPoints(backbone, backbone);
 
-  if (backbone.length < 2) { alert("Tuyến cáp chưa đủ dữ liệu!"); return; }
+  if (backbone.length < 2) { showToast("Tuyến cáp chưa đủ dữ liệu!"); return; }
 
   var routeStops = [];
   backbone.forEach(p => routeStops.push({ pt: p, dist: p.distanceFromAMeters, duTru: p.duTru || 0, isMX: isMangXong(p) }));
@@ -646,13 +646,13 @@ function timLyTrinhBanDo() {
   var targetMeters = parsedTarget ? parsedTarget.meters : null;
   
   if (targetMeters === null || isNaN(targetMeters)) {
-    alert("Sai định dạng lý trình! Vui lòng nhập theo mẫu: 54+100 hoặc km 54+100");
+    showToast("Sai định dạng lý trình! Vui lòng nhập theo mẫu: 54+100 hoặc km 54+100");
     return;
   }
   
   var pts = getPointsCuaTuyenHienTai();
   if (pts.length < 2) {
-    alert("Vui lòng chọn tuyến cáp ở bảng điều khiển bên trái trước khi tìm kiếm lý trình!");
+    showToast("Vui lòng chọn tuyến cáp ở bảng điều khiển bên trái trước khi tìm kiếm lý trình!");
     return;
   }
 
@@ -709,7 +709,7 @@ function timLyTrinhBanDo() {
     
     var deviationMeters = Math.abs(closest.calculatedLyTrinhMeters - targetMeters);
     if (deviationMeters > 100) {
-      alert(`Không tìm thấy vị trí lý trình ${txt} chính xác (Sai số quá ${Math.round(deviationMeters)}m so với mốc gần nhất ${closest.ten}). Vui lòng kiểm tra lại mốc neo!`);
+      showToast(`Không tìm thấy vị trí lý trình ${txt} chính xác (Sai số quá ${Math.round(deviationMeters)}m so với mốc gần nhất ${closest.ten}). Vui lòng kiểm tra lại mốc neo!`);
       return;
     }
 
@@ -811,8 +811,8 @@ async function saveAccountAction() {
   try {
     if (!id) await supabaseClient.from('tai_khoan').insert([payload]);
     else await supabaseClient.from('tai_khoan').update(payload).eq('id', id);
-    alert("Lưu thành công!"); openModal('adminMasterModal', 'tab-accounts');
-  } catch (err) { alert("Lỗi: " + err.message); } finally { hideLoading(); }
+    showToast("Lưu thành công!"); openModal('adminMasterModal', 'tab-accounts');
+  } catch (err) { showToast("Lỗi: " + err.message); } finally { hideLoading(); }
 }
 
 async function xoaTaiKhoan(id) {
@@ -832,8 +832,8 @@ async function saveAuxRecord() {
     else if (tbl === 'tram_vt') await supabaseClient.from('tram_vt').insert([{ ten_tram: nameVal, id_dai: parseInt(document.getElementById('auxRefId').value) }]);
     else if (tbl === 'tuyen_cap') await supabaseClient.from('tuyen_cap').insert([{ ma_tuyencap: nameVal }]);
     else if (tbl === 'doan_cap') await supabaseClient.from('doan_cap').insert([{ ma_doancap: nameVal, id_tuyen: parseInt(document.getElementById('auxRefId').value) }]);
-    alert("Lưu thành công!"); closeModals(); taiDuLieuSupabase(); openModal('adminMasterModal');
-  } catch (err) { alert("Lỗi: " + err.message); } finally { hideLoading(); }
+    showToast("Lưu thành công!"); closeModals(); taiDuLieuSupabase(); openModal('adminMasterModal');
+  } catch (err) { showToast("Lỗi: " + err.message); } finally { hideLoading(); }
 }
 
 async function xoaAuxRecord(tbl, col, val) {
@@ -867,8 +867,8 @@ async function executeCrudAction() {
       await supabaseClient.from('diem_ha_tang').insert([payload]);
     } else if (act === 'EDIT') { await supabaseClient.from('diem_ha_tang').update(payload).eq('id_diem', id); }
     else if (act === 'DELETE') { await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id); }
-    alert("Thành công!"); closeModals(); taiDuLieuSupabase();
-  } catch (err) { alert("Lỗi: " + err.message); } finally { hideLoading(); }
+    showToast("Thành công!"); closeModals(); taiDuLieuSupabase();
+  } catch (err) { showToast("Lỗi: " + err.message); } finally { hideLoading(); }
 }
 
 // --- LOGIC VUỐT CẢM ỨNG (SWIPE TO COLLAPSE/EXPAND) ---
