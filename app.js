@@ -531,9 +531,25 @@ function veLaiTuyenAB() {
       try {
         const { error } = await supabaseClient.from('diem_ha_tang').update({ lat: newPos.lat, long: newPos.lng }).eq('id_diem', ptObj.id);
         if (error) throw error;
-        hideLoading(); taiDuLieuSupabase();
-      } catch (err) { showToast("Lỗi: " + err.message); hideLoading(); e.target.setLatLng([ptObj.lat, ptObj.lng]); }
-    } else { e.target.setLatLng([ptObj.lat, ptObj.lng]); }
+        
+        // Cập nhật trực tiếp vào bộ nhớ cục bộ thay vì tải lại toàn bộ database
+        var localPt = globalDataPoints.find(p => p.id == ptObj.id);
+        if (localPt) {
+          localPt.lat = newPos.lat;
+          localPt.lng = newPos.lng;
+        }
+        
+        hideLoading();
+        showToast("Đã lưu tọa độ thành công!", "success");
+        veLaiTuyenAB(); // Vẽ lại bản đồ từ dữ liệu cục bộ
+      } catch (err) { 
+        showToast("Lỗi: " + err.message, "error"); 
+        hideLoading(); 
+        e.target.setLatLng([ptObj.lat, ptObj.lng]); 
+      }
+    } else { 
+      e.target.setLatLng([ptObj.lat, ptObj.lng]); 
+    }
   }
 
   pts.forEach((pt, index) => {
@@ -877,19 +893,69 @@ function moFormCrud(act, id, name, lat, lng) {
 }
 
 async function executeCrudAction() {
-  var act = document.getElementById('crudActionType').value, id = document.getElementById('crudObjectId').value;
-  var payload = { ten_diem: document.getElementById('crudObjectName').value.trim(), id_loaidiem: parseInt(document.getElementById('crudObjectLoai').value), ly_trinh: document.getElementById('crudObjectLyTrinh').value };
+  var act = document.getElementById('crudActionType').value;
+  var id = document.getElementById('crudObjectId').value;
+  var tenMoi = document.getElementById('crudObjectName').value.trim();
+  var loaiMoi = parseInt(document.getElementById('crudObjectLoai').value);
+  var ltMoi = document.getElementById('crudObjectLyTrinh').value;
+  
+  var payload = { ten_diem: tenMoi, id_loaidiem: loaiMoi, ly_trinh: ltMoi };
   showLoading("Đang xử lý...");
+  
   try {
     if (act === 'ADD') {
-      payload.lat = parseFloat(document.getElementById('crudObjectLat').value); payload.long = parseFloat(document.getElementById('crudObjectLng').value);
+      var latVal = parseFloat(document.getElementById('crudObjectLat').value);
+      var lngVal = parseFloat(document.getElementById('crudObjectLng').value);
+      payload.lat = latVal; 
+      payload.long = lngVal;
+      
       var tuyenH = document.getElementById('selectTuyen').value;
       if (tuyenH !== 'ALL') payload.id_tuyen_cap = parseInt(tuyenH);
-      await supabaseClient.from('diem_ha_tang').insert([payload]);
-    } else if (act === 'EDIT') { await supabaseClient.from('diem_ha_tang').update(payload).eq('id_diem', id); }
-    else if (act === 'DELETE') { await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id); }
-    showToast("Thành công!"); closeModals(); taiDuLieuSupabase();
-  } catch (err) { showToast("Lỗi: " + err.message); } finally { hideLoading(); }
+      
+      const { data, error } = await supabaseClient.from('diem_ha_tang').insert([payload]).select();
+      if (error) throw error;
+      
+      // Thêm điểm mới vào mảng cục bộ
+      if (data && data[0]) {
+        var newRec = data[0];
+        globalDataPoints.push({
+          id: newRec.id_diem || newRec.id,
+          ten: newRec.ten_diem,
+          lat: newRec.lat,
+          lng: newRec.long,
+          lyTrinh: newRec.ly_trinh || '',
+          idTuyen: tuyenH,
+          idLoaiDiem: loaiMoi,
+          loai: 'Điểm mới'
+        });
+      }
+    } else if (act === 'EDIT') { 
+      const { error } = await supabaseClient.from('diem_ha_tang').update(payload).eq('id_diem', id);
+      if (error) throw error;
+      
+      // Cập nhật mảng cục bộ
+      var localPt = globalDataPoints.find(p => p.id == id);
+      if (localPt) {
+        localPt.ten = tenMoi;
+        localPt.idLoaiDiem = loaiMoi;
+        localPt.lyTrinh = ltMoi;
+      }
+    } else if (act === 'DELETE') { 
+      const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id);
+      if (error) throw error;
+      
+      // Xóa khỏi mảng cục bộ
+      globalDataPoints = globalDataPoints.filter(p => p.id != id);
+    }
+    
+    closeModals();
+    hideLoading();
+    showToast("Thực hiện thành công!", "success");
+    veLaiTuyenAB(); // Vẽ lại bản đồ ngay lập tức mà không gọi API tải lại toàn bộ database
+  } catch (err) { 
+    showToast("Lỗi: " + err.message, "error"); 
+    hideLoading(); 
+  }
 }
 
 // --- LOGIC VUỐT CẢM ỨNG (SWIPE TO COLLAPSE/EXPAND) ---
