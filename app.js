@@ -387,7 +387,7 @@ function getPointsCuaTuyenHienTai() {
   return precalculateRouteData(ordered);
 }
 
-// HÀM VẼ LẠI TUYẾN TRÊN BẢN ĐỒ (Đã được định nghĩa đầy đủ)
+// HÀM VẼ LẠI TUYẾN TRÊN BẢN ĐỒ (Đã được định nghĩa và gán vào window toàn cục)
 function veLaiTuyenAB() {
   if (!map) return;
   markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
@@ -444,6 +444,7 @@ function veLaiTuyenAB() {
   if (lineCoordinates.length > 1) polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: '#0d6efd', weight: 3 }));
   if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
 }
+window.veLaiTuyenAB = veLaiTuyenAB; // Đảm bảo gọi toàn cục không bị lỗi Not Defined
 
 async function suaGhiChu(id, oldGhiChu) {
   if (!currentUser.canEditMap && currentUser.role !== 'sys_admin') { alert("Không có quyền!"); return; }
