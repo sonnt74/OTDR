@@ -576,8 +576,9 @@ function timViTriDut() {
       var segOptDist = segEndDist - segStartDist;
       var ratio = (segOptDist > 0) ? ((kcOtdrMeters - segStartDist) / segOptDist) : 0;
       
+      // Đã sửa lại đúng công thức nội suy vĩ độ và kinh độ
       targetLat = routeStops[i].pt.lat + ratio * (routeStops[i+1].pt.lat - routeStops[i].pt.lat);
-      targetLng = routeStops[i].pt.lng + ratio * (routeStops[i+1].pt.lng - routeStops[i+1].pt.lat); // Giữ đúng công thức nội suy tọa độ
+      targetLng = routeStops[i].pt.lng + ratio * (routeStops[i+1].pt.lng - routeStops[i].pt.lng);
       
       // Nội suy giá trị lý trình quốc lộ giữa 2 điểm mốc
       var lt1 = routeStops[i].pt.calculatedLyTrinhMeters;
