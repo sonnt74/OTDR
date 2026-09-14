@@ -39,7 +39,14 @@ window.onload = function() {
 
 function toggleGISPanel() {
   var panel = document.getElementById('control-panel');
-  panel.style.display = (panel.style.display === 'none' || panel.style.display === '') ? 'block' : 'none';
+  if (window.innerWidth <= 768) {
+    // Trên điện thoại: Kích hoạt class thu gọn
+    panel.classList.toggle('collapsed');
+    panel.style.display = 'block'; 
+  } else {
+    // Trên máy tính: Ẩn/Hiện nguyên khối
+    panel.style.display = (panel.style.display === 'none' || panel.style.display === '') ? 'block' : 'none';
+  }
 }
 
 function closeModals() {
@@ -292,7 +299,6 @@ function isMangXong(pt) {
   return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
 }
 
-// HÀM BÓC TÁCH LÝ TRÌNH VÀ HẬU TỐ TỪ CHUỖI THÔ
 function parseLyTrinhWithSuffix(str) {
   if (!str) return null;
   var cleanStr = str.toString().trim();
@@ -322,7 +328,6 @@ function getDistanceAlongRoute(targetPt, pathPts) {
     var segPhys = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
     if (segPhys === 0) continue;
     
-    // Tính cự ly quang học của đoạn: (Khoảng cách hình học * Hệ số chùng) + Cáp dự trữ tại điểm đích (p2)
     var segOpt = (segPhys * heSo) + (p2.duTru || 0);
     
     var dx = p2.lng - p1.lng, dy = p2.lat - p1.lat, lenSq = dx * dx + dy * dy;
@@ -364,13 +369,11 @@ function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   return sorted;
 }
 
-// THUẬT TOÁN TÍNH TOÁN THEO ĐOẠN CÁP (ID DOAN CAP), MỐC NEO TỪ B LÙI VỀ VÀ HƯỚNG HNI
 function precalculateRouteDataForPoints(pts, backbonePts) {
   if (!pts || pts.length === 0) return pts;
   
   var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
 
-  // PHÂN NHÓM CÁC ĐIỂM TRÊN BACKBONE THEO TỪNG ĐOẠN CÁP (DOAN_CAP)
   var segmentsMap = {};
   backbonePts.forEach(p => {
     var segId = p.idDoanCap || 'default';
@@ -378,11 +381,9 @@ function precalculateRouteDataForPoints(pts, backbonePts) {
     segmentsMap[segId].push(p);
   });
 
-  // TÍNH TOÁN ĐỘC LẬP CHO TỪNG ĐOẠN CÁP
   Object.keys(segmentsMap).forEach(segId => {
     var segPoints = segmentsMap[segId];
     
-    // Tìm 2 mốc neo liên tiếp trong đoạn để xác định chiều tăng hay giảm của lý trình
     var anchors = [];
     segPoints.forEach((pt, idx) => {
       var parsed = parseLyTrinhWithSuffix(pt.lyTrinh);
@@ -391,30 +392,24 @@ function precalculateRouteDataForPoints(pts, backbonePts) {
       }
     });
 
-    // Mặc định chiều xuôi (tăng dần)
     var isSegmentNghich = false;
     if (anchors.length >= 2) {
-      // So sánh 2 mốc neo đầu tiên tìm thấy trên đoạn
       if (anchors[1].meters < anchors[0].meters) {
-        isSegmentNghich = true; // Mốc sau nhỏ hơn mốc trước -> Chiều nghịch (HNI)
+        isSegmentNghich = true; 
       }
     }
 
-    // Chọn mốc neo chuẩn làm gốc cho đoạn
     var segBaseMeters = anchors.length > 0 ? anchors[0].meters : 0;
     var segSuffix = anchors.length > 0 ? anchors[0].suffix : '';
     var segAnchorDistFromA = anchors.length > 0 ? getDistanceAlongRoute(anchors[0].pt, backbonePts) : 0;
 
-    // Gán thông số cho các điểm thuộc đoạn cáp này
     segPoints.forEach(pt => {
       let distFromA = getDistanceAlongRoute(pt, backbonePts);
       
-      // 1. KHOẢNG CÁCH TỪ A (Luôn tăng dần từ 0 ra đến hết tuyến)
       pt.distanceFromAMeters = distFromA;
       let distAVal = Math.round(pt.distanceFromAMeters);
       pt.distanceFromAText = (distAVal >= 1000) ? (distAVal / 1000).toFixed(2) + " km" : distAVal + " m";
 
-      // 2. XỬ LÝ ĐỔI HẬU TỐ HOẶC MỐC RIÊNG CỦA ĐIỂM NẾU CÓ
       var parsedPt = parseLyTrinhWithSuffix(pt.lyTrinh);
       if (parsedPt !== null && parsedPt.suffix) {
         segSuffix = parsedPt.suffix;
@@ -422,13 +417,10 @@ function precalculateRouteDataForPoints(pts, backbonePts) {
         segAnchorDistFromA = distFromA;
       }
 
-      // 3. TÍNH LÝ TRÌNH DỰA TRÊN CHIỀU ĐÃ ĐƯỢC SUY RA TỪ MỐC NEO
       let effectiveLyTrinhMeters;
       if (isSegmentNghich) {
-        // Chiều nghịch: Càng đi ra xa A thì lý trình càng GIẢM
         effectiveLyTrinhMeters = segBaseMeters - (distFromA - segAnchorDistFromA);
       } else {
-        // Chiều xuôi: Càng đi ra xa A thì lý trình càng TĂNG
         let baseOffsetMeters = segBaseMeters - segAnchorDistFromA;
         effectiveLyTrinhMeters = baseOffsetMeters + distFromA;
       }
@@ -576,11 +568,9 @@ function timViTriDut() {
       var segOptDist = segEndDist - segStartDist;
       var ratio = (segOptDist > 0) ? ((kcOtdrMeters - segStartDist) / segOptDist) : 0;
       
-      // Đã sửa lại đúng công thức nội suy vĩ độ và kinh độ
       targetLat = routeStops[i].pt.lat + ratio * (routeStops[i+1].pt.lat - routeStops[i].pt.lat);
       targetLng = routeStops[i].pt.lng + ratio * (routeStops[i+1].pt.lng - routeStops[i].pt.lng);
       
-      // Nội suy giá trị lý trình quốc lộ giữa 2 điểm mốc
       var lt1 = routeStops[i].pt.calculatedLyTrinhMeters;
       var lt2 = routeStops[i+1].pt.calculatedLyTrinhMeters;
       if (lt1 !== undefined && lt2 !== undefined) {
@@ -633,15 +623,13 @@ function timLyTrinhBanDo() {
     return;
   }
 
-  // TỰ ĐỘNG XÁC ĐỊNH CHIỀU TĂNG HAY GIẢM CỦA TUYẾN DỰA TRÊN 2 ĐIỂM ĐẦU TIÊN
   var isNghichHuong = false;
   if (pts.length >= 2) {
     if (pts[1].calculatedLyTrinhMeters < pts[0].calculatedLyTrinhMeters) {
-      isNghichHuong = true; // Nếu điểm sau nhỏ hơn điểm trước -> Chiều nghịch (HNI)
+      isNghichHuong = true; 
     }
   }
 
-  // Sắp xếp mảng điểm theo đúng chiều lý trình đã nhận diện
   var sortedPts = [...pts].sort((a, b) => {
     return isNghichHuong 
       ? b.calculatedLyTrinhMeters - a.calculatedLyTrinhMeters 
@@ -651,7 +639,6 @@ function timLyTrinhBanDo() {
   var targetSeg = null;
   var foundLat = null, foundLng = null, bestDescription = "";
 
-  // Duyệt qua các đoạn để tìm đoạn chứa lý trình cần tìm
   for (var i = 0; i < sortedPts.length - 1; i++) {
     var p1 = sortedPts[i];
     var p2 = sortedPts[i+1];
@@ -682,7 +669,6 @@ function timLyTrinhBanDo() {
     }
   }
 
-  // Nếu không tìm được đoạn nội suy qua bộ lọc, dùng điểm mốc gần nhất có kiểm tra sai số 100m
   if (!targetSeg) {
     var closest = sortedPts.reduce((prev, curr) => 
       Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev
@@ -851,3 +837,35 @@ async function executeCrudAction() {
     alert("Thành công!"); closeModals(); taiDuLieuSupabase();
   } catch (err) { alert("Lỗi: " + err.message); } finally { hideLoading(); }
 }
+
+// --- LOGIC VUỐT CẢM ỨNG (SWIPE TO COLLAPSE/EXPAND) ---
+function khoiTaoVuotCamUng() {
+  var panel = document.getElementById('control-panel');
+  var startY = 0;
+  var currentY = 0;
+  
+  panel.addEventListener('touchstart', function(e) {
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+
+  panel.addEventListener('touchmove', function(e) {
+    currentY = e.touches[0].clientY;
+  }, { passive: true });
+
+  panel.addEventListener('touchend', function(e) {
+    if (startY === 0 || currentY === 0) return;
+    
+    var diffY = currentY - startY;
+    
+    if (diffY > 50) {
+      panel.classList.add('collapsed');
+    } else if (diffY < -50 && panel.scrollTop === 0) {
+      panel.classList.remove('collapsed');
+    }
+    
+    startY = 0;
+    currentY = 0;
+  }, { passive: true });
+}
+
+document.addEventListener('DOMContentLoaded', khoiTaoVuotCamUng);
