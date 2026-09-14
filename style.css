@@ -48,3 +48,20 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
 .tab-btn.active { background: #0d6efd; color: white; }
 .tab-pane { display: none; }
 .tab-pane.active { display: block; }
+
+/* Tối ưu giao diện cho màn hình điện thoại (Mobile) */
+@media (max-width: 768px) {
+  #control-panel {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    max-height: 50vh; /* Giới hạn độ cao chiếm 50% màn hình */
+    border-radius: 15px 15px 0 0; /* Bo tròn mượt mà 2 góc trên */
+    box-shadow: 0 -4px 15px rgba(0,0,0,0.2);
+  }
+  
+  /* Di chuyển các nút công cụ bản đồ lên cao hơn để không bị khay trượt che khuất */
+  #gps-btn { bottom: calc(50vh + 15px); }
+  #measure-btn { bottom: calc(50vh + 60px); }
+}
