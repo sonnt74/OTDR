@@ -648,7 +648,7 @@ function timLyTrinhBanDo() {
       var segmentRealLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
 
       // Nếu độ dài đoạn nội suy hợp lý so với đoạn thực tế (không bị nhảy cóc tọa độ ảo)
-      if (distToP1 <= segmentRealLen + 100 && distToP2 <= segmentRealLen + 100) {
+      if (distToP1 <= segmentRealLen + 50 && distToP2 <= segmentRealLen + 50) {
         targetSeg = { p1: p1, p2: p2 };
         foundLat = testLat;
         foundLng = testLng;
@@ -668,7 +668,7 @@ function timLyTrinhBanDo() {
     var deviationMeters = Math.abs(closest.calculatedLyTrinhMeters - targetMeters);
     
     // Nếu sai số lệch quá 100m mà không có đoạn nội suy phù hợp thì báo lỗi theo yêu cầu của anh
-    if (deviationMeters > 100) {
+    if (deviationMeters > 50) {
       alert(`Không tìm thấy vị trí lý trình ${txt} chính xác (Sai số quá ${Math.round(deviationMeters)}m so với mốc gần nhất ${closest.ten}). Vui lòng kiểm tra lại mốc neo!`);
       return;
     }
