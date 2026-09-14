@@ -1,4 +1,3 @@
-// ---------------- KHỞI TẠO BIẾN TOÀN CỤC VÀ SUPABASE ----------------
 const SUPABASE_URL = 'https://clddwitzwuewwxawuorv.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_U3tMbsj5oQ9Wub1UAJO5Cw_NXt6Px8E';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -23,7 +22,6 @@ var rawDoanCapList = [];
 var rawLoaiDiemList = [];
 var globalDataPoints = [];
 
-// ---------------- TỰ ĐỘNG ĐĂNG NHẬP KHI MỞ TRANG ----------------
 window.onload = function() {
   var savedSession = localStorage.getItem('tnn_user');
   if (savedSession) {
@@ -39,7 +37,6 @@ window.onload = function() {
   }
 };
 
-// ---------------- CÁC HÀM TIỆN ÍCH GIAO DIỆN ----------------
 function toggleGISPanel() {
   var panel = document.getElementById('control-panel');
   panel.style.display = (panel.style.display === 'none' || panel.style.display === '') ? 'block' : 'none';
@@ -76,7 +73,6 @@ function openModal(id, tabId = null) {
   }
 }
 
-// ---------------- ĐĂNG NHẬP & ĐĂNG XUẤT ----------------
 async function handleCustomLogin() {
   var email = document.getElementById('loginEmail').value.trim();
   var pass = document.getElementById('loginPass').value;
@@ -105,7 +101,6 @@ function handleLogout() {
   location.reload();
 }
 
-// ---------------- ĐỊNH VỊ GPS & ĐO KHOẢNG CÁCH ----------------
 function triggerUserLocation() {
   if (!navigator.geolocation) { alert("Trình duyệt không hỗ trợ GPS."); return; }
   showLoading("Đang lấy vị trí GPS...");
@@ -150,7 +145,6 @@ function redrawMeasureLayer() {
   L.marker(measurePoints[measurePoints.length - 1], { icon: textIcon }).addTo(measureLayer);
 }
 
-// ---------------- KHỞI TẠO BẢN ĐỒ LEAFLET ----------------
 function khoiTaoBanDoLeaflet() {
   if (map) return;
   var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
@@ -168,7 +162,6 @@ function khoiTaoBanDoLeaflet() {
   map.on('click', e => { if (isMeasuring) { measurePoints.push(e.latlng); redrawMeasureLayer(); } });
 }
 
-// ---------------- ĐỒNG BỘ DỮ LIỆU TỪ SUPABASE ----------------
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
   while (keep) {
@@ -216,7 +209,6 @@ async function taiDuLieuSupabase(forceRefresh = false) {
   } catch (err) { alert("Lỗi: " + err.message); } finally { hideLoading(); if (map) map.invalidateSize(); }
 }
 
-// ---------------- COMBOBOX & LỌC DỮ LIỆU ----------------
 function khoiTaoComboDaiTheoPhanCap() {
   var selectDai = document.getElementById('selectDai');
   selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
@@ -274,6 +266,47 @@ function isMangXong(pt) {
   return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
 }
 
+// Hàm chuẩn hóa và nội suy lý trình cho toàn bộ điểm trên tuyến
+function precalculateRouteData(pts) {
+  if (!pts || pts.length === 0) return pts;
+  
+  var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
+  var baseMeters = 0;
+  var foundBase = false;
+  
+  for (let i = 0; i < pts.length; i++) {
+    var m = parseLyTrinh(pts[i].lyTrinh);
+    if (m !== null) {
+      var distFromA = 0;
+      for (let j = 0; j < i; j++) {
+        let segLen = calculateHaversine(pts[j].lat, pts[j].lng, pts[j+1].lat, pts[j+1].lng);
+        distFromA += (segLen * heSo) + (pts[j+1].duTru || 0);
+      }
+      baseMeters = m - distFromA;
+      foundBase = true;
+      break;
+    }
+  }
+
+  if (!foundBase) baseMeters = 0;
+
+  var accumulatedDist = 0;
+  for (let i = 0; i < pts.length; i++) {
+    if (i > 0) {
+      var segPhys = calculateHaversine(pts[i-1].lat, pts[i-1].lng, pts[i].lat, pts[i].lng);
+      accumulatedDist += (segPhys * heSo) + (pts[i].duTru || 0);
+    }
+    
+    pts[i].calculatedLyTrinhMeters = baseMeters + accumulatedDist;
+    let totalMeters = Math.round(pts[i].calculatedLyTrinhMeters);
+    let km = Math.floor(totalMeters / 1000);
+    let m = totalMeters % 1000;
+    pts[i].calculatedLyTrinhText = pts[i].lyTrinh || `${km}+${m < 10 ? '0' + m : m}`;
+  }
+
+  return pts;
+}
+
 function getPointsCuaTuyenHienTai() {
   var tuyenVal = document.getElementById('selectTuyen').value;
   var tramVal = document.getElementById('selectTram').value;
@@ -289,10 +322,13 @@ function getPointsCuaTuyenHienTai() {
       filteredPts.unshift({ ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, lyTrinh: "", idTuyen: tuyenVal, stt: -9999, loai: "Trạm" });
     }
   }
-  return document.getElementById('chkNghichHuong').checked ? filteredPts.slice().reverse() : filteredPts;
+  
+  var ordered = document.getElementById('chkNghichHuong').checked ? filteredPts.slice().reverse() : filteredPts;
+  
+  // Tự động chuẩn hóa và trả về danh sách điểm đã được nội suy sẵn lý trình
+  return precalculateRouteData(ordered);
 }
 
-// ---------------- VẼ TUYẾN CÁP & KÉO THẢ TỌA ĐỘ ----------------
 function veLaiTuyenAB() {
   if (!map) return;
   markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
@@ -322,7 +358,7 @@ function veLaiTuyenAB() {
     bounds.push([pt.lat, pt.lng]);
     var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : ((index === pts.length - 1) ? '<div class="point-b-marker">B</div>' : '<div class="standard-marker"></div>');
     var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
-    marker.bindPopup(`<b>${pt.ten}</b><br>Loại: ${pt.loai}<br>Lý trình: ${pt.lyTrinh || 'Không có'}` + taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng));
+    marker.bindPopup(`<b>${pt.ten}</b><br>Loại: ${pt.loai}<br>Lý trình chuẩn: <b>${pt.calculatedLyTrinhText}</b>` + taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng));
     marker.on('dragend', e => handleDragEnd(e, pt));
     markersLayer.addLayer(marker);
   });
@@ -353,7 +389,6 @@ async function suaGhiChu(id, oldGhiChu) {
   }
 }
 
-// ---------------- THUẬT TOÁN HÌNH HỌC & KHOẢNG CÁCH ----------------
 function calculateHaversine(lat1, lon1, lat2, lon2) {
   var R = 6371000, dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
   var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
@@ -374,7 +409,6 @@ function getDistanceAlongRoute(targetPt, pathPts) {
   return bestDist;
 }
 
-// ---------------- PHÂN TÍCH SỰ CỐ & CHIA SẺ ----------------
 function chiaSeSuCo(lat, lng, khoangCachKm, prevMX, nextMX, shareType) {
   var message = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n- Tọa độ: ${lat}, ${lng}\n- Cự ly đo OTDR: ${khoangCachKm} km\n- Vị trí: Nằm giữa [${prevMX}] và [${nextMX}]\n- Bản đồ: https://maps.google.com/?q=${lat},${lng}`;
   var encoded = encodeURIComponent(message);
@@ -385,7 +419,7 @@ function chiaSeSuCo(lat, lng, khoangCachKm, prevMX, nextMX, shareType) {
 
 function timViTriDut() {
   var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value), kcOtdrMeters = kcOtdrKm * 1000; 
-  var heSo = parseFloat(document.getElementById('txtDoChung').value) || 1.05;
+  var heSo = parseFloat(document.getElementById('txtDoChung').value) || 1.075;
   if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { alert("Nhập cự ly đo hợp lệ!"); return; }
   
   var pts = getPointsCuaTuyenHienTai();
@@ -432,14 +466,6 @@ function timViTriDut() {
     .then(res => res.json()).then(data => faultMarker.setPopupContent(popupHtml.replace("Đang tra cứu...", data.display_name || "Không rõ")));
 }
 
-// ---------------- TÌM NHANH LÝ TRÌNH (QL) ----------------
-function parseLyTrinh(str) {
-  if (!str) return null;
-  var match = str.match(/(?:km\s*)?(\d+)\s*\+\s*(\d+)/i);
-  return match ? (parseInt(match[1]) * 1000 + parseInt(match[2])) : null;
-}
-
-// Hàm chuyển đổi chuỗi lý trình (VD: "54+100" hoặc "km 54+100") thành số mét tính từ mốc gốc
 function parseLyTrinh(str) {
   if (!str) return null;
   var cleanStr = str.toString().trim();
@@ -447,12 +473,10 @@ function parseLyTrinh(str) {
   if (match) {
     return parseInt(match[1]) * 1000 + parseInt(match[2]);
   }
-  // Trường hợp nhập số mét trực tiếp hoặc dạng khác
   var num = parseFloat(cleanStr);
   return isNaN(num) ? null : num;
 }
 
-// Hàm tìm và định vị lý trình nhanh trên bản đồ
 function timLyTrinhBanDo() {
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var targetMeters = parseLyTrinh(txt);
@@ -463,84 +487,68 @@ function timLyTrinhBanDo() {
   }
   
   var pts = getPointsCuaTuyenHienTai();
-  if (pts.length === 0) {
+  if (pts.length < 2) {
     alert("Vui lòng chọn tuyến cáp ở bảng điều khiển bên trái trước khi tìm kiếm lý trình!");
     return;
   }
 
-  var heSo = parseFloat(document.getElementById('txtDoChung').value) || 1.075;
-  var bestPt = null;
-  var minDiff = Infinity;
-
-  // Bước 1: Ưu tiên tìm trong danh sách các điểm hạ tầng đã có sẵn lý trình
-  pts.forEach(p => {
-    var pMeters = parseLyTrinh(p.lyTrinh);
-    if (pMeters !== null) {
-      var diff = Math.abs(pMeters - targetMeters);
-      if (diff < minDiff) {
-        minDiff = diff;
-        bestPt = p;
-      }
-    }
-  });
-
-  // Bước 2: Nếu không khớp điểm nào gần, tiến hành nội suy khoảng cách quang học dọc theo tuyến
-  if (!bestPt || minDiff > 10000) {
-    var baseMeters = 0;
-    pts.forEach(p => { 
-      let m = parseLyTrinh(p.lyTrinh); 
-      if (m !== null && baseMeters === 0) baseMeters = m; 
-    });
+  var targetSeg = null;
+  for (var i = 0; i < pts.length - 1; i++) {
+    var startLt = pts[i].calculatedLyTrinhMeters;
+    var endLt = pts[i+1].calculatedLyTrinhMeters;
     
-    minDiff = Infinity;
-    pts.forEach(p => {
-      var distToA = getDistanceAlongRoute(p, pts) * heSo;
-      var estimatedMeters = baseMeters + distToA;
-      var diff = Math.abs(estimatedMeters - targetMeters);
-      if (diff < minDiff) {
-        minDiff = diff;
-        bestPt = p;
-      }
-    });
+    if ((targetMeters >= Math.min(startLt, endLt)) && (targetMeters <= Math.max(startLt, endLt))) {
+      targetSeg = { p1: pts[i], p2: pts[i+1] };
+      break;
+    }
   }
 
-  if (!bestPt) {
-    alert("Không tìm thấy vị trí phù hợp với lý trình " + txt + " trên tuyến này!");
-    return;
+  var targetLat, targetLng, bestDescription;
+
+  if (targetSeg) {
+    var span = targetSeg.p2.calculatedLyTrinhMeters - targetSeg.p1.calculatedLyTrinhMeters;
+    var ratio = (span !== 0) ? (targetMeters - targetSeg.p1.calculatedLyTrinhMeters) / span : 0;
+    
+    targetLat = targetSeg.p1.lat + ratio * (targetSeg.p2.lat - targetSeg.p1.lat);
+    targetLng = targetSeg.p1.lng + ratio * (targetSeg.p2.lng - targetSeg.p1.lng);
+    bestDescription = `Nằm giữa [${targetSeg.p1.ten}] và [${targetSeg.p2.ten}]`;
+  } else {
+    var closest = pts.reduce((prev, curr) => 
+      Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev
+    );
+    targetLat = closest.lat;
+    targetLng = closest.lng;
+    bestDescription = `Gần điểm mốc: ${closest.ten}`;
   }
 
-  // Tính toán cự ly thực tế từ trạm gốc đến điểm tìm được
-  var distToA = getDistanceAlongRoute(bestPt, pts) * heSo;
+  var heSo = parseFloat(document.getElementById('txtDoChung').value) || 1.075;
+  var distToA = calculateHaversine(pts[0].lat, pts[0].lng, targetLat, targetLng) * heSo;
   var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
 
-  // Hiển thị marker vị trí tìm thấy trên bản đồ
   if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
-  map.setView([bestPt.lat, bestPt.lng], 19, { animate: true });
+  map.setView([targetLat, targetLng], 19, { animate: true });
   
   var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
-  foundMarkerLayer = L.marker([bestPt.lat, bestPt.lng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
+  foundMarkerLayer = L.marker([targetLat, targetLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
   
   var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
-                     `- Điểm mốc gần nhất: <b>${bestPt.ten}</b><br>` +
-                     `- Lý trình gốc: ${bestPt.lyTrinh || 'Chưa cập nhật'}<br>` +
+                     `- Vị trí: <b>${bestDescription}</b><br>` +
                      `- Cự ly cáp quang tới Trạm A: <b>${distStr}</b><br>` +
                      `🏛️ Địa chỉ: <span id='lt-addr'>Đang tra cứu tọa độ...</span>`;
                      
   foundMarkerLayer.bindPopup(popupContent).openPopup();
   
-  // Tra cứu tên địa danh thực tế qua hệ thống Nominatim (OpenStreetMap)
-  fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${bestPt.lat}&lon=${bestPt.lng}&accept-language=vi`)
+  fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${targetLat}&lon=${targetLng}&accept-language=vi`)
     .then(r => r.json())
     .then(data => {
       var addressText = data.display_name || "Không rõ địa chỉ chi tiết";
       foundMarkerLayer.setPopupContent(popupContent.replace("Đang tra cứu tọa độ...", addressText));
     })
     .catch(() => {
-      foundMarkerLayer.setPopupContent(popupContent.replace("Đang tra cứu tọa độ...", "Không thể kết nối dịch vụ địa danh"));
+      foundMarkerLayer.setPopupContent(popupContent.replace("Đang tra cứu...", "Không thể kết nối dịch vụ địa danh"));
     });
 }
 
-// ---------------- QUẢN TRỊ HỆ THỐNG & DANH MỤC ----------------
 async function loadAdminMasterData() {
   if (currentUser.role !== 'sys_admin' && currentUser.role !== 'dai_admin') return;
   var query = supabaseClient.from('tai_khoan').select('*');
@@ -621,7 +629,7 @@ function moFormThemTuyen() { document.getElementById('auxTableType').value = 'tu
 function moFormThemDoan() { document.getElementById('auxTableType').value = 'doan_cap'; document.getElementById('auxFormFields').innerHTML = '<label>Mã Đoạn:</label><input type="text" id="auxName" class="form-group"><label>Thuộc Tuyến:</label><select id="auxRefId" class="form-group"></select>'; populateDropdown('auxRefId', rawTuyenList, 'id_tuyen_cap', 'ma_tuyencap', null); openModal('genericAuxModal'); }
 
 async function saveAuxRecord() {
-  var tbl = document.getElementById('auxTableType').value, nameVal = document.getElementById('auxName').value;
+  var tbl = document.getElementById('auxTableType').value, nameVal = document.getElementById('auxName'].value;
   showLoading("Đang lưu...");
   try {
     if (tbl === 'dai_vt') await supabaseClient.from('dai_vt').insert([{ ten_dai: nameVal }]);
@@ -636,7 +644,6 @@ async function xoaAuxRecord(tbl, col, val) {
   if (confirm("Xóa mục này?")) { await supabaseClient.from(tbl).delete().eq(col, val); loadAdminMasterData(); taiDuLieuSupabase(); }
 }
 
-// ---------------- CRUD ĐỐI TƯỢNG BẢN ĐỒ ----------------
 function moFormCrud(act, id, name, lat, lng) {
   document.getElementById('crudActionType').value = act; document.getElementById('crudObjectId').value = id || '';
   document.getElementById('crudObjectName').value = name || ''; document.getElementById('crudObjectLat').value = lat; document.getElementById('crudObjectLng').value = lng;
