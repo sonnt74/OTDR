@@ -594,7 +594,6 @@ function timLyTrinhBanDo() {
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var parsedTarget = parseLyTrinhWithSuffix(txt);
   var targetMeters = parsedTarget ? parsedTarget.meters : null;
-  var targetSuffix = parsedTarget ? parsedTarget.suffix : '';
   
   if (targetMeters === null || isNaN(targetMeters)) {
     alert("Sai định dạng lý trình! Vui lòng nhập theo mẫu: 54+100 hoặc km 54+100");
@@ -607,24 +606,37 @@ function timLyTrinhBanDo() {
     return;
   }
 
+  var isNghichHuong = document.getElementById('chkNghichHuong')?.checked || false;
   var targetSeg = null;
+
+  // Duyệt tìm đoạn chứa lý trình cần tìm (hỗ trợ phân biệt chiều tăng và chiều giảm HNI)
   for (var i = 0; i < pts.length - 1; i++) {
     var startLt = pts[i].calculatedLyTrinhMeters;
     var endLt = pts[i+1].calculatedLyTrinhMeters;
     
-    // Kiểm tra khoảng giá trị lý trình nằm trong đoạn (hỗ trợ cả chiều tăng lẫn chiều giảm của HNI)
-    var minLt = Math.min(startLt, endLt);
-    var maxLt = Math.max(startLt, endLt);
-    
-    if (targetMeters >= minLt && targetMeters <= maxLt) {
-      targetSeg = { p1: pts[i], p2: pts[i+1] };
-      break;
+    if (isNghichHuong) {
+      // Hướng nghịch (HNI): Lý trình giảm dần từ điểm i sang điểm i+1
+      var maxLt = Math.max(startLt, endLt);
+      var minLt = Math.min(startLt, endLt);
+      if (targetMeters >= minLt && targetMeters <= maxLt) {
+        targetSeg = { p1: pts[i], p2: pts[i+1] };
+        break;
+      }
+    } else {
+      // Hướng xuôi: Lý trình tăng dần từ điểm i sang điểm i+1
+      var minLt = Math.min(startLt, endLt);
+      var maxLt = Math.max(startLt, endLt);
+      if (targetMeters >= minLt && targetMeters <= maxLt) {
+        targetSeg = { p1: pts[i], p2: pts[i+1] };
+        break;
+      }
     }
   }
 
   var targetLat, targetLng, bestDescription;
 
   if (targetSeg) {
+    // Tính tỷ lệ chính xác theo chiều lý trình của đoạn
     var span = targetSeg.p2.calculatedLyTrinhMeters - targetSeg.p1.calculatedLyTrinhMeters;
     var ratio = (span !== 0) ? (targetMeters - targetSeg.p1.calculatedLyTrinhMeters) / span : 0;
     
@@ -632,7 +644,7 @@ function timLyTrinhBanDo() {
     targetLng = targetSeg.p1.lng + ratio * (targetSeg.p2.lng - targetSeg.p1.lng);
     bestDescription = `Nằm giữa [${targetSeg.p1.ten}] và [${targetSeg.p2.ten}]`;
   } else {
-    // Nếu vượt quá giới hạn, chọn điểm gần nhất có cùng hậu tố hoặc trên cùng đoạn cáp
+    // Nếu không tìm thấy đoạn khớp chính xác, chọn điểm gần nhất
     var closest = pts.reduce((prev, curr) => 
       Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev
     );
