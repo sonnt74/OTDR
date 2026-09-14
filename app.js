@@ -400,16 +400,27 @@ function getDistanceAlongRoute(targetPt, pathPts) {
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   var allPts = globalDataPoints.filter(pt => pt.idTuyen == tuyenVal && (tramVal === 'ALL' || pt.idTram == tramVal) && (doanVal === 'ALL' || pt.idDoanCap == doanVal));
   
-  var basePt = allPts.find(p => p.id === 'TNN_BASE' || Math.abs(p.lat - 21.593365) < 0.0001);
+  var basePt = allPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
   if (!basePt) {
     basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, lyTrinh: "0+000", idTuyen: tuyenVal, stt: -9999, loai: "Trạm", idLoaiDiem: 0, duTru: 0 };
     allPts.unshift(basePt);
   }
 
-  // Sắp xếp các điểm theo đúng số thứ tự (thu_tu) được lưu trong database để giữ nguyên hình dạng tuyến
-  allPts.sort((a, b) => (a.stt || 0) - (b.stt || 0));
+  let sorted = [basePt];
+  let remaining = allPts.filter(p => p !== basePt);
 
-  return allPts;
+  while (remaining.length > 0) {
+    let current = sorted[sorted.length - 1];
+    let nearestIdx = 0, minDist = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      let dist = calculateHaversine(current.lat, current.lng, remaining[i].lat, remaining[i].lng);
+      if (dist < minDist) { minDist = dist; nearestIdx = i; }
+    }
+    sorted.push(remaining[nearestIdx]);
+    remaining.splice(nearestIdx, 1);
+  }
+
+  return sorted;
 }
 
 function precalculateRouteDataForPoints(pts, backbonePts) {
@@ -896,7 +907,8 @@ async function executeCrudAction() {
   var loaiMoi = parseInt(document.getElementById('crudObjectLoai').value);
   var ltMoi = document.getElementById('crudObjectLyTrinh').value;
   
-  showLoading("Đang xử lý và sắp xếp chuẩn hóa tuyến...");
+  var payload = { ten_diem: tenMoi, id_loaidiem: loaiMoi, ly_trinh: ltMoi };
+  showLoading("Đang xử lý...");
   
   try {
     var targetLat = null, targetLng = null;
@@ -904,120 +916,36 @@ async function executeCrudAction() {
     if (act === 'ADD') {
       targetLat = parseFloat(document.getElementById('crudObjectLat').value);
       targetLng = parseFloat(document.getElementById('crudObjectLng').value);
+      payload.lat = targetLat; 
+      payload.long = targetLng;
       
-      var tuyenVal = document.getElementById('selectTuyen').value;
-      var doanVal = document.getElementById('selectDoanCap').value;
-
-      if (!tuyenVal || tuyenVal === 'ALL') {
-        throw new Error("Vui lòng chọn Tuyến cáp ở bảng điều khiển bên trái trước khi thêm điểm!");
-      }
-
-      var targetDoanId = null;
-      if (doanVal && doanVal !== 'ALL') {
-        targetDoanId = parseInt(doanVal);
-      } else {
-        var firstDoan = rawDoanCapList.find(d => d.id_tuyen == tuyenVal);
-        if (firstDoan) {
-          targetDoanId = firstDoan.id_doan_cap || firstDoan.id;
-        } else {
-          throw new Error("Tuyến cáp này chưa có Đoạn cáp nào được khai báo!");
-        }
-      }
-
-      // 1. Quy đổi lý trình mới sang số mét để so sánh
-      var parsedNewLt = parseLyTrinhWithSuffix(ltMoi);
-      var newMeters = parsedNewLt ? parsedNewLt.meters : 0;
-
-      // 2. Lấy danh sách liên kết hiện tại của đoạn cáp sắp xếp theo thu_tu tăng dần
-      const { data: existingLinks, error: linkErr } = await supabaseClient
-        .from('doan_cap_diem')
-        .select('id_diem, thu_tu')
-        .eq('id_doan_cap', targetDoanId)
-        .order('thu_tu', { ascending: true });
-
-      var targetThuTu = 1;
-      let linksWithLyTrinh = [];
-
-      if (!linkErr && existingLinks && existingLinks.length > 0) {
-        linksWithLyTrinh = existingLinks.map(link => {
-          var pt = globalDataPoints.find(p => p.id == link.id_diem);
-          var ltParsed = pt ? parseLyTrinhWithSuffix(pt.lyTrinh) : null;
-          return {
-            id_diem: link.id_diem,
-            thu_tu: link.thu_tu || 1,
-            meters: ltParsed ? ltParsed.meters : 0
-          };
-        });
-
-        var insertIndex = linksWithLyTrinh.findIndex(item => item.meters > newMeters);
-        
-        if (insertIndex === -1) {
-          var maxThuTu = Math.max(...linksWithLyTrinh.map(i => i.thu_tu));
-          targetThuTu = maxThuTu + 1;
-        } else {
-          targetThuTu = linksWithLyTrinh[insertIndex].thu_tu;
-        }
-      }
-
-      var payload = { 
-        ten_diem: tenMoi, 
-        id_loaidiem: loaiMoi, 
-        ly_trinh: ltMoi,
-        lat: targetLat, 
-        long: targetLng,
-        id_tram: currentUser.idTram || 2
-      };
+      var tuyenH = document.getElementById('selectTuyen').value;
+      if (tuyenH !== 'ALL') payload.id_tuyen_cap = parseInt(tuyenH);
       
-      // 3. Thêm điểm mới vào bảng diem_ha_tang trước để lấy ID
-      const { data: diemData, error: diemErr } = await supabaseClient.from('diem_ha_tang').insert([payload]).select();
-      if (diemErr) throw new Error(diemErr.message);
+      // 1. Lưu điểm mới xuống Supabase và yêu cầu trả về bản ghi
+      const { data, error } = await supabaseClient.from('diem_ha_tang').insert([payload]).select();
+      if (error) throw error;
       
-      if (diemData && diemData[0]) {
-        var newRec = diemData[0];
-        var newIdDiem = newRec.id_diem || newRec.id;
-
-        // 4. Nếu chèn vào giữa, thực hiện dời số thứ tự các điểm phía sau lên +1 (đếm ngược từ dưới lên để tránh trùng khóa)
-        if (linksWithLyTrinh.length > 0) {
-          var insertIndex = linksWithLyTrinh.findIndex(item => item.meters > newMeters);
-          if (insertIndex !== -1) {
-            for (var i = linksWithLyTrinh.length - 1; i >= insertIndex; i--) {
-              await supabaseClient
-                .from('doan_cap_diem')
-                .update({ thu_tu: linksWithLyTrinh[i].thu_tu + 1 })
-                .eq('id_doan_cap', targetDoanId)
-                .eq('id_diem', linksWithLyTrinh[i].id_diem);
-            }
-          }
-        }
-        
-        // 5. Thêm liên kết mới vào bảng doan_cap_diem với số thứ tự chuẩn xác
-        var dcdPayload = {
-          id_doan_cap: targetDoanId,
-          id_diem: newIdDiem,
-          thu_tu: targetThuTu
-        };
-        const { error: dcdErr } = await supabaseClient.from('doan_cap_diem').insert([dcdPayload]);
-        if (dcdErr) throw new Error("Lỗi liên kết đoạn tuyến: " + dcdErr.message);
-
-        // 6. Cập nhật mảng RAM cục bộ và đồng bộ lại stt của toàn bộ điểm trong đoạn
+      // 2. Thêm vào mảng RAM cục bộ
+      if (data && data[0]) {
+        var newRec = data[0];
         globalDataPoints.push({
-          id: newIdDiem,
+          id: newRec.id_diem || newRec.id,
           ten: newRec.ten_diem,
           lat: newRec.lat,
-          lng: newRec.long || newRec.lng,
+          lng: newRec.long,
           lyTrinh: newRec.ly_trinh || '',
-          idTuyen: tuyenVal,
-          idDoanCap: targetDoanId,
+          idTuyen: tuyenH,
           idLoaiDiem: loaiMoi,
-          loai: 'Điểm mới',
-          stt: targetThuTu
+          loai: 'Điểm mới'
         });
       }
     } else if (act === 'EDIT') { 
-      var payload = { ten_diem: tenMoi, id_loaidiem: loaiMoi, ly_trinh: ltMoi };
+      // 1. Cập nhật xuống Supabase
       const { error } = await supabaseClient.from('diem_ha_tang').update(payload).eq('id_diem', id);
-      if (error) throw new Error(error.message);
+      if (error) throw error;
       
+      // 2. Cập nhật trong mảng RAM
       var localPt = globalDataPoints.find(p => p.id == id);
       if (localPt) {
         localPt.ten = tenMoi;
@@ -1027,20 +955,23 @@ async function executeCrudAction() {
         targetLng = localPt.lng;
       }
     } else if (act === 'DELETE') { 
+      // Lấy tọa độ trước khi xóa để có thể canh tầm nhìn nếu cần
       var delPt = globalDataPoints.find(p => p.id == id);
       if (delPt) { targetLat = delPt.lat; targetLng = delPt.lng; }
 
-      await supabaseClient.from('doan_cap_diem').delete().eq('id_diem', id);
+      // 1. Xóa khỏi Supabase
       const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id);
-      if (error) throw new Error(error.message);
+      if (error) throw error;
       
+      // 2. Xóa khỏi mảng RAM
       globalDataPoints = globalDataPoints.filter(p => p.id != id);
     }
     
     closeModals();
     hideLoading();
-    showToast("Đã cập nhật tuyến và vẽ lại bản đồ chuẩn xác!", "success");
+    showToast("Thực hiện lưu dữ liệu thành công!", "success");
     
+    // 3. Vẽ lại bản đồ và Zoom vào vị trí đối tượng nếu có tọa độ hợp lệ
     veLaiTuyenAB();
     if (targetLat && targetLng && act !== 'DELETE') {
       map.setView([targetLat, targetLng], 19, { animate: true });
