@@ -907,7 +907,6 @@ async function executeCrudAction() {
   var loaiMoi = parseInt(document.getElementById('crudObjectLoai').value);
   var ltMoi = document.getElementById('crudObjectLyTrinh').value;
   
-  var payload = { ten_diem: tenMoi, id_loaidiem: loaiMoi, ly_trinh: ltMoi };
   showLoading("Đang xử lý...");
   
   try {
@@ -916,36 +915,57 @@ async function executeCrudAction() {
     if (act === 'ADD') {
       targetLat = parseFloat(document.getElementById('crudObjectLat').value);
       targetLng = parseFloat(document.getElementById('crudObjectLng').value);
-      payload.lat = targetLat; 
-      payload.long = targetLng;
       
-      var tuyenH = document.getElementById('selectTuyen').value;
-      if (tuyenH !== 'ALL') payload.id_tuyen_cap = parseInt(tuyenH);
+      // Payload chuẩn khớp với các cột thực tế của bảng diem_ha_tang
+      var payload = { 
+        ten_diem: tenMoi, 
+        id_loaidiem: loaiMoi, 
+        ly_trinh: ltMoi,
+        lat: targetLat, 
+        long: targetLng,
+        id_tram: currentUser.idTram || 2
+      };
       
-      // 1. Lưu điểm mới xuống Supabase và yêu cầu trả về bản ghi
-      const { data, error } = await supabaseClient.from('diem_ha_tang').insert([payload]).select();
-      if (error) throw error;
+      // 1. Thêm bản ghi vào bảng diem_ha_tang trên Supabase
+      const { data: diemData, error: diemErr } = await supabaseClient.from('diem_ha_tang').insert([payload]).select();
+      if (diemErr) throw diemErr;
       
-      // 2. Thêm vào mảng RAM cục bộ
-      if (data && data[0]) {
-        var newRec = data[0];
+      if (diemData && diemData[0]) {
+        var newRec = diemData[0];
+        var newIdDiem = newRec.id_diem || newRec.id;
+        
+        var doanVal = document.getElementById('selectDoanCap').value;
+        var tuyenVal = document.getElementById('selectTuyen').value;
+        
+        // 2. Liên kết điểm mới vào đoạn cáp hiện tại qua bảng doan_cap_diem
+        if (doanVal && doanVal !== 'ALL') {
+          var dcdPayload = {
+            id_doan_cap: parseInt(doanVal),
+            id_diem: newIdDiem,
+            thu_tu: 1
+          };
+          const { error: dcdErr } = await supabaseClient.from('doan_cap_diem').insert([dcdPayload]);
+          if (dcdErr) console.warn("Cảnh báo liên kết đoạn tuyến:", dcdErr.message);
+        }
+
+        // 3. Cập nhật mảng RAM cục bộ
         globalDataPoints.push({
-          id: newRec.id_diem || newRec.id,
+          id: newIdDiem,
           ten: newRec.ten_diem,
           lat: newRec.lat,
           lng: newRec.long,
           lyTrinh: newRec.ly_trinh || '',
-          idTuyen: tuyenH,
+          idTuyen: tuyenVal !== 'ALL' ? tuyenVal : null,
+          idDoanCap: doanVal !== 'ALL' ? parseInt(doanVal) : null,
           idLoaiDiem: loaiMoi,
           loai: 'Điểm mới'
         });
       }
     } else if (act === 'EDIT') { 
-      // 1. Cập nhật xuống Supabase
+      var payload = { ten_diem: tenMoi, id_loaidiem: loaiMoi, ly_trinh: ltMoi };
       const { error } = await supabaseClient.from('diem_ha_tang').update(payload).eq('id_diem', id);
       if (error) throw error;
       
-      // 2. Cập nhật trong mảng RAM
       var localPt = globalDataPoints.find(p => p.id == id);
       if (localPt) {
         localPt.ten = tenMoi;
@@ -955,29 +975,29 @@ async function executeCrudAction() {
         targetLng = localPt.lng;
       }
     } else if (act === 'DELETE') { 
-      // Lấy tọa độ trước khi xóa để có thể canh tầm nhìn nếu cần
       var delPt = globalDataPoints.find(p => p.id == id);
       if (delPt) { targetLat = delPt.lat; targetLng = delPt.lng; }
 
-      // 1. Xóa khỏi Supabase
+      // Xóa liên kết trong bảng trung gian doan_cap_diem trước để tránh lỗi khóa ngoại
+      await supabaseClient.from('doan_cap_diem').delete().eq('id_diem', id);
+
+      // Sau đó tiến hành xóa điểm chính trong diem_ha_tang
       const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id);
       if (error) throw error;
       
-      // 2. Xóa khỏi mảng RAM
       globalDataPoints = globalDataPoints.filter(p => p.id != id);
     }
     
     closeModals();
     hideLoading();
-    showToast("Thực hiện lưu dữ liệu thành công!", "success");
+    showToast("Đã lưu dữ liệu thành công xuống Database!", "success");
     
-    // 3. Vẽ lại bản đồ và Zoom vào vị trí đối tượng nếu có tọa độ hợp lệ
     veLaiTuyenAB();
     if (targetLat && targetLng && act !== 'DELETE') {
       map.setView([targetLat, targetLng], 19, { animate: true });
     }
   } catch (err) { 
-    showToast("Lỗi: " + err.message, "error"); 
+    showToast("Lỗi lưu Database: " + err.message, "error"); 
     hideLoading(); 
   }
 }
