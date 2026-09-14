@@ -188,7 +188,7 @@ function toggleMeasureTool() {
   var btn = document.getElementById('measure-btn');
   if (isMeasuring) {
     btn.style.background = '#0d6efd'; btn.style.color = 'white'; measurePoints = []; measureLayer.clearLayers();
-    showToast("Đã BẬT đo khoảng cách. Click các điểm trên bản đồ.");
+    showToast("Đã BẬT đo khoảng cách. Click các điểm trên bản đồ.","info");
   } else {
     btn.style.background = 'white'; btn.style.color = 'black'; measureLayer.clearLayers(); measurePoints = [];
     showToast("Đã TẮT đo khoảng cách.");
