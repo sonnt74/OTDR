@@ -292,7 +292,7 @@ function isMangXong(pt) {
   return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
 }
 
-// CÁC HÀM XỬ LÝ LÝ TRÌNH, NỘI SUY HÌNH HỌC VÀ HƯỚNG HNI
+// CÁC HÀM XỬ LÝ LÝ TRÌNH, NỘI SUY HÌNH HỌC VÀ ƯU TIÊN MỐC MĂNG XÔNG
 function parseLyTrinh(str) {
   if (!str) return null;
   var cleanStr = str.toString().trim();
@@ -324,7 +324,7 @@ function getDistanceAlongRoute(targetPt, pathPts) {
   return bestDist;
 }
 
-// Nội suy toàn bộ điểm (cột, bể, mốc) theo hình chiếu dọc tuyến giống măng xông
+// Hàm nội suy thống nhất cho tất cả các điểm, ưu tiên măng xông làm mốc neo
 function precalculateRouteData(pts) {
   if (!pts || pts.length === 0) return pts;
   
@@ -338,21 +338,35 @@ function precalculateRouteData(pts) {
   }
   let totalRouteOpticalDist = totalRoutePhysDist * heSo;
 
-  // Tìm mốc neo có lý trình chuẩn đầu tiên
+  // ƯU TIÊN TÌM MỐC NEO TỪ MĂNG XÔNG CÓ NHẬP LÝ TRÌNH HOẶC ĐIỂM ĐẦU TIÊN CÓ LÝ TRÌNH
   var baseMeters = 0;
   var foundBase = false;
-  for (let i = 0; i < pts.length; i++) {
-    var m = parseLyTrinh(pts[i].lyTrinh);
-    if (m !== null) {
-      let distToThis = getDistanceAlongRoute(pts[i], pts) * heSo;
-      baseMeters = m - distToThis;
-      foundBase = true;
-      break;
+
+  // Tìm trong các điểm măng xông trước
+  let allTuyenPts = globalDataPoints.filter(p => p.idTuyen == pts[0]?.idTuyen);
+  let mxWithLyTrinh = allTuyenPts.find(p => isMangXong(p) && parseLyTrinh(p.lyTrinh) !== null);
+
+  if (mxWithLyTrinh) {
+    let mVal = parseLyTrinh(mxWithLyTrinh.lyTrinh);
+    let distToMx = getDistanceAlongRoute(mxWithLyTrinh, pts) * heSo;
+    baseMeters = mVal - distToMx;
+    foundBase = true;
+  } else {
+    // Nếu không có măng xông nào có lý trình, tìm bất kỳ điểm nào có lý trình
+    for (let i = 0; i < pts.length; i++) {
+      var m = parseLyTrinh(pts[i].lyTrinh);
+      if (m !== null) {
+        let distToThis = getDistanceAlongRoute(pts[i], pts) * heSo;
+        baseMeters = m - distToThis;
+        foundBase = true;
+        break;
+      }
     }
   }
+
   if (!foundBase) baseMeters = 0;
 
-  // Gán thông số cho từng điểm dựa trên hình chiếu (getDistanceAlongRoute)
+  // Gán thông số cho từng điểm dựa trên hình chiếu
   pts.forEach(pt => {
     let distFromA = getDistanceAlongRoute(pt, pts) * heSo;
     
