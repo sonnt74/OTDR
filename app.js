@@ -292,7 +292,7 @@ function isMangXong(pt) {
   return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
 }
 
-// CÁC HÀM XỬ LÝ LÝ TRÌNH, NỘI SUY VÀ HƯỚNG HNI
+// CÁC HÀM XỬ LÝ LÝ TRÌNH, NỘI SUY HÌNH HỌC VÀ HƯỚNG HNI
 function parseLyTrinh(str) {
   if (!str) return null;
   var cleanStr = str.toString().trim();
@@ -304,65 +304,71 @@ function parseLyTrinh(str) {
   return isNaN(num) ? null : num;
 }
 
+function calculateHaversine(lat1, lon1, lat2, lon2) {
+  var R = 6371000, dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
+  var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function getDistanceAlongRoute(targetPt, pathPts) {
+  var bestDist = 0, currentDist = 0, minDst = Infinity;
+  for (var i = 0; i < pathPts.length - 1; i++) {
+    var p1 = pathPts[i], p2 = pathPts[i+1], segLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
+    if (segLen === 0) continue;
+    var dx = p2.lng - p1.lng, dy = p2.lat - p1.lat, lenSq = dx * dx + dy * dy;
+    var t = Math.max(0, Math.min(1, ((targetPt.lng - p1.lng) * dx + (targetPt.lat - p1.lat) * dy) / lenSq));
+    var distToProj = calculateHaversine(targetPt.lat, targetPt.lng, p1.lat + t * dy, p1.lng + t * dx);
+    if (distToProj < minDst) { minDst = distToProj; bestDist = currentDist + t * segLen; }
+    currentDist += segLen;
+  }
+  return bestDist;
+}
+
+// Nội suy toàn bộ điểm (cột, bể, mốc) theo hình chiếu dọc tuyến giống măng xông
 function precalculateRouteData(pts) {
   if (!pts || pts.length === 0) return pts;
   
   var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
   var isNghichHuong = document.getElementById('chkNghichHuong')?.checked || false;
 
-  let totalRouteOpticalDist = 0;
-  let segmentDistances = [];
-  for (let i = 0; i < pts.length; i++) {
-    if (i > 0) {
-      let segPhys = calculateHaversine(pts[i-1].lat, pts[i-1].lng, pts[i].lat, pts[i].lng);
-      let optDist = (segPhys * heSo) + (pts[i].duTru || 0);
-      segmentDistances.push(optDist);
-      totalRouteOpticalDist += optDist;
-    } else {
-      segmentDistances.push(0);
-    }
+  // Tính tổng chiều dài hình học tuyến
+  let totalRoutePhysDist = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    totalRoutePhysDist += calculateHaversine(pts[i].lat, pts[i].lng, pts[i+1].lat, pts[i+1].lng);
   }
+  let totalRouteOpticalDist = totalRoutePhysDist * heSo;
 
+  // Tìm mốc neo có lý trình chuẩn đầu tiên
   var baseMeters = 0;
-  var baseIndex = -1;
+  var foundBase = false;
   for (let i = 0; i < pts.length; i++) {
     var m = parseLyTrinh(pts[i].lyTrinh);
     if (m !== null) {
-      baseMeters = m;
-      baseIndex = i;
+      let distToThis = getDistanceAlongRoute(pts[i], pts) * heSo;
+      baseMeters = m - distToThis;
+      foundBase = true;
       break;
     }
   }
+  if (!foundBase) baseMeters = 0;
 
-  if (baseIndex !== -1) {
-    let distFromAToBase = 0;
-    for (let j = 1; j <= baseIndex; j++) {
-      distFromAToBase += segmentDistances[j];
-    }
-    baseMeters = baseMeters - distFromAToBase;
-  } else {
-    baseMeters = 0;
-  }
+  // Gán thông số cho từng điểm dựa trên hình chiếu (getDistanceAlongRoute)
+  pts.forEach(pt => {
+    let distFromA = getDistanceAlongRoute(pt, pts) * heSo;
+    
+    let effectiveOpticalDist = isNghichHuong ? (totalRouteOpticalDist - distFromA) : distFromA;
+    let effectiveLyTrinhMeters = isNghichHuong ? (baseMeters + totalRouteOpticalDist - distFromA) : (baseMeters + distFromA);
 
-  let accumulatedOpticalDist = 0;
-  for (let i = 0; i < pts.length; i++) {
-    if (i > 0) {
-      accumulatedOpticalDist += segmentDistances[i];
-    }
+    pt.distanceFromAMeters = effectiveOpticalDist;
+    let distAVal = Math.round(pt.distanceFromAMeters);
+    pt.distanceFromAText = (distAVal >= 1000) ? (distAVal / 1000).toFixed(2) + " km" : distAVal + " m";
 
-    let effectiveOpticalDist = isNghichHuong ? (totalRouteOpticalDist - accumulatedOpticalDist) : accumulatedOpticalDist;
-    let effectiveLyTrinhMeters = isNghichHuong ? (baseMeters + totalRouteOpticalDist - accumulatedOpticalDist) : (baseMeters + accumulatedOpticalDist);
-
-    pts[i].distanceFromAMeters = effectiveOpticalDist;
-    let distAVal = Math.round(pts[i].distanceFromAMeters);
-    pts[i].distanceFromAText = (distAVal >= 1000) ? (distAVal / 1000).toFixed(2) + " km" : distAVal + " m";
-
-    pts[i].calculatedLyTrinhMeters = effectiveLyTrinhMeters;
-    let totalMeters = Math.round(pts[i].calculatedLyTrinhMeters);
+    pt.calculatedLyTrinhMeters = effectiveLyTrinhMeters;
+    let totalMeters = Math.round(pt.calculatedLyTrinhMeters);
     let km = Math.floor(totalMeters / 1000);
     let m = totalMeters % 1000;
-    pts[i].calculatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}`;
-  }
+    pt.calculatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}`;
+  });
 
   return pts;
 }
@@ -387,7 +393,7 @@ function getPointsCuaTuyenHienTai() {
   return precalculateRouteData(ordered);
 }
 
-// HÀM VẼ LẠI TUYẾN TRÊN BẢN ĐỒ (Đã được định nghĩa và gán vào window toàn cục)
+// HÀM VẼ LẠI TUYẾN TRÊN BẢN ĐỒ
 function veLaiTuyenAB() {
   if (!map) return;
   markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
@@ -433,7 +439,15 @@ function veLaiTuyenAB() {
     bounds.push([mx.lat, mx.lng]);
     var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
     var distToA = getDistanceAlongRoute(mx, pts);
-    var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
+    let isNghichHuong = document.getElementById('chkNghichHuong')?.checked || false;
+    let totalRouteOpticalDist = (function() {
+      let d = 0; let h = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
+      for (let i = 0; i < pts.length - 1; i++) d += calculateHaversine(pts[i].lat, pts[i].lng, pts[i+1].lat, pts[i+1].lng);
+      return d * h;
+    })();
+    let effDist = isNghichHuong ? (totalRouteOpticalDist - distToA) : distToA;
+    var distStr = (effDist >= 1000) ? (effDist / 1000).toFixed(2) + " km" : Math.round(effDist) + " m";
+    
     var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}')">📝 Ghi chú</button>`;
     mxMarker.bindPopup(`<b>${mx.ten}</b><br>Lý trình: ${mx.lyTrinh || 'Không có'}<br>📏 Cách gốc: <b>${distStr}</b><br>` + taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng) + ghiChuBtn);
     mxMarker.on('dragend', e => handleDragEnd(e, mx));
@@ -444,7 +458,7 @@ function veLaiTuyenAB() {
   if (lineCoordinates.length > 1) polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: '#0d6efd', weight: 3 }));
   if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
 }
-window.veLaiTuyenAB = veLaiTuyenAB; // Đảm bảo gọi toàn cục không bị lỗi Not Defined
+window.veLaiTuyenAB = veLaiTuyenAB;
 
 async function suaGhiChu(id, oldGhiChu) {
   if (!currentUser.canEditMap && currentUser.role !== 'sys_admin') { alert("Không có quyền!"); return; }
@@ -454,26 +468,6 @@ async function suaGhiChu(id, oldGhiChu) {
     await supabaseClient.from('diem_ha_tang').update({ ghi_chu: newVal }).eq('id_diem', id);
     alert("Đã lưu!"); taiDuLieuSupabase();
   }
-}
-
-function calculateHaversine(lat1, lon1, lat2, lon2) {
-  var R = 6371000, dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
-  var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-function getDistanceAlongRoute(targetPt, pathPts) {
-  var bestDist = 0, currentDist = 0, minDst = Infinity;
-  for (var i = 0; i < pathPts.length - 1; i++) {
-    var p1 = pathPts[i], p2 = pathPts[i+1], segLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
-    if (segLen === 0) continue;
-    var dx = p2.lng - p1.lng, dy = p2.lat - p1.lat, lenSq = dx * dx + dy * dy;
-    var t = Math.max(0, Math.min(1, ((targetPt.lng - p1.lng) * dx + (targetPt.lat - p1.lat) * dy) / lenSq));
-    var distToProj = calculateHaversine(targetPt.lat, targetPt.lng, p1.lat + t * dy, p1.lng + t * dx);
-    if (distToProj < minDst) { minDst = distToProj; bestDist = currentDist + t * segLen; }
-    currentDist += segLen;
-  }
-  return bestDist;
 }
 
 function chiaSeSuCo(lat, lng, khoangCachKm, prevMX, nextMX, shareType) {
