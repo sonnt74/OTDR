@@ -59,18 +59,36 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
     bottom: 0;
     left: 0;
     width: 100vw;
-    max-height: 65vh; /* Tăng nhẹ độ cao để chứa thanh công cụ mới */
+    max-height: 65vh; 
     border-radius: 15px 15px 0 0;
     box-shadow: 0 -4px 15px rgba(0,0,0,0.2);
+    /* Tạo khoảng đệm an toàn tránh thanh điều hướng của hệ điều hành */
+    padding-bottom: env(safe-area-inset-bottom, 15px); 
   }
   
-  #control-panel.collapsed { max-height: 40px !important; overflow: hidden; }
-  .panel-header { position: sticky; top: 0; z-index: 10; }
-  .panel-header::after { content: " (Vuốt ↕)"; font-size: 10px; font-weight: normal; }
+  /* Tăng chiều cao khi thu gọn để không bị sát đáy màn hình */
+  #control-panel.collapsed { 
+    max-height: 65px !important; 
+    overflow: hidden; 
+  }
+  
+  /* Tăng vùng chạm cho tiêu đề để ngón tay vuốt lên dễ dàng hơn */
+  .panel-header { 
+    position: sticky; 
+    top: 0; 
+    z-index: 10; 
+    padding: 12px 8px; 
+  }
+  .panel-header::after { 
+    content: " (Vuốt ↕)"; 
+    font-size: 10px; 
+    font-weight: normal; 
+  }
 
   #gps-btn { bottom: calc(65vh + 15px); transition: bottom 0.3s ease; }
   #measure-btn { bottom: calc(65vh + 60px); transition: bottom 0.3s ease; }
   
-  #control-panel.collapsed ~ #gps-btn { bottom: 55px; }
-  #control-panel.collapsed ~ #measure-btn { bottom: 100px; }
+  /* Đẩy các nút công cụ lên cao hơn tương ứng với chiều cao khay 65px */
+  #control-panel.collapsed ~ #gps-btn { bottom: 80px; }
+  #control-panel.collapsed ~ #measure-btn { bottom: 125px; }
 }
