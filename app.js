@@ -279,7 +279,12 @@ function khoiTaoComboDaiTheoPhanCap() {
   var selectDai = document.getElementById('selectDai');
   selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
   rawDaiList.forEach(dai => selectDai.innerHTML += `<option value="${dai.id_dai}">${dai.ten_dai}</option>`);
-  if (currentUser.role === 'dai_admin' && currentUser.idDai) { selectDai.value = currentUser.idDai; selectDai.disabled = true; }
+  
+  // Phân quyền theo Đài
+  if (currentUser.role === 'dai_admin' && currentUser.idDai) { 
+    selectDai.value = currentUser.idDai; 
+    selectDai.disabled = true; 
+  }
   onDaiChange();
 }
 
@@ -287,9 +292,18 @@ function onDaiChange() {
   var daiVal = document.getElementById('selectDai').value;
   var selectTram = document.getElementById('selectTram');
   selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
-  rawTramList.filter(tram => daiVal === 'ALL' || tram.id_dai == daiVal)
-             .forEach(tram => selectTram.innerHTML += `<option value="${tram.id_tram}">${tram.ten_tram}</option>`);
-  if (currentUser.role === 'tram_admin' && currentUser.idTram) { selectTram.value = currentUser.idTram; selectTram.disabled = true; }
+  
+  var validTrams = rawTramList.filter(tram => daiVal === 'ALL' || tram.id_dai == daiVal);
+  validTrams.forEach(tram => selectTram.innerHTML += `<option value="${tram.id_tram}">${tram.ten_tram}</option>`);
+  
+  // Phân quyền theo Trạm
+  if (currentUser.role === 'tram_admin' && currentUser.idTram) { 
+    selectTram.value = currentUser.idTram; 
+    selectTram.disabled = true; 
+  } else if (validTrams.length > 0 && currentUser.role === 'tram_admin') {
+    selectTram.value = validTrams[0].id_tram;
+  }
+  
   updateTuyenOptions();
 }
 
@@ -298,7 +312,14 @@ function onTramChange() { updateTuyenOptions(); }
 function updateTuyenOptions() {
   var selectTuyen = document.getElementById('selectTuyen');
   selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
+  
   rawTuyenList.forEach(tuyen => selectTuyen.innerHTML += `<option value="${tuyen.id_tuyen_cap}">${tuyen.ma_tuyencap}</option>`);
+  
+  // Tự động chọn tuyến cáp đầu tiên nếu danh sách có sẵn để hiển thị ngay tuyến gần nhất
+  if (rawTuyenList.length > 0 && selectTuyen.value === 'ALL') {
+    selectTuyen.value = rawTuyenList[0].id_tuyen_cap;
+  }
+  
   onTuyenChange();
 }
 
