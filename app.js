@@ -292,7 +292,18 @@ function isMangXong(pt) {
   return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
 }
 
-// Hàm chuẩn hóa và nội suy lý trình cho toàn bộ điểm trên tuyến
+// HÀM CHUẨN HÓA & NỘI SUY TẬP TRUNG TOÀN TUYẾN
+function parseLyTrinh(str) {
+  if (!str) return null;
+  var cleanStr = str.toString().trim();
+  var match = cleanStr.match(/(?:km\s*)?(\d+)\s*\+\s*(\d+)/i);
+  if (match) {
+    return parseInt(match[1]) * 1000 + parseInt(match[2]);
+  }
+  var num = parseFloat(cleanStr);
+  return isNaN(num) ? null : num;
+}
+
 function precalculateRouteData(pts) {
   if (!pts || pts.length === 0) return pts;
   
@@ -300,6 +311,7 @@ function precalculateRouteData(pts) {
   var baseMeters = 0;
   var foundBase = false;
   
+  // 1. Tìm mốc neo có lý trình chuẩn đầu tiên để làm căn cứ
   for (let i = 0; i < pts.length; i++) {
     var m = parseLyTrinh(pts[i].lyTrinh);
     if (m !== null) {
@@ -316,6 +328,7 @@ function precalculateRouteData(pts) {
 
   if (!foundBase) baseMeters = 0;
 
+  // 2. Chạy vòng lặp nội suy và gán lý trình chuẩn cho từng điểm
   var accumulatedDist = 0;
   for (let i = 0; i < pts.length; i++) {
     if (i > 0) {
@@ -327,7 +340,7 @@ function precalculateRouteData(pts) {
     let totalMeters = Math.round(pts[i].calculatedLyTrinhMeters);
     let km = Math.floor(totalMeters / 1000);
     let m = totalMeters % 1000;
-    pts[i].calculatedLyTrinhText = pts[i].lyTrinh || `${km}+${m < 10 ? '0' + m : m}`;
+    pts[i].calculatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}`;
   }
 
   return pts;
@@ -345,11 +358,13 @@ function getPointsCuaTuyenHienTai() {
   if (filteredPts.length > 0) {
     var hasBase = filteredPts.some(p => Math.abs(p.lat - 21.593365) < 0.0001);
     if (!hasBase) {
-      filteredPts.unshift({ ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, lyTrinh: "", idTuyen: tuyenVal, stt: -9999, loai: "Trạm" });
+      filteredPts.unshift({ ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, lyTrinh: "0+000", idTuyen: tuyenVal, stt: -9999, loai: "Trạm" });
     }
   }
   
   var ordered = document.getElementById('chkNghichHuong').checked ? filteredPts.slice().reverse() : filteredPts;
+  
+  // Trả về danh sách điểm đã được nội suy chuẩn hóa sẵn
   return precalculateRouteData(ordered);
 }
 
@@ -382,7 +397,7 @@ function veLaiTuyenAB() {
     bounds.push([pt.lat, pt.lng]);
     var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : ((index === pts.length - 1) ? '<div class="point-b-marker">B</div>' : '<div class="standard-marker"></div>');
     var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
-    marker.bindPopup(`<b>${pt.ten}</b><br>Loại: ${pt.loai}<br>Lý trình chuẩn: <b>${pt.calculatedLyTrinhText}</b>` + taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng));
+    marker.bindPopup(`<b>${pt.ten}</b><br>Loại: ${pt.loai}<br>Lý trình gốc: ${pt.lyTrinh || 'Chưa nhập'}<br>Lý trình nội suy: <b>${pt.calculatedLyTrinhText}</b>` + taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng));
     marker.on('dragend', e => handleDragEnd(e, pt));
     markersLayer.addLayer(marker);
   });
@@ -490,17 +505,7 @@ function timViTriDut() {
     .then(res => res.json()).then(data => faultMarker.setPopupContent(popupHtml.replace("Đang tra cứu...", data.display_name || "Không rõ")));
 }
 
-function parseLyTrinh(str) {
-  if (!str) return null;
-  var cleanStr = str.toString().trim();
-  var match = cleanStr.match(/(?:km\s*)?(\d+)\s*\+\s*(\d+)/i);
-  if (match) {
-    return parseInt(match[1]) * 1000 + parseInt(match[2]);
-  }
-  var num = parseFloat(cleanStr);
-  return isNaN(num) ? null : num;
-}
-
+// HÀM TÌM NHANH LÝ TRÌNH SỬ DỤNG DỮ LIỆU ĐÃ NỘI SUY SẴN
 function timLyTrinhBanDo() {
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var targetMeters = parseLyTrinh(txt);
