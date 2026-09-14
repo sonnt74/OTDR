@@ -324,8 +324,6 @@ function getPointsCuaTuyenHienTai() {
   }
   
   var ordered = document.getElementById('chkNghichHuong').checked ? filteredPts.slice().reverse() : filteredPts;
-  
-  // Tự động chuẩn hóa và trả về danh sách điểm đã được nội suy sẵn lý trình
   return precalculateRouteData(ordered);
 }
 
@@ -629,7 +627,7 @@ function moFormThemTuyen() { document.getElementById('auxTableType').value = 'tu
 function moFormThemDoan() { document.getElementById('auxTableType').value = 'doan_cap'; document.getElementById('auxFormFields').innerHTML = '<label>Mã Đoạn:</label><input type="text" id="auxName" class="form-group"><label>Thuộc Tuyến:</label><select id="auxRefId" class="form-group"></select>'; populateDropdown('auxRefId', rawTuyenList, 'id_tuyen_cap', 'ma_tuyencap', null); openModal('genericAuxModal'); }
 
 async function saveAuxRecord() {
-  var tbl = document.getElementById('auxTableType').value, nameVal = document.getElementById('auxName'].value;
+  var tbl = document.getElementById('auxTableType').value, nameVal = document.getElementById('auxName').value;
   showLoading("Đang lưu...");
   try {
     if (tbl === 'dai_vt') await supabaseClient.from('dai_vt').insert([{ ten_dai: nameVal }]);
