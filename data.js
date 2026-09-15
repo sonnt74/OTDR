@@ -1,4 +1,4 @@
-// data_2.js - Xử lý bắt sự kiện chọn Trạm, lọc chính xác danh sách Tuyến và Đoạn cáp
+// data_2.js - Sửa triệt để lỗi lọc danh sách Tuyến theo Trạm và tự động cập nhật bản đồ GIS
 
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
@@ -11,18 +11,30 @@ async function fetchAllRowsSafe(tableName) {
 }
 
 /**
- * HÀM PHỤ TRỢ: Lấy giá trị ID dạng Chuỗi (String) an toàn tuyệt đối
+ * HÀM PHỤ TRỢ: Lấy ID dạng Chuỗi (String) an toàn tuyệt đối
  */
-function safeGetId(item, keys) {
+function safeGetStrId(item, keys) {
   if (!item) return '';
   for (let k of keys) {
-    if (item[k] !== undefined && item[k] !== null) return String(item[k]).trim();
+    if (item[k] !== undefined && item[k] !== null && item[k] !== '') {
+      return String(item[k]).trim();
+    }
   }
   return '';
 }
 
 /**
- * 1. HÀM TẢI DỮ LIỆU BAN ĐẦU TỪ SUPABASE
+ * HÀM PHỤ TRỢ: Kiểm tra xem Đoạn Cáp có thuộc Trạm được chọn hay không
+ */
+function isDoanCapThuocTram(doanCap, targetTramId) {
+  if (targetTramId === 'ALL' || !targetTramId) return true;
+  
+  var tramIdDoan = safeGetStrId(doanCap, ['id_tram', 'tram_id', 'id_diem_a', 'id_diem_b']);
+  return tramIdDoan === String(targetTramId).trim();
+}
+
+/**
+ * 1. HÀM CHÍNH TẢI DỮ LIỆU TỪ SUPABASE
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   showLoading("Đang tải dữ liệu...");
@@ -44,28 +56,28 @@ async function taiDuLieuSupabase(forceRefresh = false) {
     rawLoaiDiemList = loaiRes.data || [];
     
     var diemMap = {}, doanCapMap = {}, loaiDiemMap = {};
-    diemRes.forEach(d => diemMap[safeGetId(d, ['id_diem', 'id'])] = d);
-    rawDoanCapList.forEach(dc => doanCapMap[safeGetId(dc, ['id_doan_cap', 'id'])] = dc);
-    rawLoaiDiemList.forEach(l => loaiDiemMap[safeGetId(l, ['id_loaidiem', 'id'])] = l.ten_loaidiem);
+    diemRes.forEach(d => diemMap[safeGetStrId(d, ['id_diem', 'id'])] = d);
+    rawDoanCapList.forEach(dc => doanCapMap[safeGetStrId(dc, ['id_doan_cap', 'id'])] = dc);
+    rawLoaiDiemList.forEach(l => loaiDiemMap[safeGetStrId(l, ['id_loaidiem', 'id'])] = l.ten_loaidiem);
 
     globalDataPoints = [];
     dcdRes.forEach(item => {
-      var pt = diemMap[safeGetId(item, ['id_diem', 'diem_id'])];
-      var dc = doanCapMap[safeGetId(item, ['id_doan_cap', 'doan_cap_id'])];
+      var pt = diemMap[safeGetStrId(item, ['id_diem', 'diem_id'])];
+      var dc = doanCapMap[safeGetStrId(item, ['id_doan_cap', 'doan_cap_id'])];
       if (!pt || isNaN(parseFloat(pt.lat))) return;
       var idLoai = pt.id_loaidiem || 1;
       var loaiName = loaiDiemMap[String(idLoai)] || 'Điểm';
       var isMx = (Number(idLoai) === 4 || loaiName.toLowerCase().includes('mx') || loaiName.toLowerCase().includes('măng xông'));
       
       globalDataPoints.push({
-        id: safeGetId(pt, ['id_diem', 'id']), 
+        id: safeGetStrId(pt, ['id_diem', 'id']), 
         ten: pt.ten_diem || pt.ten, 
         lat: parseFloat(pt.lat), 
         lng: parseFloat(pt.long || pt.lng),
         ghiChu: pt.ghi_chu || '', 
-        idTuyen: dc ? safeGetId(dc, ['id_tuyen', 'tuyen_cap_id', 'id']) : null,
-        idDoanCap: safeGetId(item, ['id_doan_cap', 'doan_cap_id']), 
-        idTram: safeGetId(pt, ['id_tram', 'tram_id']), 
+        idTuyen: dc ? safeGetStrId(dc, ['id_tuyen', 'tuyen_cap_id', 'id']) : null,
+        idDoanCap: safeGetStrId(item, ['id_doan_cap', 'doan_cap_id']), 
+        idTram: safeGetStrId(pt, ['id_tram', 'tram_id']), 
         idLoaiDiem: idLoai,
         loai: loaiName, 
         lyTrinh: pt.ly_trinh || '', 
@@ -94,7 +106,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 }
 
 /**
- * 2. KHỞI TẠO COMBOBOX ĐÀI VÀ TRẠM
+ * 2. KHỞI TẠO DỮ LIỆU ĐÀI & TRẠM VÀO COMBOBOX
  */
 function khoiTaoComboDaiTheoPhanCap() {
   var selectDai = document.getElementById('selectDai');
@@ -103,7 +115,7 @@ function khoiTaoComboDaiTheoPhanCap() {
   if (selectDai) {
     selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
     rawDaiList.forEach(d => {
-      var dId = safeGetId(d, ['id_dai', 'id']);
+      var dId = safeGetStrId(d, ['id_dai', 'id']);
       selectDai.innerHTML += `<option value="${dId}">${d.ten_dai || d.ten}</option>`;
     });
   }
@@ -111,15 +123,13 @@ function khoiTaoComboDaiTheoPhanCap() {
   if (selectTram) {
     selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
     rawTramList.forEach(t => {
-      var tId = safeGetId(t, ['id_tram', 'id']);
+      var tId = safeGetStrId(t, ['id_tram', 'id']);
       selectTram.innerHTML += `<option value="${tId}">${t.ten_tram || t.ten}</option>`;
     });
   }
 
-  // Tự động gán nếu có User phân quyền
   if (currentUser && currentUser.idTram && selectTram) {
-    var userTramId = String(currentUser.idTram).trim();
-    selectTram.value = userTramId;
+    selectTram.value = String(currentUser.idTram).trim();
   }
 
   onTramChange();
@@ -137,9 +147,9 @@ function onDaiChange() {
 
   if (selectTram) {
     selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
-    rawTramList.filter(tram => daiVal === 'ALL' || safeGetId(tram, ['id_dai', 'dai_id']) === String(daiVal))
+    rawTramList.filter(tram => daiVal === 'ALL' || safeGetStrId(tram, ['id_dai', 'dai_id']) === String(daiVal))
                .forEach(tram => {
-                 var tId = safeGetId(tram, ['id_tram', 'id']);
+                 var tId = safeGetStrId(tram, ['id_tram', 'id']);
                  selectTram.innerHTML += `<option value="${tId}">${tram.ten_tram || tram.ten}</option>`;
                });
   }
@@ -147,21 +157,21 @@ function onDaiChange() {
 }
 
 /**
- * 4. HÀM XỬ LÝ KHI CHỌN TRẠM (ĐÃ KHẮC PHỤC LỖI KHÔNG HIỆN TUYẾN)
+ * 4. HÀM KHI CHỌN TRẠM - ĐỒNG BỘ APPSTORE VÀ LỌC TUYẾN
  */
 function onTramChange() {
   var selectTram = document.getElementById('selectTram');
   var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
 
-  // Cập nhật Trạm vào AppStore
+  // Cập nhật giá trị Trạm vào AppStore
   AppStore.setState({ selectedTram: tramVal });
 
-  // Gọi hàm lọc Tuyến theo Trạm
+  // Gọi hàm cập nhật lại ComboBox Tuyến
   updateTuyenOptions();
 }
 
 /**
- * 5. LỌC DANH SÁCH TUYẾN THEO TRẠM ĐÃ CHỌN
+ * 5. HÀM LỌC VÀ HIỂN THỊ DANH SÁCH TUYẾN THEO TRẠM MỚI
  */
 function updateTuyenOptions() {
   var selectTuyen = document.getElementById('selectTuyen');
@@ -169,33 +179,36 @@ function updateTuyenOptions() {
   if (!selectTuyen) return;
 
   var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
-  selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
 
-  // Lọc lấy các Đoạn cáp thuộc Trạm đã chọn
+  // 1. Lọc danh sách Đoạn cáp thuộc Trạm đã chọn
   var matchedDoanList = rawDoanCapList;
   if (tramVal !== 'ALL') {
-    matchedDoanList = rawDoanCapList.filter(d => safeGetId(d, ['id_tram', 'tram_id']) === tramVal);
+    matchedDoanList = rawDoanCapList.filter(d => isDoanCapThuocTram(d, tramVal));
   }
 
-  // Lấy danh sách ID Tuyến duy nhất xuất hiện trong các Đoạn cáp này
-  var allowedTuyenIds = [...new Set(matchedDoanList.map(d => safeGetId(d, ['id_tuyen', 'tuyen_cap_id'])))];
+  // 2. Lấy danh sách ID Tuyến duy nhất từ các Đoạn cáp đã lọc
+  var allowedTuyenIds = [...new Set(matchedDoanList.map(d => safeGetStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap'])))];
 
-  // Lọc dữ liệu Tuyến cáp từ danh sách Tuyến gốc
-  var filteredTuyenList = rawTuyenList.filter(t => allowedTuyenIds.includes(safeGetId(t, ['id_tuyen_cap', 'id'])));
+  // 3. Lọc danh sách Tuyến cáp khớp với allowedTuyenIds
+  var filteredTuyenList = rawTuyenList;
+  if (tramVal !== 'ALL') {
+    filteredTuyenList = rawTuyenList.filter(t => allowedTuyenIds.includes(safeGetStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id'])));
+  }
 
-  // Đổ Tuyến cáp vào thẻ <select id="selectTuyen">
+  // 4. Xóa sạch và nạp lại thẻ <select id="selectTuyen">
+  selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
   filteredTuyenList.forEach(tuyen => {
-    var tuyenId = safeGetId(tuyen, ['id_tuyen_cap', 'id']);
-    var tuyenMa = tuyen.ma_tuyencap || tuyen.ten_tuyen;
+    var tuyenId = safeGetStrId(tuyen, ['id_tuyen_cap', 'id_tuyen', 'id']);
+    var tuyenMa = tuyen.ma_tuyencap || tuyen.ten_tuyen || tuyen.ten;
     selectTuyen.innerHTML += `<option value="${tuyenId}">${tuyenMa}</option>`;
   });
 
-  // Tự động chọn Tuyến đầu tiên nếu có danh sách
+  // 5. Tự động chọn Tuyến đầu tiên nếu có danh sách
   if (selectTuyen.options.length > 1) {
     selectTuyen.selectedIndex = 1;
   }
 
-  // Gọi tiếp hàm cập nhật Đoạn cáp
+  // 6. Chạy tiếp hàm cập nhật Đoạn cáp
   onTuyenChange();
 }
 
@@ -212,10 +225,10 @@ function onTuyenChange() {
   if (selectDoanCap) {
     selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
     if (tuyenVal !== 'ALL') {
-      var matchedDoan = rawDoanCapList.filter(d => safeGetId(d, ['id_tuyen', 'tuyen_cap_id']) === tuyenVal);
+      var matchedDoan = rawDoanCapList.filter(d => safeGetStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']) === tuyenVal);
 
       matchedDoan.forEach(d => {
-        var dId = safeGetId(d, ['id_doan_cap', 'id']);
+        var dId = safeGetStrId(d, ['id_doan_cap', 'id']);
         var dName = d.ma_doancap || d.ten_doancap;
         selectDoanCap.innerHTML += `<option value="${dId}">${dName}</option>`;
       });
