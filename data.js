@@ -476,3 +476,6 @@ function renderColoredRouteOnMap() {
 
   showToast("Đã hiển thị xong đường tuyến phân màu và các điểm mốc!", "success");
 }
+function veLaiTuyenAB() {
+  renderColoredRouteOnMap();
+}
