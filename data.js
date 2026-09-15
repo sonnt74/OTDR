@@ -168,175 +168,123 @@ function chiaSeSuCo(lat, lng, khoangCachKm, prevMX, nextMX, shareType) {
   else if (shareType === 'viber') window.open(`viber://forward?text=${encoded}`, '_blank');
 }
 
-function timViTriDut() {
-  var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value), kcOtdrMeters = kcOtdrKm * 1000; 
-  if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { showToast("Nhập cự ly đo hợp lệ!"); return; }
+// data.js - Gọi hàm PostGIS xử lý định vị sự cố OTDR
+// 1. Hàm định vị sự cố OTDR gọi qua PostGIS RPC
+async function timViTriDut() {
+  var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value);
+  var kcOtdrMeters = kcOtdrKm * 1000; 
+  
+  if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) {
+    showToast("Vui lòng nhập cự ly đo OTDR hợp lệ!");
+    return;
+  }
   
   var tuyenVal = document.getElementById('selectTuyen').value;
-  var tramVal = document.getElementById('selectTram').value;
-  var doanVal = document.getElementById('selectDoanCap').value;
-  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
-  precalculateRouteDataForPoints(backbone, backbone);
-
-  if (backbone.length < 2) { showToast("Tuyến cáp chưa đủ dữ liệu!"); return; }
-
-  var routeStops = [];
-  backbone.forEach(p => routeStops.push({ pt: p, dist: p.distanceFromAMeters, duTru: p.duTru || 0, isMX: isMangXong(p) }));
-  routeStops.sort((a, b) => a.dist - b.dist);
-
-  var targetLat = backbone[backbone.length - 1].lat, targetLng = backbone[backbone.length - 1].lng;
-  var closestPrevMX = "Chưa xác định", closestNextMX = "Chưa xác định";
-  var interpolatedLyTrinhText = "Đang xác định...";
-
-  for (var i = 0; i < routeStops.length - 1; i++) {
-    if (routeStops[i].isMX) closestPrevMX = routeStops[i].pt.ten;
-    var segStartDist = routeStops[i].dist;
-    var segEndDist = routeStops[i+1].dist;
-    
-    if (kcOtdrMeters <= segEndDist) {
-      var segOptDist = segEndDist - segStartDist;
-      var ratio = (segOptDist > 0) ? ((kcOtdrMeters - segStartDist) / segOptDist) : 0;
-      
-      targetLat = routeStops[i].pt.lat + ratio * (routeStops[i+1].pt.lat - routeStops[i].pt.lat);
-      targetLng = routeStops[i].pt.lng + ratio * (routeStops[i+1].pt.lng - routeStops[i].pt.lng);
-      
-      var lt1 = routeStops[i].pt.calculatedLyTrinhMeters;
-      var lt2 = routeStops[i+1].pt.calculatedLyTrinhMeters;
-      if (lt1 !== undefined && lt2 !== undefined) {
-        var interMeters = Math.round(lt1 + ratio * (lt2 - lt1));
-        var km = Math.floor(interMeters / 1000);
-        var m = interMeters % 1000;
-        interpolatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}`;
-      }
-
-      for (var j = i + 1; j < routeStops.length; j++) { if (routeStops[j].isMX) { closestNextMX = routeStops[j].pt.ten; break; } }
-      break;
-    }
+  if (tuyenVal === 'ALL') {
+    showToast("Vui lòng chọn tuyến cáp cần đo sự cố!");
+    return;
   }
 
-  if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
-  map.setView([targetLat, targetLng], 19, { animate: true });
-  
-  var faultIcon = L.divIcon({ html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>', iconSize: [28, 28] });
-  var faultMarker = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
-  foundMarkerLayer = faultMarker;
+  showLoading("Đang tính toán tọa độ sự cố bằng PostGIS...");
 
-  var shareButtons = `<div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;"><b>Chia sẻ sự cố:</b><br><button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'copy')">📋 Copy</button><button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'sms')" style="background:#28a745; color:white;">📩 SMS</button><button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'viber')" style="background:#6f42c1; color:white;">📱 Viber</button></div>`;
-  
-  var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>` +
-                  `Cự ly đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
-                  `📍 Lý trình QL: <b>${interpolatedLyTrinhText}</b><br>` +
-                  `MX trước: <b>${closestPrevMX}</b><br>` +
-                  `MX sau: <b>${closestNextMX}</b><br>` +
-                  `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>${shareButtons}`;
-  
-  faultMarker.bindPopup(popupHtml).openPopup();
+  try {
+    const { data, error } = await supabaseClient.rpc('tinh_vi_tri_otdr', {
+      p_id_tuyen: parseInt(tuyenVal),
+      p_kc_met: kcOtdrMeters
+    });
+
+    if (error) throw error;
+    if (!data || !data.success) {
+      throw new Error(data?.message || "Không thể tính toán vị trí sự cố từ cơ sở dữ liệu.");
+    }
+
+    hideLoading();
+    var targetLat = data.lat;
+    var targetLng = data.lng;
+
+    if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
+    map.setView([targetLat, targetLng], 19, { animate: true });
+    
+    var faultIcon = L.divIcon({ html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>', iconSize: [28, 28] });
+    foundMarkerLayer = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
+
+    var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR (POSTGIS)</b><br>` +
+                    `Cự ly đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
+                    `📍 Tọa độ: ${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}<br>` +
+                    `🏛️ Địa chỉ: <span id='fault-addr'>Đang tra cứu...</span><br>` +
+                    `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>`;
+    
+    foundMarkerLayer.bindPopup(popupHtml).openPopup();
+    
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${targetLat}&lon=${targetLng}&accept-language=vi`)
+      .then(res => res.json()).then(resData => {
+        var addrEl = document.getElementById('fault-addr');
+        if (addrEl) addrEl.innerText = resData.display_name || "Không rõ địa chỉ chi tiết";
+      });
+
+    showToast("Đã định vị thành công vị trí sự cố bằng PostGIS!", "success");
+  } catch (err) {
+    hideLoading();
+    showToast("Lỗi tính toán PostGIS: " + err.message, "error");
+  }
 }
 
-function timLyTrinhBanDo() {
+// 2. Hàm tìm lý trình bản đồ gọi qua PostGIS RPC
+async function timLyTrinhBanDo() {
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var parsedTarget = parseLyTrinhWithSuffix(txt);
   var targetMeters = parsedTarget ? parsedTarget.meters : null;
   
   if (targetMeters === null || isNaN(targetMeters)) {
-    showToast("Sai định dạng lý trình! Vui lòng nhập theo mẫu: 54+100 hoặc km 54+100");
+    showToast("Sai định dạng lý trình! Vui lòng nhập theo mẫu: 54+100");
     return;
   }
   
-  var pts = getPointsCuaTuyenHienTai();
-  if (pts.length < 2) {
-    showToast("Vui lòng chọn tuyến cáp ở bảng điều khiển bên trái trước khi tìm kiếm lý trình!");
+  var tuyenVal = document.getElementById('selectTuyen').value;
+  if (tuyenVal === 'ALL') {
+    showToast("Vui lòng chọn tuyến cáp trước khi tìm kiếm lý trình!");
     return;
   }
 
-  var isNghichHuong = false;
-  if (pts.length >= 2) {
-    if (pts[1].calculatedLyTrinhMeters < pts[0].calculatedLyTrinhMeters) {
-      isNghichHuong = true; 
-    }
-  }
+  showLoading("Đang tìm kiếm lý trình bằng PostGIS...");
 
-  var sortedPts = [...pts].sort((a, b) => {
-    return isNghichHuong 
-      ? b.calculatedLyTrinhMeters - a.calculatedLyTrinhMeters 
-      : a.calculatedLyTrinhMeters - b.calculatedLyTrinhMeters;
-  });
-
-  var targetSeg = null;
-  var foundLat = null, foundLng = null, bestDescription = "";
-
-  for (var i = 0; i < sortedPts.length - 1; i++) {
-    var p1 = sortedPts[i];
-    var p2 = sortedPts[i+1];
-    var startLt = p1.calculatedLyTrinhMeters;
-    var endLt = p2.calculatedLyTrinhMeters;
-    
-    var minLt = Math.min(startLt, endLt);
-    var maxLt = Math.max(startLt, endLt);
-    
-    if (targetMeters >= minLt && targetMeters <= maxLt) {
-      var span = endLt - startLt;
-      var ratio = (span !== 0) ? (targetMeters - startLt) / span : 0;
-      
-      var testLat = p1.lat + ratio * (p2.lat - p1.lat);
-      var testLng = p1.lng + ratio * (p2.lng - p1.lng);
-      
-      var distToP1 = calculateHaversine(testLat, testLng, p1.lat, p1.lng);
-      var distToP2 = calculateHaversine(testLat, testLng, p2.lat, p2.lng);
-      var segmentRealLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
-
-      if (distToP1 <= segmentRealLen + 100 && distToP2 <= segmentRealLen + 100) {
-        targetSeg = { p1: p1, p2: p2 };
-        foundLat = testLat;
-        foundLng = testLng;
-        bestDescription = `Nằm giữa [${p1.ten}] và [${p2.ten}]`;
-        break;
-      }
-    }
-  }
-
-  if (!targetSeg) {
-    var closest = sortedPts.reduce((prev, curr) => 
-      Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev
-    );
-    
-    var deviationMeters = Math.abs(closest.calculatedLyTrinhMeters - targetMeters);
-    if (deviationMeters > 100) {
-      showToast(`Không tìm thấy vị trí lý trình ${txt} chính xác (Sai số quá ${Math.round(deviationMeters)}m so với mốc gần nhất ${closest.ten}). Vui lòng kiểm tra lại mốc neo!`);
-      return;
-    }
-
-    foundLat = closest.lat;
-    foundLng = closest.lng;
-    bestDescription = `Gần điểm mốc: ${closest.ten} (Sai số ~${Math.round(deviationMeters)}m)`;
-  }
-
-  var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, getMasterRouteBackbone(document.getElementById('selectTuyen').value, document.getElementById('selectTram').value, document.getElementById('selectDoanCap').value));
-  var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
-
-  // Khôi phục hiển thị Marker và Popup chi tiết trên bản đồ
-  if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
-  map.setView([foundLat, foundLng], 19, { animate: true });
-  
-  var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
-  foundMarkerLayer = L.marker([foundLat, foundLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
-  
-  var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
-                     `- Vị trí: <b>${bestDescription}</b><br>` +
-                     `- Cự ly cáp tới Trạm TNN: <b>${distStr}</b><br>` +
-                     `🏛️ Địa chỉ: <span id='lt-addr'>Đang tra cứu tọa độ...</span>`;
-                     
-  foundMarkerLayer.bindPopup(popupContent).openPopup();
-  
-  // Gọi API tra cứu địa chỉ thực tế từ tọa độ (Reverse Geocoding)
-  fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${foundLat}&lon=${foundLng}&accept-language=vi`)
-    .then(r => r.json())
-    .then(data => {
-      var addressText = data.display_name || "Không rõ địa chỉ chi tiết";
-      foundMarkerLayer.setPopupContent(popupContent.replace("Đang tra cứu tọa độ...", addressText));
-    })
-    .catch(() => {
-      foundMarkerLayer.setPopupContent(popupContent.replace("Đang tra cứu tọa độ...", "Không thể kết nối dịch vụ địa danh"));
+  try {
+    const { data, error } = await supabaseClient.rpc('tim_toa_do_theo_ly_trinh', {
+      p_id_tuyen: parseInt(tuyenVal),
+      p_target_meters: targetMeters
     });
-}
 
+    if (error) throw error;
+    if (!data || !data.success) {
+      throw new Error(data?.message || "Không thể tìm thấy lý trình từ cơ sở dữ liệu.");
+    }
+
+    hideLoading();
+    var foundLat = data.lat;
+    var foundLng = data.lng;
+
+    if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
+    map.setView([foundLat, foundLng], 19, { animate: true });
+    
+    var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
+    foundMarkerLayer = L.marker([foundLat, foundLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
+    
+    var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt} (POSTGIS)</b><br>` +
+                       `- Tọa độ: ${foundLat.toFixed(6)}, ${foundLng.toFixed(6)}<br>` +
+                       `🏛️ Địa chỉ: <span id='lt-addr'>Đang tra cứu tọa độ...</span>`;
+                       
+    foundMarkerLayer.bindPopup(popupContent).openPopup();
+    
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${foundLat}&lon=${foundLng}&accept-language=vi`)
+      .then(r => r.json())
+      .then(resData => {
+        var addrEl = document.getElementById('lt-addr');
+        if (addrEl) addrEl.innerText = resData.display_name || "Không rõ địa chỉ chi tiết";
+      });
+
+    showToast("Đã tìm thấy vị trí lý trình thành công!", "success");
+  } catch (err) {
+    hideLoading();
+    showToast("Lỗi tìm lý trình PostGIS: " + err.message, "error");
+  }
+}
