@@ -331,16 +331,27 @@ function datLichTuXoaMarkerTimKiem() {
  */
 // data.js - Phục hồi Popup vị trí sự cố OTDR đầy đủ nút chia sẻ và Măng xông lân cận
 
-function chiaSeSuCo(lat, lng, khoangCachKm, prevMX, nextMX, shareType) {
-  var message = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n- Tọa độ: ${lat}, ${lng}\n- Cự ly đo OTDR: ${khoangCachKm} km\n- Vị trí: Nằm giữa [${prevMX}] và [${nextMX}]\n- Bản đồ: https://maps.google.com/?q=${lat},${lng}`;
-  var encoded = encodeURIComponent(message);
+function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMX, nextMX, shareType) {
+  // Tạo chuỗi thông báo chuẩn có chứa thông tin Lý trình QL
+  var message = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n` +
+                `- Tọa độ: ${lat}, ${lng}\n` +
+                `- Cự ly đo OTDR: ${khoangCachKm} km\n` +
+                `- Lý trình QL: ${lyTrinhText}\n` +
+                `- Vị trí: Nằm giữa [${prevMX}] và [${nextMX}]\n` +
+                `- Bản đồ: https://maps.google.com/?q=${lat},${lng}`;
   
   if (shareType === 'copy') { 
     navigator.clipboard.writeText(message); 
-    showToast("📋 Đã sao chép nội dung sự cố!", "success"); 
-  } else if (shareType === 'sms') {
-    window.open(`sms:?&body=${encoded}`, '_blank');
+    showToast("📋 Đã sao chép nội dung sự cố kèm Lý trình!", "success"); 
+  } else if (shareType === 'zalo') {
+    // Sao chép nội dung vào bộ nhớ tạm trước khi mở Zalo
+    navigator.clipboard.writeText(message);
+    showToast("📋 Đã sao chép nội dung! Đang mở Zalo...", "success");
+    setTimeout(function() {
+      window.open('https://zalo.me', '_blank');
+    }, 500);
   } else if (shareType === 'viber') {
+    var encoded = encodeURIComponent(message);
     window.open(`viber://forward?text=${encoded}`, '_blank');
   }
 }
@@ -400,13 +411,13 @@ function timViTriDut() {
   var faultMarker = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
   foundMarkerLayer = faultMarker;
 
-  // KHỐI POPUP CHIA SẺ SỰ CỐ ĐẦY ĐỦ VÀ KÍCH THƯỚC ĐẸP
+  // TRUYỀN BIẾN interpolatedLyTrinhText VÀO HÀM CHIA SẼ
   var shareButtonsHtml = `
     <div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">
-      <b>Nút chia sẻ nhanh:</b><br>
-      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'copy')">📋 Copy</button>
-      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'sms')" style="background:#28a745; color:white;">📩 SMS</button>
-      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'viber')" style="background:#6f42c1; color:white;">📱 Viber</button>
+      <b>Chia sẻ sự cố nhanh:</b><br>
+      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${closestPrevMX}', '${closestNextMX}', 'copy')">📋 Copy</button>
+      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${closestPrevMX}', '${closestNextMX}', 'zalo')" style="background:#0068ff; color:white;">💬 Zalo</button>
+      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${closestPrevMX}', '${closestNextMX}', 'viber')" style="background:#6f42c1; color:white;">📱 Viber</button>
     </div>`;
 
   var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>` +
