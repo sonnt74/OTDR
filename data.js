@@ -521,109 +521,95 @@ function timLyTrinhBanDo() {
     });
 }
 
-var routeColoredLinesGroup = L.featureGroup();
-var pointsMarkersLayer = L.featureGroup();
-
-function getColorByLoaiDiem(loaiDiemStr, idLoaiDiem) {
-  var str = (loaiDiemStr || '').toLowerCase();
-  if (str.includes('bể') || str.includes('be') || idLoaiDiem == 2) return '#fd7e14';
-  if (str.includes('mốc') || str.includes('moc') || idLoaiDiem == 3) return '#795548';
-  if (str.includes('cột') || str.includes('cot') || idLoaiDiem == 1) return '#28a745';
-  if (str.includes('măng xông') || str.includes('mx') || idLoaiDiem == 4) return '#dc3545';
-  return '#007bff';
-}
-
-function createCustomMarkerIcon(loaiDiemStr, idLoaiDiem) {
-  var color = getColorByLoaiDiem(loaiDiemStr, idLoaiDiem);
-  var symbol = '📍';
-  var str = (loaiDiemStr || '').toLowerCase();
-
-  if (str.includes('bể') || str.includes('be') || idLoaiDiem == 2) symbol = '📦';
-  else if (str.includes('mốc') || str.includes('moc') || idLoaiDiem == 3) symbol = '🧱';
-  else if (str.includes('cột') || str.includes('cot') || idLoaiDiem == 1) symbol = '💈';
-  else if (str.includes('măng xông') || str.includes('mx') || idLoaiDiem == 4) symbol = '⚡';
-
-  var htmlContent = `<div style="
-    background-color: ${color};
-    color: white;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    text-align: center;
-    line-height: 24px;
-    border: 2px solid #ffffff;
-    box-shadow: 0 0 4px rgba(0,0,0,0.5);
-    font-size: 11px;
-  ">${symbol}</div>`;
-
-  return L.divIcon({
-    html: htmlContent,
-    className: '',
-    iconSize: [24, 24],
-    iconAnchor: [12, 12]
-  });
-}
-
-function renderColoredRouteOnMap() {
-  var selectTuyen = document.getElementById('selectTuyen');
-  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
-
-  if (tuyenVal === 'ALL') {
-    if (map.hasLayer(routeColoredLinesGroup)) routeColoredLinesGroup.clearLayers();
-    if (map.hasLayer(pointsMarkersLayer)) pointsMarkersLayer.clearLayers();
-    return;
-  }
-
-  var selectTram = document.getElementById('selectTram');
-  var selectDoanCap = document.getElementById('selectDoanCap');
-  var tramVal = selectTram ? selectTram.value : 'ALL';
-  var doanVal = selectDoanCap ? selectDoanCap.value : 'ALL';
-  
-  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
-  if (!backbone || backbone.length < 2) return;
-
-  if (!map.hasLayer(routeColoredLinesGroup)) routeColoredLinesGroup.addTo(map);
-  if (!map.hasLayer(pointsMarkersLayer)) pointsMarkersLayer.addTo(map);
-
-  routeColoredLinesGroup.clearLayers();
-  pointsMarkersLayer.clearLayers();
-
-  for (var i = 0; i < backbone.length - 1; i++) {
-    var p1 = backbone[i];
-    var p2 = backbone[i + 1];
-
-    if (p1.lat && p1.lng && p2.lat && p2.lng) {
-      var lineColor = getColorByLoaiDiem(p1.loai || p1.loaiDiem, p1.idLoaiDiem);
-      var segment = L.polyline(
-        [[p1.lat, p1.lng], [p2.lat, p2.lng]],
-        { color: lineColor, weight: 5, opacity: 0.85, lineJoin: 'round' }
-      );
-      var popupText = `<b>Đoạn cáp: ${p1.ten || p1.tenDiem} ➔ ${p2.ten || p2.tenDiem}</b><br>` +
-                      `- Phân loại: <b>${p1.loai || p1.loaiDiem}</b><br>` +
-                      `- Lý trình: <b>${p1.lyTrinh || '0+000'}</b>`;
-      segment.bindPopup(popupText);
-      routeColoredLinesGroup.addLayer(segment);
-    }
-  }
-
-  backbone.forEach(function(pt) {
-    if (pt.lat && pt.lng) {
-      var icon = createCustomMarkerIcon(pt.loai || pt.loaiDiem, pt.idLoaiDiem);
-      var marker = L.marker([pt.lat, pt.lng], { icon: icon });
-      var markerPopup = `<b>📌 ${pt.ten || pt.tenDiem}</b><br>` +
-                        `- Loại điểm: <b>${pt.loai || pt.loaiDiem}</b><br>` +
-                        `- Lý trình: <b>${pt.lyTrinh || 'N/A'}</b><br>` +
-                        `- Dự trữ cáp: <b>${pt.duTru || 0} m</b>`;
-      marker.bindPopup(markerPopup);
-      pointsMarkersLayer.addLayer(marker);
-    }
-  });
-
-  try {
-    map.fitBounds(routeColoredLinesGroup.getBounds(), { padding: [40, 40] });
-  } catch(e) {}
-}
-
 function veLaiTuyenAB() {
-  renderColoredRouteOnMap();
+  if (!map) return;
+  markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
+  var tuyenVal = document.getElementById('selectTuyen').value, tramVal = document.getElementById('selectTram').value, doanVal = document.getElementById('selectDoanCap').value;
+  if (tuyenVal === 'ALL') return;
+
+  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  precalculateRouteDataForPoints(backbone, backbone);
+
+  var pts = getPointsCuaTuyenHienTai();
+  if (pts.length === 0) return;
+  
+  var bounds = [];
+  var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
+
+  function taoNutHanhDong(id, ten, lat, lng) {
+    return isDraggable ? `<hr style="margin:4px 0;"><button class="btn-small" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">âœï¸ Sá»­a TÃªn</button><button class="btn-small del" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">ðŸ—‘ï¸ XÃ³a</button>` : '';
+  }
+
+  async function handleDragEnd(e, ptObj) {
+    var newPos = e.target.getLatLng();
+    
+    var isConfirmed = await showConfirmDialog(`Báº¡n cÃ³ cháº¯c cháº¯n muá»‘n lÆ°u tá»a Ä‘á»™ má»›i cho Ä‘iá»ƒm [${ptObj.ten}] khÃ´ng?`);
+    
+    if (isConfirmed) {
+      showLoading("Äang lÆ°u tá»a Ä‘á»™...");
+      try {
+        // 1. LÆ°u dá»¯ liá»‡u xuá»‘ng Supabase
+        const { error } = await supabaseClient.from('diem_ha_tang').update({ lat: newPos.lat, long: newPos.lng }).eq('id_diem', ptObj.id);
+        if (error) throw error;
+        
+        // 2. Cáº­p nháº­t trá»±c tiáº¿p trong bá»™ nhá»› RAM (globalDataPoints)
+        var localPt = globalDataPoints.find(p => p.id == ptObj.id);
+        if (localPt) {
+          localPt.lat = newPos.lat;
+          localPt.lng = newPos.lng;
+        }
+        
+        hideLoading();
+        showToast("ÄÃ£ lÆ°u vÃ  cáº­p nháº­t tá»a Ä‘á»™ thÃ nh cÃ´ng!", "success");
+        
+        // 3. Váº½ láº¡i báº£n Ä‘á»“ vÃ  Zoom trá»ng tÃ¢m tá»›i Ä‘iá»ƒm vá»«a kÃ©o tháº£
+        veLaiTuyenAB();
+        map.setView([newPos.lat, newPos.lng], 19, { animate: true });
+        
+      } catch (err) { 
+        showToast("Lá»—i: " + err.message, "error"); 
+        hideLoading(); 
+        e.target.setLatLng([ptObj.lat, ptObj.lng]); 
+      }
+    } else { 
+      e.target.setLatLng([ptObj.lat, ptObj.lng]); 
+    }
+  }
+
+  pts.forEach((pt, index) => {
+    bounds.push([pt.lat, pt.lng]);
+    var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : '<div class="standard-marker"></div>';
+    var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
+    
+    var popupHtml = `<b>${pt.ten}</b><br>` +
+                    `Loáº¡i: ${pt.loai}<br>` +
+                    `ðŸ“ LÃ½ trÃ¬nh QL: <b>${pt.calculatedLyTrinhText}</b><br>` +
+                    `ðŸ“ Cá»± ly tá»« Tráº¡m A: <b>${pt.distanceFromAText}</b>` + 
+                    taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng);
+
+    marker.bindPopup(popupHtml);
+    marker.on('dragend', e => handleDragEnd(e, pt));
+    markersLayer.addLayer(marker);
+  });
+
+  var mxList = backbone.filter(p => isMangXong(p));
+  mxList.forEach(mx => {
+    bounds.push([mx.lat, mx.lng]);
+    var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
+    var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}')">ðŸ“ Ghi chÃº</button>`;
+    
+    var popupHtml = `<b>${mx.ten}</b><br>` +
+                    `ðŸ“ LÃ½ trÃ¬nh QL: <b>${mx.calculatedLyTrinhText}</b><br>` +
+                    `ðŸ“ Cá»± ly tá»« Tráº¡m A: <b>${mx.distanceFromAText}</b><br>` +
+                    taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng) + ghiChuBtn;
+
+    mxMarker.bindPopup(popupHtml);
+    mxMarker.on('dragend', e => handleDragEnd(e, mx));
+    mxLayer.addLayer(mxMarker);
+  });
+
+  var lineCoordinates = backbone.map(p => [p.lat, p.lng]);
+  if (lineCoordinates.length > 1) polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: '#0d6efd', weight: 3 }));
+  if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
 }
+window.veLaiTuyenAB = veLaiTuyenAB;
