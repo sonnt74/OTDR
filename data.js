@@ -1,4 +1,4 @@
-// data_2.js - Xử lý truy vấn Tuyến cáp 2 lớp (Khắc phục triệt để lỗi chọn Trạm khác ALL bị rỗng)
+// data_2.js - Xử lý phân quyền currentUser chuẩn xác kết hợp bộ lọc Tuyến/Đoạn 2 lớp an toàn
 
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
@@ -11,7 +11,7 @@ async function fetchAllRowsSafe(tableName) {
 }
 
 /**
- * HÀM PHỤ TRỢ: Lấy giá trị chuỗi an toàn từ đối tượng
+ * HÀM PHỤ TRỢ: Lấy ID dạng Chuỗi (String) an toàn từ đối tượng
  */
 function getSafeStrId(item, keys) {
   if (!item) return '';
@@ -84,7 +84,8 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       dataPoints: globalDataPoints
     });
 
-    khoiTaoBangDieuKhienTest();
+    // KÍCH HOẠT LUỒNG PHÂN QUYỀN THEO CURRENTUSER
+    xuLyPhanQuyenDoanTuyenUser();
 
     if (forceRefresh) showToast("Đã làm mới dữ liệu!");
   } catch (err) { 
@@ -96,29 +97,92 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 }
 
 /**
- * 2. KHỞI TẠO BẢNG ĐIỀU KHIỂN
+ * 2. LUỒNG XỬ LÝ PHÂN QUYỀN NGUỜI DÙNG (CURRENTUSER)
  */
-function khoiTaoBangDieuKhienTest() {
+function xuLyPhanQuyenDoanTuyenUser() {
   var selectDai = document.getElementById('selectDai');
+  var groupDai = selectDai ? selectDai.closest('.form-group') : null;
   var selectTram = document.getElementById('selectTram');
+  var groupTram = selectTram ? selectTram.closest('.form-group') : null;
 
-  var state = AppStore.getState();
-  var daiList = state.daiList || [];
+  var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
+  var userDaiId = currentUser ? getSafeStrId(currentUser, ['idDai', 'id_dai']) : '';
+  var userTramId = currentUser ? getSafeStrId(currentUser, ['idTram', 'id_tram']) : '';
 
+  // 1. NẠP DỮ LIỆU ĐÀI
   if (selectDai) {
     selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
-    daiList.forEach(d => {
+    rawDaiList.forEach(d => {
       var dId = getSafeStrId(d, ['id_dai', 'id']);
       selectDai.innerHTML += `<option value="${dId}">${d.ten_dai || d.ten}</option>`;
     });
-    selectDai.value = 'ALL';
   }
 
-  onDaiChange();
+  // 2. NẠP DỮ LIỆU TRẠM
+  if (selectTram) {
+    selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
+    rawTramList.forEach(t => {
+      var tId = getSafeStrId(t, ['id_tram', 'id']);
+      selectTram.innerHTML += `<option value="${tId}">${t.ten_tram || t.ten}</option>`;
+    });
+  }
+
+  var selectedDaiVal = 'ALL';
+  var selectedTramVal = 'ALL';
+
+  // 3. XỬ LÝ THEO VAI TRÒ (ROLE)
+  if (userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') {
+    // Nhân viên / Admin Trạm: Ẩn ComboBox Đài và Trạm
+    if (groupDai) groupDai.style.display = 'none';
+    if (groupTram) groupTram.style.display = 'none';
+
+    if (userTramId) {
+      selectedTramVal = userTramId;
+      var matchedTram = rawTramList.find(t => getSafeStrId(t, ['id_tram', 'id']) === userTramId);
+      if (matchedTram) selectedDaiVal = getSafeStrId(matchedTram, ['id_dai', 'dai_id']);
+
+      if (selectTram) selectTram.value = selectedTramVal;
+      if (selectDai) selectDai.value = selectedDaiVal;
+    }
+  } else if (userRole === 'dai_admin') {
+    // Admin Đài: Khóa cứng Đài, chỉ nạp Trạm thuộc Đài
+    if (groupDai) groupDai.style.display = 'block';
+    if (groupTram) groupTram.style.display = 'block';
+
+    if (userDaiId) {
+      selectedDaiVal = userDaiId;
+      if (selectDai) {
+        selectDai.value = selectedDaiVal;
+        selectDai.disabled = true;
+      }
+
+      if (selectTram) {
+        selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
+        rawTramList.filter(t => getSafeStrId(t, ['id_dai', 'dai_id']) === userDaiId)
+                  .forEach(t => {
+                    var tId = getSafeStrId(t, ['id_tram', 'id']);
+                    selectTram.innerHTML += `<option value="${tId}">${t.ten_tram || t.ten}</option>`;
+                  });
+      }
+    }
+  } else {
+    // Sys Admin hoặc chưa đăng nhập: Mở toàn bộ
+    if (groupDai) { groupDai.style.display = 'block'; if (selectDai) selectDai.disabled = false; }
+    if (groupTram) { groupTram.style.display = 'block'; if (selectTram) selectTram.disabled = false; }
+  }
+
+  // ĐỒNG BỘ TRẠNG THÁI APPSTORE DUY NHẤT 1 LẦN
+  AppStore.setState({
+    selectedDai: selectedDaiVal,
+    selectedTram: selectedTramVal
+  });
+
+  // KÍCH HOẠT LỌC TUYẾN
+  updateTuyenOptions();
 }
 
 /**
- * 3. HÀM CHỌN ĐÀI - LỌC TRẠM TỪ APPSTORE
+ * 3. HÀM CHỌN ĐÀI
  */
 function onDaiChange() {
   var selectDai = document.getElementById('selectDai');
@@ -128,7 +192,7 @@ function onDaiChange() {
   AppStore.setState({ selectedDai: String(daiVal), selectedTram: 'ALL' });
 
   var state = AppStore.getState();
-  var tramList = state.tramList || [];
+  var tramList = state.tramList || rawTramList;
 
   if (selectTram) {
     selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
@@ -144,7 +208,7 @@ function onDaiChange() {
 }
 
 /**
- * 4. HÀM CHỌN TRẠM - CẬP NHẬT TRẠM VÀO APPSTORE
+ * 4. HÀM CHỌN TRẠM
  */
 function onTramChange() {
   var selectTram = document.getElementById('selectTram');
@@ -155,7 +219,7 @@ function onTramChange() {
 }
 
 /**
- * 5. HÀM LỌC TUYẾN THEO TRẠM DÙNG TRUY VẤN 2 LỚP DỰ PHÒNG
+ * 5. HÀM LỌC TUYẾN CÁP 2 LỚP VỚI BỘ LỌC PHÂN QUYỀN
  */
 function updateTuyenOptions() {
   var selectTuyen = document.getElementById('selectTuyen');
@@ -165,17 +229,16 @@ function updateTuyenOptions() {
   var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
   var state = AppStore.getState();
   
-  var doanCapList = state.doanCapList || [];
-  var tuyenList = state.tuyenList || [];
-  var dataPoints = state.dataPoints || [];
+  var doanCapList = state.doanCapList || rawDoanCapList;
+  var tuyenList = state.tuyenList || rawTuyenList;
+  var dataPoints = state.dataPoints || globalDataPoints;
 
   var allowedTuyenIds = [];
 
   if (tramVal === 'ALL') {
-    // Nếu là ALL, lấy toàn bộ Tuyến cáp
     allowedTuyenIds = tuyenList.map(t => getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']));
   } else {
-    // LỚP 1: Lọc theo bảng doanCapList
+    // LỚP 1: Lọc qua doanCapList
     var matchedDoan = doanCapList.filter(d => {
       var tramIdInDoan = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'id_diem_a', 'id_diem_b']);
       return tramIdInDoan === tramVal;
@@ -183,21 +246,19 @@ function updateTuyenOptions() {
 
     allowedTuyenIds = [...new Set(matchedDoan.map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap'])))];
 
-    // LỚP 2: Nếu Lớp 1 không có dữ liệu, truy vấn qua mảng dataPoints
+    // LỚP 2: Lọc qua dataPoints nếu Lớp 1 rỗng
     if (allowedTuyenIds.length === 0 && dataPoints.length > 0) {
       var matchedPoints = dataPoints.filter(p => String(p.idTram).trim() === tramVal);
       allowedTuyenIds = [...new Set(matchedPoints.map(p => String(p.idTuyen).trim()))];
     }
   }
 
-  // Lọc lấy các đối tượng Tuyến cáp từ tuyenList
   var filteredTuyenList = tuyenList.filter(t => {
     if (tramVal === 'ALL') return true;
     var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
     return allowedTuyenIds.includes(tId);
   });
 
-  // Nạp danh sách vào thẻ selectTuyen
   selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
   filteredTuyenList.forEach(t => {
     var tuyenId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
@@ -205,7 +266,7 @@ function updateTuyenOptions() {
     selectTuyen.innerHTML += `<option value="${tuyenId}">${tuyenMa}</option>`;
   });
 
-  // Tự động chọn Tuyến đầu tiên nếu có danh sách
+  // Tự động chọn Tuyến đầu tiên thuộc phân quyền
   if (selectTuyen.options.length > 1) {
     selectTuyen.selectedIndex = 1;
   }
@@ -214,7 +275,7 @@ function updateTuyenOptions() {
 }
 
 /**
- * 6. HÀM CHỌN TUYẾN - LỌC ĐOẠN CÁP VÀ VẼ BẢN ĐỒ
+ * 6. HÀM CHỌN TUYẾN CÁP - LỌC ĐOẠN CÁP VÀ VẼ BẢN ĐỒ GIS
  */
 function onTuyenChange() {
   var selectTuyen = document.getElementById('selectTuyen');
@@ -224,7 +285,7 @@ function onTuyenChange() {
   AppStore.setState({ selectedTuyen: tuyenVal });
 
   var state = AppStore.getState();
-  var doanCapList = state.doanCapList || [];
+  var doanCapList = state.doanCapList || rawDoanCapList;
 
   if (selectDoanCap) {
     selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
@@ -460,18 +521,15 @@ function timLyTrinhBanDo() {
     });
 }
 
-/**
- * 7. MODULE VẼ ĐƯỜNG TUYẾN PHÂN MÀU VÀ MỐC HẠ TẦNG TRÊN BẢN ĐỒ
- */
 var routeColoredLinesGroup = L.featureGroup();
 var pointsMarkersLayer = L.featureGroup();
 
 function getColorByLoaiDiem(loaiDiemStr, idLoaiDiem) {
   var str = (loaiDiemStr || '').toLowerCase();
-  if (str.includes('bể') || str.includes('be') || idLoaiDiem == 2) return '#fd7e14'; // Cam (Bể)
-  if (str.includes('mốc') || str.includes('moc') || idLoaiDiem == 3) return '#795548'; // Nâu (Mốc)
-  if (str.includes('cột') || str.includes('cot') || idLoaiDiem == 1) return '#28a745'; // Xanh lá (Cột)
-  if (str.includes('măng xông') || str.includes('mx') || idLoaiDiem == 4) return '#dc3545'; // Đỏ (MX)
+  if (str.includes('bể') || str.includes('be') || idLoaiDiem == 2) return '#fd7e14';
+  if (str.includes('mốc') || str.includes('moc') || idLoaiDiem == 3) return '#795548';
+  if (str.includes('cột') || str.includes('cot') || idLoaiDiem == 1) return '#28a745';
+  if (str.includes('măng xông') || str.includes('mx') || idLoaiDiem == 4) return '#dc3545';
   return '#007bff';
 }
 
@@ -566,6 +624,6 @@ function renderColoredRouteOnMap() {
   } catch(e) {}
 }
 
-//function veLaiTuyenAB() {
-//  renderColoredRouteOnMap();
-//}
+function veLaiTuyenAB() {
+  renderColoredRouteOnMap();
+}
