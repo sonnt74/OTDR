@@ -1,4 +1,4 @@
-// data_2.js - Xử lý phân quyền đăng nhập, lọc Combobox và tự động vẽ bản đồ GIS cáp quang
+// data_2.js - Xử lý phân quyền, truy vấn ngược phân cấp và tự động vẽ bản đồ GIS cáp quang
 
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
@@ -11,7 +11,31 @@ async function fetchAllRowsSafe(tableName) {
 }
 
 /**
- * 1. HÀM TẢI DỮ LIỆU TỪ SUPABASE & TỰ ĐỘNG CHỌN TUYẾN/ĐOẠN VẼ BẢN ĐỒ CHO TẤT CẢ VAI TRÒ
+ * HÀM MỚI: Truy vấn ngược ID Trạm và ID Đài từ Đoạn Cáp / Trạm phân công của User
+ */
+function truyVanNguocPhanCapUser() {
+  if (typeof currentUser === 'undefined' || !currentUser) return;
+
+  // 1. Nếu User có idDoanCap nhưng chưa có idTram hoặc idTuyen -> Tra ngược từ rawDoanCapList
+  if (currentUser.idDoanCap) {
+    var matchedDoan = rawDoanCapList.find(d => (d.id_doan_cap || d.id) == currentUser.idDoanCap);
+    if (matchedDoan) {
+      if (!currentUser.idTram) currentUser.idTram = matchedDoan.id_tram || matchedDoan.tram_id;
+      if (!currentUser.idTuyen) currentUser.idTuyen = matchedDoan.id_tuyen || matchedDoan.tuyen_cap_id;
+    }
+  }
+
+  // 2. Nếu User có idTram nhưng chưa có idDai -> Tra ngược từ rawTramList để tìm id_dai
+  if (currentUser.idTram && !currentUser.idDai) {
+    var matchedTram = rawTramList.find(t => (t.id_tram || t.id) == currentUser.idTram);
+    if (matchedTram) {
+      currentUser.idDai = matchedTram.id_dai || matchedTram.dai_id;
+    }
+  }
+}
+
+/**
+ * 1. HÀM TẢI DỮ LIỆU TỪ SUPABASE & TỰ ĐỘNG CHỌN VẼ BẢN ĐỒ
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   showLoading("Đang tải dữ liệu...");
@@ -52,7 +76,6 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       });
     });
 
-    // Cập nhật trạng thái vào AppStore
     AppStore.setState({
       daiList: rawDaiList,
       tramList: rawTramList,
@@ -61,27 +84,28 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       dataPoints: globalDataPoints
     });
 
-    // Khởi tạo phân cấp ComboBox dựa trên User đăng nhập
+    // BƯỚC QUAN TRỌNG: Thực hiện truy vấn ngược phân cấp User từ danh sách Đoạn/Trạm
+    truyVanNguocPhanCapUser();
+
+    // Khởi tạo ComboBox theo đúng phân quyền đã được làm sạch
     khoiTaoComboDaiTheoPhanCap();
     capNhatComboDiemA();
 
-    // --- XỬ LÝ TỰ ĐỘNG CHỌN TUYẾN & ĐOẠN ĐỂ VẼ BẢN ĐỒ (CHO TẤT CẢ USER) ---
+    // Tự động chọn Tuyến và Đoạn cáp để vẽ bản đồ ngay lập tức
     var selectTuyenEl = document.getElementById('selectTuyen');
     var selectDoanCapEl = document.getElementById('selectDoanCap');
 
     if (selectTuyenEl && selectTuyenEl.options.length > 1) {
-      // 1. Tự động chọn tuyến đầu tiên trong danh sách đã lọc
       selectTuyenEl.selectedIndex = 1;
-      onTuyenChange(); // Nạp danh sách đoạn cáp tương ứng
+      onTuyenChange();
 
-      // 2. Tự động chọn đoạn cáp đầu tiên của tuyến đó
       if (selectDoanCapEl && selectDoanCapEl.options.length > 1) {
         if (typeof currentUser !== 'undefined' && currentUser.idDoanCap) {
           selectDoanCapEl.value = currentUser.idDoanCap;
         } else {
-          selectDoanCapEl.selectedIndex = 1; // Chọn đoạn đầu tiên trong combobox
+          selectDoanCapEl.selectedIndex = 1;
         }
-        onDoanCapChange(); // Tự động gọi vẽ bản đồ
+        onDoanCapChange();
       } else {
         veLaiTuyenAB();
       }
@@ -107,37 +131,39 @@ function khoiTaoComboDaiTheoPhanCap() {
 
   var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
 
-  // Đổ dữ liệu Đài ban đầu
+  // Nạp danh sách Đài
   if (selectDai) {
     selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
     rawDaiList.forEach(dai => selectDai.innerHTML += `<option value="${dai.id_dai}">${dai.ten_dai}</option>`);
   }
 
-  // 1. Nếu là Admin Trạm hoặc Member (Nhân viên trạm) -> Tra sẵn giá trị và ẨN 2 ô chọn Đài/Trạm
-  if (userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') {
-    if (currentUser.idDai && selectDai) selectDai.value = currentUser.idDai;
-    if (currentUser.idTram && selectTram) selectTram.value = currentUser.idTram;
+  // Gán giá trị Đài & Trạm đã truy vấn ngược cho User
+  if (currentUser.idDai && selectDai) selectDai.value = currentUser.idDai;
+  
+  // Tải danh sách Trạm thuộc Đài đã gán
+  if (selectTram) {
+    selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
+    var daiVal = selectDai ? selectDai.value : 'ALL';
+    rawTramList.filter(tram => daiVal === 'ALL' || tram.id_dai == daiVal)
+               .forEach(tram => selectTram.innerHTML += `<option value="${tram.id_tram}">${tram.ten_tram}</option>`);
+    if (currentUser.idTram) selectTram.value = currentUser.idTram;
+  }
 
+  // Xử lý ẩn/hiện ComboBox theo vai trò
+  if (userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') {
     if (groupDai) groupDai.style.display = 'none';
     if (groupTram) groupTram.style.display = 'none';
-  } 
-  // 2. Nếu là Admin Đài -> Khóa ô Chọn Đài theo Đài quản lý, hiển thị ô Trạm
-  else if (userRole === 'dai_admin') {
-    if (groupDai) { groupDai.style.display = 'block'; }
-    if (groupTram) { groupTram.style.display = 'block'; }
-    if (currentUser.idDai && selectDai) { 
-      selectDai.value = currentUser.idDai; 
-      selectDai.disabled = true; 
-    }
-  } 
-  // 3. Admin Sys -> Hiển thị đầy đủ tất cả combobox
-  else {
+  } else if (userRole === 'dai_admin') {
+    if (groupDai) groupDai.style.display = 'block';
+    if (groupTram) groupTram.style.display = 'block';
+    if (selectDai) selectDai.disabled = true;
+  } else {
     if (groupDai) groupDai.style.display = 'block';
     if (groupTram) groupTram.style.display = 'block';
     if (selectDai) selectDai.disabled = false;
   }
 
-  onDaiChange();
+  updateTuyenOptions();
 }
 
 function onDaiChange() {
@@ -153,9 +179,7 @@ function onDaiChange() {
     selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
     rawTramList.filter(tram => daiVal === 'ALL' || tram.id_dai == daiVal)
                .forEach(tram => selectTram.innerHTML += `<option value="${tram.id_tram}">${tram.ten_tram}</option>`);
-    if (currentUser.idTram && userRole === 'tram_admin') {
-      selectTram.value = currentUser.idTram;
-    }
+    if (currentUser.idTram) selectTram.value = currentUser.idTram;
   }
   updateTuyenOptions();
 }
@@ -168,7 +192,7 @@ function onTramChange() {
 }
 
 /**
- * 3. LỌC COMBOBOX TUYẾN CÁP THEO PHÂN QUYỀN ĐĂNG NHẬP
+ * 3. LỌC DANH SÁCH TUYẾN CÁP THEO PHÂN QUYỀN ĐĂNG NHẬP
  */
 function updateTuyenOptions() {
   var selectTuyen = document.getElementById('selectTuyen');
@@ -178,7 +202,6 @@ function updateTuyenOptions() {
   var filteredTuyenList = rawTuyenList;
   var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
   
-  // Nếu là cấp Trạm (tram_admin/member): Lọc tuyến có chứa đoạn cáp thuộc trạm đó
   if ((userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') && currentUser.idTram) {
     var allowedTuyenIds = rawDoanCapList
       .filter(doan => doan.id_tram == currentUser.idTram || doan.tram_id == currentUser.idTram)
@@ -187,9 +210,7 @@ function updateTuyenOptions() {
     filteredTuyenList = rawTuyenList.filter(tuyen => 
       allowedTuyenIds.includes(tuyen.id_tuyen_cap || tuyen.id)
     );
-  } 
-  // Nếu là dai_admin: Lọc tuyến thuộc các trạm nằm trong đài đó
-  else if (userRole === 'dai_admin' && currentUser.idDai) {
+  } else if (userRole === 'dai_admin' && currentUser.idDai) {
     var tramIdsOfDai = rawTramList.filter(t => t.id_dai == currentUser.idDai).map(t => t.id_tram);
     var allowedTuyenIdsDai = rawDoanCapList
       .filter(doan => tramIdsOfDai.includes(doan.id_tram || doan.tram_id))
@@ -210,7 +231,7 @@ function updateTuyenOptions() {
 }
 
 /**
- * 4. LỌC COMBOBOX ĐOẠN CÁP THEO QUYỀN TRUY CẬP VÀ TUYẾN ĐƯỢC CHỌN
+ * 4. LỌC DANH SÁCH ĐOẠN CÁP THEO QUYỀN TRUY CẬP VÀ TUYẾN ĐƯỢC CHỌN
  */
 function onTuyenChange() {
   var selectTuyen = document.getElementById('selectTuyen');
@@ -225,7 +246,6 @@ function onTuyenChange() {
       var matchedDoan = rawDoanCapList.filter(doan => (doan.id_tuyen || doan.tuyen_cap_id) == tuyenVal);
       var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
 
-      // Lọc tiếp đoạn cáp nếu là cấp Trạm
       if ((userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') && currentUser.idTram) {
         matchedDoan = matchedDoan.filter(doan => (doan.id_tram == currentUser.idTram || doan.tram_id == currentUser.idTram));
       }
