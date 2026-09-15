@@ -170,6 +170,7 @@ function chiaSeSuCo(lat, lng, khoangCachKm, prevMX, nextMX, shareType) {
 
 // data.js - Gọi hàm PostGIS xử lý định vị sự cố OTDR
 // 1. Hàm định vị sự cố OTDR gọi qua PostGIS RPC
+// 1. Hàm định vị sự cố OTDR gọi qua PostGIS RPC
 async function timViTriDut() {
   var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value);
   var kcOtdrMeters = kcOtdrKm * 1000; 
@@ -212,11 +213,14 @@ async function timViTriDut() {
     var faultIcon = L.divIcon({ html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>', iconSize: [28, 28] });
     foundMarkerLayer = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
 
+    var shareTextOtdr = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n- Cự ly đo OTDR: ${kcOtdrKm.toFixed(2)} km\n- MX trước: ${closestPrevMX}\n- MX sau: ${closestNextMX}\n- Tọa độ: ${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}\n- Bản đồ: https://maps.google.com/?q=${targetLat},${targetLng}`;
+    var encodedOtdr = encodeURIComponent(shareTextOtdr);
+
     var shareButtons = `<div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">` +
                        `<b>Chia sẻ sự cố:</b><br>` +
-                       `<button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'copy')">📋 Copy</button> ` +
-                       `<button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'sms')" style="background:#28a745; color:white;">📩 SMS</button> ` +
-                       `<button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'viber')" style="background:#6f42c1; color:white;">📱 Viber</button>` +
+                       `<button class="btn-info" onclick="navigator.clipboard.writeText(\`${shareTextOtdr}\`); showToast('Đã sao chép nội dung!');">📋 Copy</button> ` +
+                       `<button class="btn-info" onclick="window.open('sms:?&body=${encodedOtdr}', '_blank')" style="background:#28a745; color:white;">📩 SMS</button> ` +
+                       `<button class="btn-info" onclick="window.open('viber://forward?text=${encodedOtdr}', '_blank')" style="background:#6f42c1; color:white;">📱 Viber</button>` +
                        `</div>`;
 
     var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR (POSTGIS)</b><br>` +
@@ -278,7 +282,6 @@ async function timLyTrinhBanDo() {
     var foundLat = data.lat;
     var foundLng = data.lng;
 
-    // Định dạng cự ly cáp từ Trạm A
     var distStr = (targetMeters >= 1000) ? (targetMeters / 1000).toFixed(2) + " km" : Math.round(targetMeters) + " m";
 
     if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
@@ -287,27 +290,25 @@ async function timLyTrinhBanDo() {
     var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
     foundMarkerLayer = L.marker([foundLat, foundLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
     
-    // Các nút chia sẻ thông tin vị trí lý trình
-    var shareText = `[TNN NET1] TÌM KIẾM LÝ TRÌNH: ${txt}\n- Cự ly từ Trạm A: ${distStr}\n- Tọa độ: ${foundLat.toFixed(6)}, ${foundLng.toFixed(6)}\n- Bản đồ: https://maps.google.com/?q=${foundLat},${foundLng}`;
-    var encodedShare = encodeURIComponent(shareText);
+    var shareTextLt = `[TNN NET1] TÌM KIẾM LÝ TRÌNH: ${txt}\n- Cự ly từ Trạm A: ${distStr}\n- Tọa độ: ${foundLat.toFixed(6)}, ${foundLng.toFixed(6)}\n- Bản đồ: https://maps.google.com/?q=${foundLat},${foundLng}`;
+    var encodedShareLt = encodeURIComponent(shareTextLt);
 
-    var shareButtons = `<div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">` +
-                       `<b>Chia sẻ vị trí:</b><br>` +
-                       `<button class="btn-info" onclick="navigator.clipboard.writeText(\`${shareText}\`); showToast('Đã sao chép nội dung!');">📋 Copy</button> ` +
-                       `<button class="btn-info" onclick="window.open('sms:?&body=${encodedShare}', '_blank')" style="background:#28a745; color:white;">📩 SMS</button> ` +
-                       `<button class="btn-info" onclick="window.open('viber://forward?text=${encodedShare}', '_blank')" style="background:#6f42c1; color:white;">📱 Viber</button>` +
-                       `</div>`;
+    var shareButtonsLt = `<div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">` +
+                         `<b>Chia sẻ vị trí:</b><br>` +
+                         `<button class="btn-info" onclick="navigator.clipboard.writeText(\`${shareTextLt}\`); showToast('Đã sao chép nội dung!');">📋 Copy</button> ` +
+                         `<button class="btn-info" onclick="window.open('sms:?&body=${encodedShareLt}', '_blank')" style="background:#28a745; color:white;">📩 SMS</button> ` +
+                         `<button class="btn-info" onclick="window.open('viber://forward?text=${encodedShareLt}', '_blank')" style="background:#6f42c1; color:white;">📱 Viber</button>` +
+                         `</div>`;
 
     var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt} (POSTGIS)</b><br>` +
                        `- Lý trình quy hoạch: <b>${txt}</b><br>` +
                        `- Cự ly cáp từ Trạm A: <b>${distStr}</b><br>` +
                        `- Tọa độ: <b>${foundLat.toFixed(6)}, ${foundLng.toFixed(6)}</b><br>` +
                        `🏛️ Địa chỉ: <span id='lt-addr'>Đang tra cứu tọa độ...</span><br>` +
-                       `<a href='https://maps.google.com/?q=${foundLat},${foundLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>${shareButtons}`;
+                       `<a href='https://maps.google.com/?q=${foundLat},${foundLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>${shareButtonsLt}`;
                        
     foundMarkerLayer.bindPopup(popupContent).openPopup();
     
-    // Tra cứu địa chỉ thực tế từ tọa độ qua Nominatim API
     fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${foundLat}&lon=${foundLng}&accept-language=vi`)
       .then(r => r.json())
       .then(resData => {
