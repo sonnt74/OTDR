@@ -1,4 +1,60 @@
-// admin.js - Quản lý CRUD đối tượng hạ tầng và bảng điều khiển Quản trị
+// admin.js - Quản lý CRUD đối tượng hạ tầng và Bảng điều khiển Quản trị theo Phân quyền
+
+function switchAdminTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+  
+  var activeBtn = document.querySelector(`.tab-btn[onclick*="${tabId}"]`);
+  if (activeBtn) activeBtn.classList.add('active');
+  
+  var activePane = document.getElementById(tabId);
+  if (activePane) activePane.classList.add('active');
+
+  loadAdminMasterData();
+}
+
+function loadAdminMasterData() {
+  var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : 'member';
+  var myDaiId = currentUser ? String(currentUser.idDai || currentUser.id_dai).trim() : '';
+  var myTramId = currentUser ? String(currentUser.idTram || currentUser.id_tram).trim() : '';
+
+  // 1. TẢI VÀ PHÂN QUYỀN BẢNG TÀI KHOẢN (USERS)
+  var queryAcc = supabaseClient.from('tai_khoan').select('*');
+  if (userRole === 'dai_admin') queryAcc = queryAcc.eq('id_dai', myDaiId);
+  else if (userRole === 'tram_admin') queryAcc = queryAcc.eq('id_tram', myTramId);
+
+  queryAcc.then(({ data: accs }) => {
+    var accHtml = '';
+    (accs || []).forEach(a => {
+      var daiObj = rawDaiList.find(d => String(d.id_dai || d.id).trim() == String(a.id_dai).trim());
+      var tramObj = rawTramList.find(t => String(t.id_tram || t.id).trim() == String(a.id_tram).trim());
+      
+      var canEdit = (userRole === 'sys_admin') || (userRole === 'dai_admin' && String(a.id_dai) === myDaiId) || (userRole === 'tram_admin' && String(a.id_tram) === myTramId);
+      var btnSua = canEdit ? `<button class="btn-small" onclick="moFormSuaTaiKhoan(${a.id},'${a.email}','${a.role}',${a.id_dai || 'null'},${a.id_tram || 'null'},${a.can_edit_map})">✏️</button>` : `<span class="badge bg-secondary">Chỉ xem</span>`;
+
+      accHtml += `<tr><td><b>${a.email}</b></td><td>${a.role}</td><td>${daiObj ? (daiObj.ten_dai || daiObj.ten) : '-'}</td><td>${tramObj ? (tramObj.ten_tram || tramObj.ten) : '-'}</td><td>${a.can_edit_map ? '✅' : '❌'}</td><td>${btnSua}</td></tr>`;
+    });
+    var tbodyAcc = document.getElementById('masterAccountTableBody');
+    if (tbodyAcc) tbodyAcc.innerHTML = accHtml || '<tr><td colspan="6" class="text-center text-muted">Không có dữ liệu</td></tr>';
+  });
+
+  // 2. TẢI VÀ PHÂN QUYỀN BẢNG TRẠM VT
+  var tramFiltered = rawTramList;
+  if (userRole === 'dai_admin') tramFiltered = rawTramList.filter(t => String(t.id_dai || t.dai_id).trim() === myDaiId);
+  else if (userRole === 'tram_admin') tramFiltered = rawTramList.filter(t => String(t.id_tram || t.id).trim() === myTramId);
+
+  var tramHtml = '';
+  tramFiltered.forEach(t => {
+    var dObj = rawDaiList.find(d => String(d.id_dai || d.id).trim() == String(t.id_dai || t.dai_id).trim());
+    var canEdit = (userRole === 'sys_admin') || (userRole === 'dai_admin' && String(t.id_dai) === myDaiId) || (userRole === 'tram_admin' && String(t.id_tram) === myTramId);
+    var btnSua = canEdit ? `<button class="btn-small" onclick="moFormSuaTramMaster('${t.id_tram || t.id}')">✏️ Sửa</button>` : `<span class="badge bg-secondary">Chỉ xem</span>`;
+
+    tramHtml += `<tr><td>${t.id_tram || t.id}</td><td><b>${t.ma_tram || ''}</b></td><td>${t.ten_tram || t.ten}</td><td>${dObj ? (dObj.ten_dai || dObj.ten) : '-'}</td><td>${btnSua}</td></tr>`;
+  });
+  var tbodyTram = document.getElementById('masterTramTableBody');
+  if (tbodyTram) tbodyTram.innerHTML = tramHtml || '<tr><td colspan="5" class="text-center text-muted">Không có dữ liệu Trạm VT</td></tr>';
+}
+
 function moFormCrud(act, id, name, lat, lng) {
   document.getElementById('crudActionType').value = act; document.getElementById('crudObjectId').value = id || '';
   document.getElementById('crudObjectName').value = name || ''; document.getElementById('crudObjectLat').value = lat; document.getElementById('crudObjectLng').value = lng;
@@ -73,44 +129,11 @@ async function executeCrudAction() {
   }
 }
 
-function loadAdminMasterData() {
-  if (currentUser.role !== 'sys_admin' && currentUser.role !== 'dai_admin') return;
-  var query = supabaseClient.from('tai_khoan').select('*');
-  if (currentUser.role === 'dai_admin') query = query.eq('id_dai', currentUser.idDai);
-  
-  query.then(({ data: accs }) => {
-    var accHtml = '';
-    (accs || []).forEach(a => {
-      var daiObj = rawDaiList.find(d => d.id_dai == a.id_dai);
-      var tramObj = rawTramList.find(t => t.id_tram == a.id_tram);
-      accHtml += `<tr><td><b>${a.email}</b></td><td>${a.role}</td><td>${daiObj ? daiObj.ten_dai : '-'}</td><td>${tramObj ? tramObj.ten_tram : '-'}</td><td>${a.can_edit_map ? '✅' : '❌'}</td><td><button class="btn-small" onclick="moFormSuaTaiKhoan(${a.id},'${a.email}','${a.role}',${a.id_dai || 'null'},${a.id_tram || 'null'},${a.can_edit_map})">✏️</button></td></tr>`;
-    });
-    document.getElementById('masterAccountTableBody').innerHTML = accHtml;
-  });
-}
-
 function populateDropdown(selId, list, idProp, nameProp, selectedVal) {
   var sel = document.getElementById(selId);
+  if (!sel) return;
   sel.innerHTML = '<option value="">-- Chọn --</option>';
   list.forEach(item => sel.innerHTML += `<option value="${item[idProp]}" ${item[idProp] == selectedVal ? 'selected' : ''}>${item[nameProp]}</option>`);
-}
-
-function showToast(message, type = 'info') {
-  var container = document.getElementById('toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    document.body.appendChild(container);
-  }
-  var toast = document.createElement('div');
-  toast.className = `toast-msg ${type}`;
-  toast.innerText = message;
-  container.appendChild(toast);
-  setTimeout(() => {
-    toast.style.transition = 'opacity 0.3s ease';
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
 }
 
 let confirmResolveCallback = null;
