@@ -839,3 +839,136 @@ async function luuDuLieuCRUD() {
     hideLoading();
   }
 }
+// crud_manager.js - Hàm render hiển thị bảng danh sách và nút lệnh quản trị theo phân quyền
+
+/**
+ * 1. HÀM HIỂN THỊ DANH SÁCH NGƯỜI DÙNG KÈM NÚT LỆNH THAO TÁC
+ */
+function renderBangQuanTriUser(userList) {
+  var tbody = document.getElementById('tableUserBody');
+  if (!tbody) return;
+
+  var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : 'member';
+  var myDaiId = currentUser ? String(currentUser.idDai || currentUser.id_dai).trim() : '';
+  var myTramId = currentUser ? String(currentUser.idTram || currentUser.id_tram).trim() : '';
+
+  tbody.innerHTML = ''; // Làm sạch bảng trước khi nạp
+
+  if (!userList || userList.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Không có dữ liệu người dùng</td></tr>';
+    return;
+  }
+
+  userList.forEach((u, index) => {
+    var uDaiId = String(u.idDai || u.id_dai).trim();
+    var uTramId = String(u.idTram || u.id_tram).trim();
+
+    // Kiểm tra quyền hiển thị nút lệnh theo yêu cầu phân quyền
+    var coQuyenSua = false;
+    var coQuyenXoa = false;
+
+    if (userRole === 'sys_admin') {
+      coQuyenSua = true;
+      coQuyenXoa = true;
+    } else if (userRole === 'dai_admin' && uDaiId === myDaiId) {
+      coQuyenSua = true; // dai_admin chỉ Sửa user thuộc Đài
+      coQuyenXoa = false;
+    } else if (userRole === 'tram_admin' && uTramId === myTramId) {
+      coQuyenSua = true; // tram_admin chỉ Sửa user thuộc Trạm
+      coQuyenXoa = false;
+    }
+
+    // Tạo các nút lệnh thao tác
+    var nutSua = coQuyenSua 
+      ? `<button class="btn btn-sm btn-warning me-1" onclick='moFormSuaUser(${JSON.stringify(u)})'>✏️ Sửa</button>` 
+      : `<span class="badge bg-secondary">Chỉ xem</span>`;
+      
+    var nutXoa = coQuyenXoa 
+      ? `<button class="btn btn-sm btn-danger" onclick='xoaUserData("${u.id}")'>🗑️ Xóa</button>` 
+      : '';
+
+    var tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${index + 1}</td>
+      <td><b>${u.ten || u.name || 'N/A'}</b></td>
+      <td>${u.email || ''}</td>
+      <td><span class="badge bg-info text-dark">${u.role || 'member'}</span></td>
+      <td>${u.ten_tram || u.id_tram || 'N/A'}</td>
+      <td class="text-center">${nutSua} ${nutXoa}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/**
+ * 2. HÀM HIỂN THỊ DANH SÁCH TRẠM VT KÈM NÚT LỆNH THAO TÁC
+ */
+function renderBangDanhMucTram(tramList) {
+  var tbody = document.getElementById('tableTramBody');
+  if (!tbody) return;
+
+  var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : 'member';
+  var myDaiId = currentUser ? String(currentUser.idDai || currentUser.id_dai).trim() : '';
+  var myTramId = currentUser ? String(currentUser.idTram || currentUser.id_tram).trim() : '';
+
+  tbody.innerHTML = '';
+
+  if (!tramList || tramList.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Không có dữ liệu Trạm VT</td></tr>';
+    return;
+  }
+
+  tramList.forEach((t, index) => {
+    var tTramId = String(t.id_tram || t.id).trim();
+    var tDaiId = String(t.id_dai || t.dai_id).trim();
+
+    var coQuyenSua = false;
+    var coQuyenXoa = false;
+
+    if (userRole === 'sys_admin') {
+      coQuyenSua = true;
+      coQuyenXoa = true;
+    } else if (userRole === 'dai_admin' && tDaiId === myDaiId) {
+      coQuyenSua = true; // dai_admin chỉ Sửa trạm thuộc Đài
+      coQuyenXoa = false;
+    } else if (userRole === 'tram_admin' && tTramId === myTramId) {
+      coQuyenSua = true; // tram_admin chỉ Sửa trạm thuộc Trạm mình
+      coQuyenXoa = false;
+    }
+
+    var nutSua = coQuyenSua 
+      ? `<button class="btn btn-sm btn-warning me-1" onclick='moFormSuaTram(${JSON.stringify(t)})'>✏️ Sửa</button>` 
+      : `<span class="badge bg-secondary">Chỉ xem</span>`;
+
+    var nutXoa = coQuyenXoa 
+      ? `<button class="btn btn-sm btn-danger" onclick='xoaTramData("${tTramId}")'>🗑️ Xóa</button>` 
+      : '';
+
+    var tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${index + 1}</td>
+      <td><b>${t.ma_tram || ''}</b></td>
+      <td>${t.ten_tram || t.ten || ''}</td>
+      <td>${t.ghi_chu || ''}</td>
+      <td class="text-center">${nutSua} ${nutXoa}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/**
+ * 3. HÀM KÍCH HOẠT NẠP TOÀN BỘ DANH MỤC VÀ HỦY ẨN BẢNG
+ */
+function taiVaHienThiQuanTriDanhMuc() {
+  var state = AppStore.getState();
+  var tramList = state.tramList || rawTramList;
+
+  // Lấy dữ liệu người dùng từ Supabase nếu có
+  supabaseClient.from('users').select('*').then(({ data, error }) => {
+    var userList = data || [];
+    renderBangQuanTriUser(userList);
+  });
+
+  // Render bảng Trạm VT
+  renderBangDanhMucTram(tramList);
+}
