@@ -1,4 +1,4 @@
-// data_2.js - Xử lý phân quyền, truy vấn ngược phân cấp và tự động vẽ bản đồ GIS cáp quang
+// data_2.js - Xử lý phân quyền, sửa lỗi lệch ID ComboBox và tự động vẽ bản đồ GIS cáp quang
 
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
@@ -11,23 +11,23 @@ async function fetchAllRowsSafe(tableName) {
 }
 
 /**
- * HÀM MỚI: Truy vấn ngược ID Trạm và ID Đài từ Đoạn Cáp / Trạm phân công của User
+ * HÀM NÂNG CẤP: Truy vấn ngược ID Trạm và ID Đài từ Đoạn Cáp / Trạm của User (Chuẩn hóa ID)
  */
 function truyVanNguocPhanCapUser() {
   if (typeof currentUser === 'undefined' || !currentUser) return;
 
-  // 1. Nếu User có idDoanCap nhưng chưa có idTram hoặc idTuyen -> Tra ngược từ rawDoanCapList
+  // 1. Tra ngược Trạm & Tuyến từ Đoạn cáp phân công
   if (currentUser.idDoanCap) {
-    var matchedDoan = rawDoanCapList.find(d => (d.id_doan_cap || d.id) == currentUser.idDoanCap);
+    var matchedDoan = rawDoanCapList.find(d => String(d.id_doan_cap || d.id) === String(currentUser.idDoanCap));
     if (matchedDoan) {
       if (!currentUser.idTram) currentUser.idTram = matchedDoan.id_tram || matchedDoan.tram_id;
       if (!currentUser.idTuyen) currentUser.idTuyen = matchedDoan.id_tuyen || matchedDoan.tuyen_cap_id;
     }
   }
 
-  // 2. Nếu User có idTram nhưng chưa có idDai -> Tra ngược từ rawTramList để tìm id_dai
+  // 2. Tra ngược Đài từ Trạm phân công
   if (currentUser.idTram && !currentUser.idDai) {
-    var matchedTram = rawTramList.find(t => (t.id_tram || t.id) == currentUser.idTram);
+    var matchedTram = rawTramList.find(t => String(t.id_tram || t.id) === String(currentUser.idTram));
     if (matchedTram) {
       currentUser.idDai = matchedTram.id_dai || matchedTram.dai_id;
     }
@@ -84,14 +84,14 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       dataPoints: globalDataPoints
     });
 
-    // BƯỚC QUAN TRỌNG: Thực hiện truy vấn ngược phân cấp User từ danh sách Đoạn/Trạm
+    // BƯỚC QUAN TRỌNG: Truy vấn ngược ID chuẩn cho User
     truyVanNguocPhanCapUser();
 
-    // Khởi tạo ComboBox theo đúng phân quyền đã được làm sạch
+    // Khởi tạo ComboBox
     khoiTaoComboDaiTheoPhanCap();
     capNhatComboDiemA();
 
-    // Tự động chọn Tuyến và Đoạn cáp để vẽ bản đồ ngay lập tức
+    // Tự động chọn Tuyến và Đoạn cáp để vẽ bản đồ
     var selectTuyenEl = document.getElementById('selectTuyen');
     var selectDoanCapEl = document.getElementById('selectDoanCap');
 
@@ -121,7 +121,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 }
 
 /**
- * 2. HÀM KHỞI TẠO COMBOBOX VÀ GÁN/ẨN THEO PHÂN QUYỀN VAI TRÒ
+ * 2. HÀM KHỞI TẠO COMBOBOX ĐÀI/TRẠM (ĐÃ SỬA LỖI KHÔNG TƯƠNG THÍCH ID)
  */
 function khoiTaoComboDaiTheoPhanCap() {
   var selectDai = document.getElementById('selectDai');
@@ -131,25 +131,43 @@ function khoiTaoComboDaiTheoPhanCap() {
 
   var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
 
-  // Nạp danh sách Đài
+  // 1. Đổ dữ liệu Đài với thuộc tính ID chuẩn hóa
   if (selectDai) {
     selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
-    rawDaiList.forEach(dai => selectDai.innerHTML += `<option value="${dai.id_dai}">${dai.ten_dai}</option>`);
+    rawDaiList.forEach(dai => {
+      var daiId = dai.id_dai !== undefined ? dai.id_dai : dai.id;
+      selectDai.innerHTML += `<option value="${daiId}">${dai.ten_dai || dai.ten}</option>`;
+    });
   }
 
-  // Gán giá trị Đài & Trạm đã truy vấn ngược cho User
-  if (currentUser.idDai && selectDai) selectDai.value = currentUser.idDai;
+  // 2. Gán giá trị Đài cho User (So sánh an toàn với chuỗi)
+  if (currentUser && currentUser.idDai && selectDai) {
+    var matchedDaiOption = Array.from(selectDai.options).find(opt => String(opt.value) === String(currentUser.idDai));
+    if (matchedDaiOption) {
+      selectDai.value = matchedDaiOption.value;
+    }
+  }
   
-  // Tải danh sách Trạm thuộc Đài đã gán
+  // 3. Đổ danh sách Trạm dựa trên Đài đã chọn
   if (selectTram) {
     selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
-    var daiVal = selectDai ? selectDai.value : 'ALL';
-    rawTramList.filter(tram => daiVal === 'ALL' || tram.id_dai == daiVal)
-               .forEach(tram => selectTram.innerHTML += `<option value="${tram.id_tram}">${tram.ten_tram}</option>`);
-    if (currentUser.idTram) selectTram.value = currentUser.idTram;
+    var currentDaiVal = selectDai ? selectDai.value : 'ALL';
+    
+    rawTramList.filter(tram => currentDaiVal === 'ALL' || String(tram.id_dai || tram.dai_id) === String(currentDaiVal))
+               .forEach(tram => {
+                 var tramId = tram.id_tram !== undefined ? tram.id_tram : tram.id;
+                 selectTram.innerHTML += `<option value="${tramId}">${tram.ten_tram || tram.ten}</option>`;
+               });
+
+    if (currentUser && currentUser.idTram) {
+      var matchedTramOption = Array.from(selectTram.options).find(opt => String(opt.value) === String(currentUser.idTram));
+      if (matchedTramOption) {
+        selectTram.value = matchedTramOption.value;
+      }
+    }
   }
 
-  // Xử lý ẩn/hiện ComboBox theo vai trò
+  // 4. Xử lý Ẩn/Hiện ComboBox theo Vai trò
   if (userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') {
     if (groupDai) groupDai.style.display = 'none';
     if (groupTram) groupTram.style.display = 'none';
@@ -177,9 +195,15 @@ function onDaiChange() {
 
   if (userRole !== 'tram_admin' && userRole !== 'member' && userRole !== 'tram_user' && selectTram) {
     selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
-    rawTramList.filter(tram => daiVal === 'ALL' || tram.id_dai == daiVal)
-               .forEach(tram => selectTram.innerHTML += `<option value="${tram.id_tram}">${tram.ten_tram}</option>`);
-    if (currentUser.idTram) selectTram.value = currentUser.idTram;
+    rawTramList.filter(tram => daiVal === 'ALL' || String(tram.id_dai || tram.dai_id) === String(daiVal))
+               .forEach(tram => {
+                 var tramId = tram.id_tram !== undefined ? tram.id_tram : tram.id;
+                 selectTram.innerHTML += `<option value="${tramId}">${tram.ten_tram || tram.ten}</option>`;
+               });
+
+    if (currentUser && currentUser.idTram) {
+      selectTram.value = currentUser.idTram;
+    }
   }
   updateTuyenOptions();
 }
@@ -192,7 +216,7 @@ function onTramChange() {
 }
 
 /**
- * 3. LỌC DANH SÁCH TUYẾN CÁP THEO PHÂN QUYỀN ĐĂNG NHẬP
+ * 3. LỌC DANH SÁCH TUYẾN CÁP THEO PHÂN QUYỀN VỚI ID CHUẨN HOÁ
  */
 function updateTuyenOptions() {
   var selectTuyen = document.getElementById('selectTuyen');
@@ -204,25 +228,26 @@ function updateTuyenOptions() {
   
   if ((userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') && currentUser.idTram) {
     var allowedTuyenIds = rawDoanCapList
-      .filter(doan => doan.id_tram == currentUser.idTram || doan.tram_id == currentUser.idTram)
-      .map(doan => doan.id_tuyen || doan.tuyen_cap_id);
+      .filter(doan => String(doan.id_tram || doan.tram_id) === String(currentUser.idTram))
+      .map(doan => String(doan.id_tuyen || doan.tuyen_cap_id));
       
     filteredTuyenList = rawTuyenList.filter(tuyen => 
-      allowedTuyenIds.includes(tuyen.id_tuyen_cap || tuyen.id)
+      allowedTuyenIds.includes(String(tuyen.id_tuyen_cap || tuyen.id))
     );
   } else if (userRole === 'dai_admin' && currentUser.idDai) {
-    var tramIdsOfDai = rawTramList.filter(t => t.id_dai == currentUser.idDai).map(t => t.id_tram);
+    var tramIdsOfDai = rawTramList.filter(t => String(t.id_dai || t.dai_id) === String(currentUser.idDai))
+                                 .map(t => String(t.id_tram || t.id));
     var allowedTuyenIdsDai = rawDoanCapList
-      .filter(doan => tramIdsOfDai.includes(doan.id_tram || doan.tram_id))
-      .map(doan => doan.id_tuyen || doan.tuyen_cap_id);
+      .filter(doan => tramIdsOfDai.includes(String(doan.id_tram || doan.tram_id)))
+      .map(doan => String(doan.id_tuyen || doan.tuyen_cap_id));
 
     filteredTuyenList = rawTuyenList.filter(tuyen => 
-      allowedTuyenIdsDai.includes(tuyen.id_tuyen_cap || tuyen.id)
+      allowedTuyenIdsDai.includes(String(tuyen.id_tuyen_cap || tuyen.id))
     );
   }
 
   filteredTuyenList.forEach(tuyen => {
-    var tuyenId = tuyen.id_tuyen_cap || tuyen.id;
+    var tuyenId = tuyen.id_tuyen_cap !== undefined ? tuyen.id_tuyen_cap : tuyen.id;
     var tuyenMa = tuyen.ma_tuyencap || tuyen.ten_tuyen;
     selectTuyen.innerHTML += `<option value="${tuyenId}">${tuyenMa}</option>`;
   });
@@ -243,15 +268,15 @@ function onTuyenChange() {
   if (selectDoanCap) {
     selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
     if (tuyenVal !== 'ALL') {
-      var matchedDoan = rawDoanCapList.filter(doan => (doan.id_tuyen || doan.tuyen_cap_id) == tuyenVal);
+      var matchedDoan = rawDoanCapList.filter(doan => String(doan.id_tuyen || doan.tuyen_cap_id) === String(tuyenVal));
       var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
 
       if ((userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') && currentUser.idTram) {
-        matchedDoan = matchedDoan.filter(doan => (doan.id_tram == currentUser.idTram || doan.tram_id == currentUser.idTram));
+        matchedDoan = matchedDoan.filter(doan => String(doan.id_tram || doan.tram_id) === String(currentUser.idTram));
       }
 
       matchedDoan.forEach(doan => {
-        var doanId = doan.id_doan_cap || doan.id;
+        var doanId = doan.id_doan_cap !== undefined ? doan.id_doan_cap : doan.id;
         var doanMa = doan.ma_doancap || doan.ten_doancap;
         selectDoanCap.innerHTML += `<option value="${doanId}">${doanMa}</option>`;
       });
@@ -277,7 +302,7 @@ function capNhatComboDiemA() {
   var combo = document.getElementById('comboDiemA');
   if (!combo) return;
   combo.innerHTML = '<option value="DEFAULT">📍 Trạm Gốc (TNN)</option>';
-  globalDataPoints.filter(pt => isMangXong(pt) && (tuyenVal === 'ALL' || pt.idTuyen == tuyenVal)).forEach(mx => {
+  globalDataPoints.filter(pt => isMangXong(pt) && (tuyenVal === 'ALL' || String(pt.idTuyen) === String(tuyenVal))).forEach(mx => {
     combo.innerHTML += `<option value="${mx.ten}">🔀 ${mx.ten}</option>`;
   });
 }
@@ -575,6 +600,6 @@ function renderColoredRouteOnMap() {
   } catch(e) {}
 }
 
-function veLaiTuyenAB() {
-  renderColoredRouteOnMap();
-}
+//function veLaiTuyenAB() {
+//  renderColoredRouteOnMap();
+//}
