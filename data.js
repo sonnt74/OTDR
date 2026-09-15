@@ -1,4 +1,4 @@
-// data_2.js - Xử lý phân quyền, đồng bộ AppStore chuẩn xác và tự động vẽ bản đồ GIS cáp quang
+// data_2.js - Xử lý phân quyền, ép kiểu ID chuẩn và đồng bộ AppStore không bị kẹt 'ALL'
 
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
@@ -11,7 +11,7 @@ async function fetchAllRowsSafe(tableName) {
 }
 
 /**
- * HÀM PHỤ TRỢ: Lấy ID chuẩn dạng chuỗi (String) để so sánh tuyệt đối chính xác
+ * HÀM PHỤ TRỢ: Lấy ID chuẩn dạng Chuỗi (String) tuyệt đối
  */
 function getStandardId(item, primaryKeyName) {
   if (!item) return '';
@@ -21,7 +21,7 @@ function getStandardId(item, primaryKeyName) {
 }
 
 /**
- * 1. HÀM TẢI DỮ LIỆU TỪ SUPABASE
+ * 1. HÀM CHÍNH TẢI DỮ LIỆU TỪ SUPABASE
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   showLoading("Đang tải dữ liệu...");
@@ -71,7 +71,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       });
     });
 
-    // Cập nhật AppStore ban đầu
+    // Cập nhật mảng dữ liệu thô vào AppStore
     AppStore.setState({
       daiList: rawDaiList,
       tramList: rawTramList,
@@ -80,7 +80,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       dataPoints: globalDataPoints
     });
 
-    // Thực hiện luồng xử lý phân quyền và đồng bộ trạng thái AppStore
+    // Xử lý phân quyền và đồng bộ trạng thái thực tế cho AppStore
     xuLyPhanQuyenDoanTuyenUser();
 
     if (forceRefresh) showToast("Đã làm mới dữ liệu!");
@@ -93,7 +93,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 }
 
 /**
- * 2. LUỒNG XỬ LÝ PHÂN QUYỀN & ĐỒNG BỘ TRẠNG THÁI APPSTORE
+ * 2. LUỒNG XỬ LÝ PHÂN QUYỀN VÀ KHẮC PHỤC TRIỆT ĐỂ LỖI KẸT 'ALL'
  */
 function xuLyPhanQuyenDoanTuyenUser() {
   var selectDai = document.getElementById('selectDai');
@@ -106,7 +106,22 @@ function xuLyPhanQuyenDoanTuyenUser() {
 
   var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
 
-  // BƯỚC 1: LỌC DANH SÁCH ĐOẠN CÁP CỦA USER
+  // BƯỚC 1: NẠP TOÀN BỘ OPTION ĐÀI & TRẠM VÀO THẺ COMBOBOX
+  if (selectDai) {
+    selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
+    rawDaiList.forEach(d => {
+      selectDai.innerHTML += `<option value="${getStandardId(d, 'id_dai')}">${d.ten_dai || d.ten}</option>`;
+    });
+  }
+
+  if (selectTram) {
+    selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
+    rawTramList.forEach(t => {
+      selectTram.innerHTML += `<option value="${getStandardId(t, 'id_tram')}">${t.ten_tram || t.ten}</option>`;
+    });
+  }
+
+  // BƯỚC 2: LỌC DANH SÁCH ĐOẠN CÁP VÀ TRUY VẤN NGUỢC ID CHO USER
   var allowedDoanList = rawDoanCapList;
   
   if (userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') {
@@ -127,11 +142,10 @@ function xuLyPhanQuyenDoanTuyenUser() {
     );
   }
 
-  // BƯỚC 2: RÚT RA DANH SÁCH TUYẾN CÁP
+  // BƯỚC 3: RÚT RA DANH SÁCH TUYẾN CÁP TƯƠNG ỨNG
   var allowedTuyenIds = [...new Set(allowedDoanList.map(d => String(d.id_tuyen || d.tuyen_cap_id)))];
   var userTuyenList = rawTuyenList.filter(t => allowedTuyenIds.includes(getStandardId(t, 'id_tuyen_cap')));
 
-  // BƯỚC 3: ĐỔ DỮ LIỆU VÀO COMBOBOX TUYẾN CÁP
   if (selectTuyen) {
     selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
     userTuyenList.forEach(t => {
@@ -141,49 +155,46 @@ function xuLyPhanQuyenDoanTuyenUser() {
     });
   }
 
-  // BƯỚC 4: AN/HIỂN THỊ ĐÀI/TRẠM VA TRUY VẤN NGUỢC ID
-  var finalDaiVal = 'ALL';
-  var finalTramVal = 'ALL';
+  // BƯỚC 4: XÁC ĐỊNH GIÁ TRỊ THỰC TẾ ĐỂ GÁN VÀO COMBOBOX
+  var selectedDaiVal = 'ALL';
+  var selectedTramVal = 'ALL';
+
+  if (allowedDoanList.length > 0) {
+    var firstDoan = allowedDoanList[0];
+    selectedTramVal = String(firstDoan.id_tram || firstDoan.tram_id);
+    var matchedTram = rawTramList.find(t => getStandardId(t, 'id_tram') === selectedTramVal);
+    if (matchedTram) selectedDaiVal = String(matchedTram.id_dai || matchedTram.dai_id);
+  }
 
   if (userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') {
     if (groupDai) groupDai.style.display = 'none';
     if (groupTram) groupTram.style.display = 'none';
-    
-    if (allowedDoanList.length > 0) {
-      var firstDoan = allowedDoanList[0];
-      finalTramVal = String(firstDoan.id_tram || firstDoan.tram_id);
-      var matchedTram = rawTramList.find(t => getStandardId(t, 'id_tram') === finalTramVal);
-      if (matchedTram) finalDaiVal = String(matchedTram.id_dai || matchedTram.dai_id);
-
-      if (selectTram) selectTram.value = finalTramVal;
-      if (selectDai) selectDai.value = finalDaiVal;
-    }
+    if (selectTram) selectTram.value = selectedTramVal;
+    if (selectDai) selectDai.value = selectedDaiVal;
   } else {
     if (groupDai) groupDai.style.display = 'block';
     if (groupTram) groupTram.style.display = 'block';
     
-    if (selectDai) {
-      selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
-      rawDaiList.forEach(d => selectDai.innerHTML += `<option value="${getStandardId(d, 'id_dai')}">${d.ten_dai}</option>`);
-      if (userRole === 'dai_admin' && currentUser.idDai) {
-        finalDaiVal = String(currentUser.idDai);
-        selectDai.value = finalDaiVal;
+    if (userRole === 'dai_admin' && currentUser.idDai) {
+      selectedDaiVal = String(currentUser.idDai);
+      if (selectDai) {
+        selectDai.value = selectedDaiVal;
         selectDai.disabled = true;
       }
     }
   }
 
-  // BƯỚC 5: TỰ ĐỘNG CHỌN TUYẾN 1, ĐOẠN 1 VÀ CẬP NHẬT TRẠNG THÁI APPSTORE
-  var finalTuyenVal = 'ALL';
-  var finalDoanVal = 'ALL';
+  // BƯỚC 5: CHỌN TUYẾN 1, ĐOẠN 1 VÀ GÁN GIÁ TRỊ TRỰC TIẾP
+  var selectedTuyenVal = 'ALL';
+  var selectedDoanVal = 'ALL';
 
   if (selectTuyen && selectTuyen.options.length > 1) {
     selectTuyen.selectedIndex = 1; 
-    finalTuyenVal = selectTuyen.value;
+    selectedTuyenVal = selectTuyen.value;
     
     if (selectDoanCap) {
       selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
-      var matchedDoanOfSelectedTuyen = allowedDoanList.filter(d => String(d.id_tuyen || d.tuyen_cap_id) === String(finalTuyenVal));
+      var matchedDoanOfSelectedTuyen = allowedDoanList.filter(d => String(d.id_tuyen || d.tuyen_cap_id) === String(selectedTuyenVal));
       
       matchedDoanOfSelectedTuyen.forEach(d => {
         var dId = getStandardId(d, 'id_doan_cap');
@@ -193,17 +204,17 @@ function xuLyPhanQuyenDoanTuyenUser() {
 
       if (selectDoanCap.options.length > 1) {
         selectDoanCap.selectedIndex = 1;
-        finalDoanVal = selectDoanCap.value;
+        selectedDoanVal = selectDoanCap.value;
       }
     }
   }
 
-  // ĐỒNG BỘ TRẠNG THÁI APPSTORE CHÍNH XÁC (KHÔNG ĐỂ BỊ LỖI 'ALL')
+  // BƯỚC 6: ĐỒNG BỘ TRẠNG THÁI APPSTORE DUY NHẤT 1 LẦN VỚI GIÁ TRỊ THỰC TẾ (KHÔNG CÒN BỊ KẸT 'ALL')
   AppStore.setState({
-    selectedDai: finalDaiVal,
-    selectedTram: finalTramVal,
-    selectedTuyen: finalTuyenVal,
-    selectedDoanCap: finalDoanVal
+    selectedDai: selectedDaiVal,
+    selectedTram: selectedTramVal,
+    selectedTuyen: selectedTuyenVal,
+    selectedDoanCap: selectedDoanVal
   });
 
   // KÍCH HOẠT VẼ BẢN ĐỒ
@@ -562,6 +573,6 @@ function renderColoredRouteOnMap() {
   } catch(e) {}
 }
 
-function veLaiTuyenAB() {
-  renderColoredRouteOnMap();
-}
+//function veLaiTuyenAB() {
+//  renderColoredRouteOnMap();
+//}
