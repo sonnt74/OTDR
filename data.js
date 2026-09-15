@@ -1,4 +1,4 @@
-// data.js - Đồng bộ dữ liệu Supabase, quản lý ComboBox qua AppStore, phân tích OTDR và tìm lý trình
+// data.js - Đồng bộ dữ liệu Supabase, quản lý ComboBox theo phân quyền, phân tích OTDR và tìm lý trình
 
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
@@ -10,6 +10,9 @@ async function fetchAllRowsSafe(tableName) {
   return allData;
 }
 
+/**
+ * 1. HÀM TẢI DỮ LIỆU TỪ SUPABASE & TỰ ĐỘNG HÓA CHỌN TUYẾN/VẼ BẢN ĐỒ SAU ĐĂNG NHẬP
+ */
 async function taiDuLieuSupabase(forceRefresh = false) {
   showLoading("Đang tải dữ liệu...");
   try {
@@ -58,8 +61,32 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       dataPoints: globalDataPoints
     });
 
+    // Khởi tạo combobox phân cấp
     khoiTaoComboDaiTheoPhanCap();
     capNhatComboDiemA();
+
+    // --- TỰ ĐỘNG CHỌN TUYẾN, ĐOẠN CÁP VÀ VẼ BẢN ĐỒ SAU KHI TẢI DỮ LIỆU XONG ---
+    var selectTuyenEl = document.getElementById('selectTuyen');
+    var selectDoanCapEl = document.getElementById('selectDoanCap');
+
+    if (selectTuyenEl && selectTuyenEl.options.length > 1) {
+      if (selectTuyenEl.value === 'ALL') {
+        selectTuyenEl.selectedIndex = 1; // Chọn tuyến đầu tiên trong danh sách phân quyền
+      }
+      onTuyenChange();
+
+      if (selectDoanCapEl && selectDoanCapEl.options.length > 1) {
+        if (typeof currentUser !== 'undefined' && currentUser.idDoanCap) {
+          selectDoanCapEl.value = currentUser.idDoanCap;
+        } else {
+          selectDoanCapEl.selectedIndex = 1; // Chọn đoạn đầu tiên
+        }
+        onDoanCapChange();
+      } else {
+        veLaiTuyenAB();
+      }
+    }
+
     if (forceRefresh) showToast("Đã làm mới dữ liệu!");
   } catch (err) { 
     showToast("Lỗi: " + err.message); 
@@ -69,38 +96,50 @@ async function taiDuLieuSupabase(forceRefresh = false) {
   }
 }
 
+/**
+ * 2. HÀM KHỞI TẠO COMBOBOX ĐÀI/TRẠM VÀ AN GIẤU GỌN CHO CẤP TRẠM
+ */
 function khoiTaoComboDaiTheoPhanCap() {
   var selectDai = document.getElementById('selectDai');
   var groupDai = selectDai ? selectDai.closest('.form-group') : null;
   var selectTram = document.getElementById('selectTram');
   var groupTram = selectTram ? selectTram.closest('.form-group') : null;
 
-  if (currentUser.role === 'tram_admin') {
+  var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
+
+  // Nếu là Admin Trạm hoặc Nhân viên Trạm (tram_user/member) -> Ẩn 2 ô chọn Đài & Trạm cho gọn
+  if (userRole === 'tram_admin' || userRole === 'tram_user' || userRole === 'member') {
     if (groupDai) groupDai.style.display = 'none';
     if (groupTram) groupTram.style.display = 'none';
-    if (currentUser.idDai) selectDai.value = currentUser.idDai;
-    if (currentUser.idTram) selectTram.value = currentUser.idTram;
+    if (currentUser.idDai && selectDai) selectDai.value = currentUser.idDai;
+    if (currentUser.idTram && selectTram) selectTram.value = currentUser.idTram;
   } else {
+    // Với tài khoản admin cấp cao hơn -> Hiển thị combobox đầy đủ
     if (groupDai) groupDai.style.display = 'block';
     if (groupTram) groupTram.style.display = 'block';
     
-    selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
-    rawDaiList.forEach(dai => selectDai.innerHTML += `<option value="${dai.id_dai}">${dai.ten_dai}</option>`);
-    if (currentUser.role === 'dai_admin' && currentUser.idDai) { 
-      selectDai.value = currentUser.idDai; 
-      selectDai.disabled = true; 
+    if (selectDai) {
+      selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
+      rawDaiList.forEach(dai => selectDai.innerHTML += `<option value="${dai.id_dai}">${dai.ten_dai}</option>`);
+      if (userRole === 'dai_admin' && currentUser.idDai) { 
+        selectDai.value = currentUser.idDai; 
+        selectDai.disabled = true; 
+      }
     }
   }
   onDaiChange();
 }
 
 function onDaiChange() {
-  var daiVal = document.getElementById('selectDai').value;
+  var selectDai = document.getElementById('selectDai');
+  var daiVal = selectDai ? selectDai.value : 'ALL';
   var selectTram = document.getElementById('selectTram');
   
   AppStore.setState({ selectedDai: daiVal });
 
-  if (currentUser.role !== 'tram_admin' && selectTram) {
+  var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
+
+  if (userRole !== 'tram_admin' && userRole !== 'tram_user' && userRole !== 'member' && selectTram) {
     selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
     rawTramList.filter(tram => daiVal === 'ALL' || tram.id_dai == daiVal)
                .forEach(tram => selectTram.innerHTML += `<option value="${tram.id_tram}">${tram.ten_tram}</option>`);
@@ -109,21 +148,49 @@ function onDaiChange() {
 }
 
 function onTramChange() { 
-  var tramVal = document.getElementById('selectTram').value;
+  var selectTram = document.getElementById('selectTram');
+  var tramVal = selectTram ? selectTram.value : 'ALL';
   AppStore.setState({ selectedTram: tramVal });
   updateTuyenOptions(); 
 }
 
+/**
+ * 3. LỌC DANH SÁCH TUYẾN CÁP THEO PHÂN QUYỀN USER ĐĂNG NHẬP
+ */
 function updateTuyenOptions() {
   var selectTuyen = document.getElementById('selectTuyen');
   if (!selectTuyen) return;
+  
   selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
-  rawTuyenList.forEach(tuyen => selectTuyen.innerHTML += `<option value="${tuyen.id_tuyen_cap}">${tuyen.ma_tuyencap}</option>`);
+  var filteredTuyenList = rawTuyenList;
+  var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
+  
+  // Nếu thuộc cấp Trạm, lọc các tuyến thuộc trạm user quản lý
+  if ((userRole === 'tram_admin' || userRole === 'tram_user' || userRole === 'member') && currentUser.idTram) {
+    var allowedTuyenIds = rawDoanCapList
+      .filter(doan => doan.id_tram == currentUser.idTram || doan.tram_id == currentUser.idTram)
+      .map(doan => doan.id_tuyen || doan.tuyen_cap_id);
+      
+    filteredTuyenList = rawTuyenList.filter(tuyen => 
+      allowedTuyenIds.includes(tuyen.id_tuyen_cap || tuyen.id)
+    );
+  }
+
+  filteredTuyenList.forEach(tuyen => {
+    var tuyenId = tuyen.id_tuyen_cap || tuyen.id;
+    var tuyenMa = tuyen.ma_tuyencap || tuyen.ten_tuyen;
+    selectTuyen.innerHTML += `<option value="${tuyenId}">${tuyenMa}</option>`;
+  });
+
   onTuyenChange();
 }
 
+/**
+ * 4. LỌC DANH SÁCH ĐOẠN CÁP THEO PHÂN QUYỀN VÀ TUYẾN CÁP ĐƯỢC CHỌN
+ */
 function onTuyenChange() {
-  var tuyenVal = document.getElementById('selectTuyen').value;
+  var selectTuyen = document.getElementById('selectTuyen');
+  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
   var selectDoanCap = document.getElementById('selectDoanCap');
   
   AppStore.setState({ selectedTuyen: tuyenVal });
@@ -131,8 +198,18 @@ function onTuyenChange() {
   if (selectDoanCap) {
     selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
     if (tuyenVal !== 'ALL') {
-      rawDoanCapList.filter(doan => doan.id_tuyen == tuyenVal)
-                    .forEach(doan => selectDoanCap.innerHTML += `<option value="${doan.id_doan_cap}">${doan.ma_doancap}</option>`);
+      var matchedDoan = rawDoanCapList.filter(doan => (doan.id_tuyen || doan.tuyen_cap_id) == tuyenVal);
+
+      var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
+      if ((userRole === 'tram_admin' || userRole === 'tram_user' || userRole === 'member') && currentUser.idTram) {
+        matchedDoan = matchedDoan.filter(doan => (doan.id_tram == currentUser.idTram || doan.tram_id == currentUser.idTram));
+      }
+
+      matchedDoan.forEach(doan => {
+        var doanId = doan.id_doan_cap || doan.id;
+        var doanMa = doan.ma_doancap || doan.ten_doancap;
+        selectDoanCap.innerHTML += `<option value="${doanId}">${doanMa}</option>`;
+      });
     }
   }
   capNhatComboDiemA();
@@ -140,7 +217,8 @@ function onTuyenChange() {
 }
 
 function onDoanCapChange() { 
-  var doanVal = document.getElementById('selectDoanCap').value;
+  var selectDoanCap = document.getElementById('selectDoanCap');
+  var doanVal = selectDoanCap ? selectDoanCap.value : 'ALL';
   AppStore.setState({ selectedDoanCap: doanVal });
   veLaiTuyenAB(); 
 }
@@ -150,7 +228,8 @@ function onDiemAChange() {
 }
 
 function capNhatComboDiemA() {
-  var tuyenVal = document.getElementById('selectTuyen').value;
+  var selectTuyen = document.getElementById('selectTuyen');
+  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
   var combo = document.getElementById('comboDiemA');
   if (!combo) return;
   combo.innerHTML = '<option value="DEFAULT">📍 Trạm Gốc (TNN)</option>';
@@ -173,7 +252,7 @@ function timViTriDut() {
   if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { showToast("Nhập cự ly đo hợp lệ!"); return; }
   
   var tuyenVal = document.getElementById('selectTuyen').value;
-  var tramVal = document.getElementById('selectTram').value;
+  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
   var doanVal = document.getElementById('selectDoanCap').value;
   var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
   precalculateRouteDataForPoints(backbone, backbone);
@@ -311,10 +390,17 @@ function timLyTrinhBanDo() {
     bestDescription = `Gần điểm mốc: ${closest.ten} (Sai số ~${Math.round(deviationMeters)}m)`;
   }
 
-  var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, getMasterRouteBackbone(document.getElementById('selectTuyen').value, document.getElementById('selectTram').value, document.getElementById('selectDoanCap').value));
+  var selectTuyen = document.getElementById('selectTuyen');
+  var selectTram = document.getElementById('selectTram');
+  var selectDoanCap = document.getElementById('selectDoanCap');
+  
+  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
+  var tramVal = selectTram ? selectTram.value : 'ALL';
+  var doanVal = selectDoanCap ? selectDoanCap.value : 'ALL';
+
+  var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, getMasterRouteBackbone(tuyenVal, tramVal, doanVal));
   var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
 
-  // Khôi phục hiển thị Marker và Popup chi tiết trên bản đồ
   if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
   map.setView([foundLat, foundLng], 19, { animate: true });
   
@@ -328,7 +414,6 @@ function timLyTrinhBanDo() {
                      
   foundMarkerLayer.bindPopup(popupContent).openPopup();
   
-  // Gọi API tra cứu địa chỉ thực tế từ tọa độ (Reverse Geocoding)
   fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${foundLat}&lon=${foundLng}&accept-language=vi`)
     .then(r => r.json())
     .then(data => {
@@ -340,37 +425,21 @@ function timLyTrinhBanDo() {
     });
 }
 
-// Biến toàn cục quản lý lớp đường tuyến cáp và lớp biểu tượng điểm mốc
+/**
+ * 5. MODULE VẼ BẢN ĐỒ TUYẾN CÁP PHÂN MÀU & HIỂN THỊ MỐC HẠ TẦNG
+ */
 var routeColoredLinesGroup = L.featureGroup();
 var pointsMarkersLayer = L.featureGroup();
 
-/**
- * 1. Hàm xác định mã màu Hex dựa trên loại điểm hạ tầng
- * @param {string} loaiDiemStr - Tên loại điểm
- * @param {number} idLoaiDiem - ID loại điểm (1: Cột, 2: Bể, 3: Mốc, 4: MX)
- */
 function getColorByLoaiDiem(loaiDiemStr, idLoaiDiem) {
   var str = (loaiDiemStr || '').toLowerCase();
-
-  // Bể cáp -> Màu cam
-  if (str.includes('bể') || str.includes('be') || idLoaiDiem == 2) {
-    return '#fd7e14';
-  }
-  // Mốc cáp -> Màu nâu
-  else if (str.includes('mốc') || str.includes('moc') || idLoaiDiem == 3) {
-    return '#795548';
-  }
-  // Cột cáp -> Màu xanh lá
-  else if (str.includes('cột') || str.includes('cot') || idLoaiDiem == 1) {
-    return '#28a745';
-  }
-  // Mặc định (Trạm, Măng xông...) -> Màu xanh dương
+  if (str.includes('bể') || str.includes('be') || idLoaiDiem == 2) return '#fd7e14'; // Cam (Bể)
+  if (str.includes('mốc') || str.includes('moc') || idLoaiDiem == 3) return '#795548'; // Nâu (Mốc)
+  if (str.includes('cột') || str.includes('cot') || idLoaiDiem == 1) return '#28a745'; // Xanh lá (Cột)
+  if (str.includes('măng xông') || str.includes('mx') || idLoaiDiem == 4) return '#dc3545'; // Đỏ (MX)
   return '#007bff';
 }
 
-/**
- * 2. Hàm tạo Icon biểu tượng Marker hình tròn phân màu sắc chuẩn
- */
 function createCustomMarkerIcon(loaiDiemStr, idLoaiDiem) {
   var color = getColorByLoaiDiem(loaiDiemStr, idLoaiDiem);
   var symbol = '📍';
@@ -402,68 +471,54 @@ function createCustomMarkerIcon(loaiDiemStr, idLoaiDiem) {
   });
 }
 
-/**
- * 3. HÀM CHÍNH: Hiển thị đầy đủ CẢ ĐƯỜNG TUYẾN PHÂN MÀU & CÁC ĐIỂM MỐC LÊN BẢN ĐỒ
- */
 function renderColoredRouteOnMap() {
-  var tuyenVal = document.getElementById('selectTuyen').value;
+  var selectTuyen = document.getElementById('selectTuyen');
+  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
+
   if (tuyenVal === 'ALL') {
-    showToast("Vui lòng chọn tuyến cáp để hiển thị!");
+    if (map.hasLayer(routeColoredLinesGroup)) routeColoredLinesGroup.clearLayers();
+    if (map.hasLayer(pointsMarkersLayer)) pointsMarkersLayer.clearLayers();
     return;
   }
 
-  var tramVal = document.getElementById('selectTram').value;
-  var doanVal = document.getElementById('selectDoanCap').value;
+  var selectTram = document.getElementById('selectTram');
+  var selectDoanCap = document.getElementById('selectDoanCap');
+  var tramVal = selectTram ? selectTram.value : 'ALL';
+  var doanVal = selectDoanCap ? selectDoanCap.value : 'ALL';
   
-  // Lấy chuỗi điểm backbone tuần tự chuẩn OK4
   var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
-  
-  if (!backbone || backbone.length < 2) {
-    showToast("Tuyến cáp không đủ dữ liệu điểm để vẽ!");
-    return;
-  }
+  if (!backbone || backbone.length < 2) return;
 
-  // Dọn dẹp layer cũ trước khi vẽ mới
-  if (map.hasLayer(routeColoredLinesGroup)) routeColoredLinesGroup.clearLayers();
-  else routeColoredLinesGroup.addTo(map);
+  if (!map.hasLayer(routeColoredLinesGroup)) routeColoredLinesGroup.addTo(map);
+  if (!map.hasLayer(pointsMarkersLayer)) pointsMarkersLayer.addTo(map);
 
-  if (map.hasLayer(pointsMarkersLayer)) pointsMarkersLayer.clearLayers();
-  else pointsMarkersLayer.addTo(map);
+  routeColoredLinesGroup.clearLayers();
+  pointsMarkersLayer.clearLayers();
 
-  // BƯỚC A: VẼ CÁC ĐOẠN ĐƯỜNG POLYLINE PHÂN MÀU
   for (var i = 0; i < backbone.length - 1; i++) {
     var p1 = backbone[i];
     var p2 = backbone[i + 1];
 
     if (p1.lat && p1.lng && p2.lat && p2.lng) {
-      var lineColor = getColorByLoaiDiem(p1.loaiDiem, p1.idLoaiDiem);
-
+      var lineColor = getColorByLoaiDiem(p1.loai || p1.loaiDiem, p1.idLoaiDiem);
       var segment = L.polyline(
         [[p1.lat, p1.lng], [p2.lat, p2.lng]],
-        {
-          color: lineColor,
-          weight: 5,
-          opacity: 0.85,
-          lineJoin: 'round'
-        }
+        { color: lineColor, weight: 5, opacity: 0.85, lineJoin: 'round' }
       );
-
-      var popupText = `<b>Đoạn cáp: ${p1.tenDiem || 'Mốc'} ➔ ${p2.tenDiem || 'Mốc'}</b><br>` +
-                      `- Phân loại: <b>${p1.loaiDiem || 'Hạ tầng'}</b><br>` +
+      var popupText = `<b>Đoạn cáp: ${p1.ten || p1.tenDiem} ➔ ${p2.ten || p2.tenDiem}</b><br>` +
+                      `- Phân loại: <b>${p1.loai || p1.loaiDiem}</b><br>` +
                       `- Lý trình: <b>${p1.lyTrinh || '0+000'}</b>`;
       segment.bindPopup(popupText);
       routeColoredLinesGroup.addLayer(segment);
     }
   }
 
-  // BƯỚC B: VẼ CÁC ĐIỂM MARKER MỐC HẠ TẦNG ĐÈ LÊN TRÊN ĐƯỜNG TUYẾN
   backbone.forEach(function(pt) {
     if (pt.lat && pt.lng) {
-      var icon = createCustomMarkerIcon(pt.loaiDiem, pt.idLoaiDiem);
+      var icon = createCustomMarkerIcon(pt.loai || pt.loaiDiem, pt.idLoaiDiem);
       var marker = L.marker([pt.lat, pt.lng], { icon: icon });
-
-      var markerPopup = `<b>📌 ${pt.tenDiem || 'Mốc hạ tầng'}</b><br>` +
-                        `- Loại điểm: <b>${pt.loaiDiem || 'Khác'}</b><br>` +
+      var markerPopup = `<b>📌 ${pt.ten || pt.tenDiem}</b><br>` +
+                        `- Loại điểm: <b>${pt.loai || pt.loaiDiem}</b><br>` +
                         `- Lý trình: <b>${pt.lyTrinh || 'N/A'}</b><br>` +
                         `- Dự trữ cáp: <b>${pt.duTru || 0} m</b>`;
       marker.bindPopup(markerPopup);
@@ -471,11 +526,11 @@ function renderColoredRouteOnMap() {
     }
   });
 
-  // Tự động thu phóng bản đồ bao trọn toàn bộ tuyến
-  map.fitBounds(routeColoredLinesGroup.getBounds(), { padding: [40, 40] });
-
-  showToast("Đã hiển thị xong đường tuyến phân màu và các điểm mốc!", "success");
+  try {
+    map.fitBounds(routeColoredLinesGroup.getBounds(), { padding: [40, 40] });
+  } catch(e) {}
 }
-// function veLaiTuyenAB() {
+
+//function veLaiTuyenAB() {
 //  renderColoredRouteOnMap();
-// }
+//}
