@@ -168,10 +168,10 @@ function chiaSeSuCo(lat, lng, khoangCachKm, prevMX, nextMX, shareType) {
   else if (shareType === 'viber') window.open(`viber://forward?text=${encoded}`, '_blank');
 }
 
-// data.js - Gọi hàm PostGIS xử lý định vị sự cố OTDR
-// 1. Hàm định vị sự cố OTDR gọi qua PostGIS RPC
-// 1. Hàm định vị sự cố OTDR gọi qua PostGIS RPC
-async function timViTriDut() {
+// =========================================================================
+// 1. HÀM TÍNH VỊ TRÍ SỰ CỐ OTDR (Chạy hoàn toàn trên Client )
+// =========================================================================
+function timViTriDut() {
   var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value);
   var kcOtdrMeters = kcOtdrKm * 1000; 
   var heSoDoChung = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
@@ -187,66 +187,113 @@ async function timViTriDut() {
     return;
   }
 
-  showLoading("Đang tính toán vị trí sự cố bằng PostGIS...");
+  // Lấy dữ liệu backbone và tính toán cự ly tích lũy chuẩn mốc 
+  var tramVal = document.getElementById('selectTram').value;
+  var doanVal = document.getElementById('selectDoanCap').value;
+  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  
+  if (!backbone || backbone.length < 2) {
+    showToast("Tuyến cáp chưa đủ dữ liệu để tính toán OTDR!");
+    return;
+  }
 
-  try {
-    const { data, error } = await supabaseClient.rpc('tinh_vi_tri_otdr', {
-      p_id_tuyen: parseInt(tuyenVal),
-      p_kc_met: kcOtdrMeters,
-      p_he_so: heSoDoChung
-    });
+  precalculateRouteDataForPoints(backbone, backbone);
+  var pts = getPointsCuaTuyenHienTai();
 
-    if (error) throw error;
-    if (!data || !data.success) {
-      throw new Error(data?.message || "Không thể tính toán vị trí sự cố từ cơ sở dữ liệu.");
+  if (pts.length < 2) {
+    showToast("Không đủ điểm dữ liệu trên tuyến!");
+    return;
+  }
+
+  var targetLat = null;
+  var targetLng = null;
+  var closestPrevMX = "Trạm TNN";
+  var closestNextMX = "Chưa xác định";
+  var foundSegment = false;
+
+  // Duyệt qua từng đoạn giữa 2 mốc để tìm vị trí sự cố theo cự ly OTDR
+  for (var i = 0; i < pts.length - 1; i++) {
+    var p1 = pts[i];
+    var p2 = pts[i + 1];
+
+    // Cập nhật măng xông trước gần nhất
+    if (p1.loaiDiem && (p1.loaiDiem.toUpperCase().includes('MX') || p1.loaiDiem.toUpperCase().includes('MĂNG XÔNG') || p1.idLoaiDiem == 4)) {
+      closestPrevMX = p1.tenDiem;
     }
 
-    hideLoading();
-    var targetLat = data.lat;
-    var targetLng = data.lng;
-    var closestPrevMX = data.prev_mx;
-    var closestNextMX = data.next_mx;
+    var startDist = p1.distanceFromAMeters || 0;
+    var endDist = p2.distanceFromAMeters || 0;
 
-    if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
-    map.setView([targetLat, targetLng], 19, { animate: true });
-    
-    var faultIcon = L.divIcon({ html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>', iconSize: [28, 28] });
-    foundMarkerLayer = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
+    if (kcOtdrMeters >= startDist && kcOtdrMeters <= endDist) {
+      var segLen = endDist - startDist;
+      var ratio = (segLen > 0) ? (kcOtdrMeters - startDist) / segLen : 0;
 
-    var shareTextOtdr = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n- Cự ly đo OTDR: ${kcOtdrKm.toFixed(2)} km\n- MX trước: ${closestPrevMX}\n- MX sau: ${closestNextMX}\n- Tọa độ: ${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}\n- Bản đồ: https://maps.google.com/?q=${targetLat},${targetLng}`;
-    var encodedOtdr = encodeURIComponent(shareTextOtdr);
+      targetLat = p1.lat + ratio * (p2.lat - p1.lat);
+      targetLng = p1.lng + ratio * (p2.lng - p1.lng);
 
-    var shareButtons = `<div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">` +
-                       `<b>Chia sẻ sự cố:</b><br>` +
-                       `<button class="btn-info" onclick="navigator.clipboard.writeText(\`${shareTextOtdr}\`); showToast('Đã sao chép nội dung!');">📋 Copy</button> ` +
-                       `<button class="btn-info" onclick="window.open('sms:?&body=${encodedOtdr}', '_blank')" style="background:#28a745; color:white;">📩 SMS</button> ` +
-                       `<button class="btn-info" onclick="window.open('viber://forward?text=${encodedOtdr}', '_blank')" style="background:#6f42c1; color:white;">📱 Viber</button>` +
-                       `</div>`;
+      // Tìm măng xông phía sau sự cố
+      for (var j = i + 1; j < pts.length; j++) {
+        var pj = pts[j];
+        if (pj.loaiDiem && (pj.loaiDiem.toUpperCase().includes('MX') || pj.loaiDiem.toUpperCase().includes('MĂNG XÔNG') || pj.idLoaiDiem == 4)) {
+          closestNextMX = pj.tenDiem;
+          break;
+        }
+      }
 
-    var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR (POSTGIS)</b><br>` +
-                    `Cự ly đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
-                    `MX trước: <b>${closestPrevMX}</b><br>` +
-                    `MX sau: <b>${closestNextMX}</b><br>` +
-                    `🏛️ Địa chỉ: <span id='fault-addr'>Đang tra cứu...</span><br>` +
-                    `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>${shareButtons}`;
-    
-    foundMarkerLayer.bindPopup(popupHtml).openPopup();
-    
-    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${targetLat}&lon=${targetLng}&accept-language=vi`)
-      .then(res => res.json()).then(resData => {
-        var addrEl = document.getElementById('fault-addr');
-        if (addrEl) addrEl.innerText = resData.display_name || "Không rõ địa chỉ chi tiết";
-      });
-
-    showToast("Đã định vị thành công vị trí sự cố bằng PostGIS!", "success");
-  } catch (err) {
-    hideLoading();
-    showToast("Lỗi tính toán PostGIS: " + err.message, "error");
+      foundSegment = true;
+      break;
+    }
   }
+
+  // Nếu cự ly vượt quá điểm cuối, lấy tọa độ điểm cuối cùng của tuyến
+  if (!foundSegment) {
+    var lastPt = pts[pts.length - 1];
+    targetLat = lastPt.lat;
+    targetLng = lastPt.lng;
+  }
+
+  var distStr = (kcOtdrMeters >= 1000) ? (kcOtdrMeters / 1000).toFixed(2) + " km" : Math.round(kcOtdrMeters) + " m";
+
+  if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
+  map.setView([targetLat, targetLng], 19, { animate: true });
+  
+  var faultIcon = L.divIcon({ html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>', iconSize: [28, 28] });
+  foundMarkerLayer = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
+
+  var shareTextOtdr = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n- Cự ly đo OTDR: ${kcOtdrKm.toFixed(2)} km\n- Lý trình: ${distStr}\n- MX trước: ${closestPrevMX}\n- MX sau: ${closestNextMX}\n- Tọa độ: ${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}`;
+  var encodedOtdr = encodeURIComponent(shareTextOtdr);
+
+  var shareButtons = `<div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">` +
+                     `<b>Chia sẻ sự cố:</b><br>` +
+                     `<button class="btn-info" onclick="navigator.clipboard.writeText(\`${shareTextOtdr}\`); showToast('Đã sao chép nội dung!');">📋 Copy</button> ` +
+                     `<button class="btn-info" onclick="window.open('sms:?&body=${encodedOtdr}', '_blank')" style="background:#28a745; color:white;">📩 SMS</button> ` +
+                     `<button class="btn-info" onclick="window.open('viber://forward?text=${encodedOtdr}', '_blank')" style="background:#6f42c1; color:white;">📱 Viber</button>` +
+                     `</div>`;
+
+  var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR ()</b><br>` +
+                  `Cự ly đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
+                  `📍 Lý trình quy hoạch: <b>${distStr}</b><br>` +
+                  `MX trước: <b>${closestPrevMX}</b><br>` +
+                  `MX sau: <b>${closestNextMX}</b><br>` +
+                  `🏛️ Địa chỉ: <span id='fault-addr'>Đang tra cứu...</span><br>` +
+                  `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>${shareButtons}`;
+  
+  foundMarkerLayer.bindPopup(popupHtml).openPopup();
+  
+  fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${targetLat}&lon=${targetLng}&accept-language=vi`)
+    .then(res => res.json()).then(resData => {
+      var addrEl = document.getElementById('fault-addr');
+      if (addrEl) addrEl.innerText = resData.display_name || "Không rõ địa chỉ chi tiết";
+    });
+
+  showToast("Đã định vị thành công vị trí sự cố !", "success");
 }
 
-// 2. Hàm tìm lý trình bản đồ gọi qua PostGIS RPC
-async function timLyTrinhBanDo() {
+
+// =========================================================================
+// 2. HÀM TÌM KIẾM VÀ NỘI SUY LÝ TRÌNH (Chạy hoàn toàn trên Client )
+// =========================================================================
+function timLyTrinhBanDo() {
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var parsedTarget = parseLyTrinhWithSuffix(txt);
   var targetMeters = parsedTarget ? parsedTarget.meters : null;
@@ -262,67 +309,102 @@ async function timLyTrinhBanDo() {
     return;
   }
 
-  var heSoDoChung = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
+  var tramVal = document.getElementById('selectTram').value;
+  var doanVal = document.getElementById('selectDoanCap').value;
+  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  
+  if (!backbone || backbone.length < 2) {
+    showToast("Tuyến cáp chưa đủ dữ liệu để nội suy lý trình!");
+    return;
+  }
 
-  showLoading("Đang tìm kiếm lý trình bằng PostGIS...");
+  // Tính toán trước khoảng cách tích lũy thực tế từ Trạm A và lý trình mốc
+  precalculateRouteDataForPoints(backbone, backbone);
 
-  try {
-    const { data, error } = await supabaseClient.rpc('tim_toa_do_theo_ly_trinh', {
-      p_id_tuyen: parseInt(tuyenVal),
-      p_target_meters: targetMeters,
-      p_he_so: heSoDoChung
+  var routePoints = backbone.map(pt => {
+    var parsedPtLt = parseLyTrinhWithSuffix(pt.lyTrinh || "0+000");
+    return {
+      ...pt,
+      lyTrinhMeters: parsedPtLt ? parsedPtLt.meters : 0,
+      distFromA: pt.distanceFromAMeters || 0
+    };
+  });
+
+  // Sắp xếp các mốc theo thứ tự lý trình tăng dần
+  routePoints.sort((a, b) => a.lyTrinhMeters - b.lyTrinhMeters);
+
+  var foundLat = null;
+  var foundLng = null;
+  var exactDistFromA = 0;
+  var foundSegment = false;
+
+  // Thuật toán nội suy tuyến tính giữa 2 mốc chứa giá trị lý trình mục tiêu
+  for (var i = 0; i < routePoints.length - 1; i++) {
+    var p1 = routePoints[i];
+    var p2 = routePoints[i + 1];
+    var lt1 = p1.lyTrinhMeters;
+    var lt2 = p2.lyTrinhMeters;
+
+    if (targetMeters >= Math.min(lt1, lt2) && targetMeters <= Math.max(lt1, lt2)) {
+      var span = lt2 - lt1;
+      var ratio = (span !== 0) ? (targetMeters - lt1) / span : 0;
+
+      foundLat = p1.lat + ratio * (p2.lat - p1.lat);
+      foundLng = p1.lng + ratio * (p2.lng - p1.lng);
+      exactDistFromA = p1.distFromA + ratio * (p2.distFromA - p1.distFromA);
+
+      foundSegment = true;
+      break;
+    }
+  }
+
+  // Nếu lý trình nằm ngoài biên, lấy mốc biên gần nhất
+  if (!foundSegment) {
+    var closest = routePoints.reduce((prev, curr) => 
+      Math.abs(curr.lyTrinhMeters - targetMeters) < Math.abs(prev.lyTrinhMeters - targetMeters) ? curr : prev
+    );
+    foundLat = closest.lat;
+    foundLng = closest.lng;
+    exactDistFromA = closest.distFromA;
+  }
+
+  var distStr = (exactDistFromA >= 1000) ? (exactDistFromA / 1000).toFixed(2) + " km" : Math.round(exactDistFromA) + " m";
+
+  if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
+  map.setView([foundLat, foundLng], 19, { animate: true });
+  
+  var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
+  foundMarkerLayer = L.marker([foundLat, foundLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
+  
+  var shareTextLt = `[TNN NET1] TÌM KIẾM LÝ TRÌNH: ${txt}\n- Cự ly từ Trạm A: ${distStr}\n- Tọa độ: ${foundLat.toFixed(6)}, ${foundLng.toFixed(6)}\n- Bản đồ: https://maps.google.com/?q=${foundLat},${foundLng}`;
+  var encodedShareLt = encodeURIComponent(shareTextLt);
+
+  var shareButtonsLt = `<div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">` +
+                       `<b>Chia sẻ vị trí:</b><br>` +
+                       `<button class="btn-info" onclick="navigator.clipboard.writeText(\`${shareTextLt}\`); showToast('Đã sao chép nội dung!');">📋 Copy</button> ` +
+                       `<button class="btn-info" onclick="window.open('sms:?&body=${encodedShareLt}', '_blank')" style="background:#28a745; color:white;">📩 SMS</button> ` +
+                       `<button class="btn-info" onclick="window.open('viber://forward?text=${encodedShareLt}', '_blank')" style="background:#6f42c1; color:white;">📱 Viber</button>` +
+                       `</div>`;
+
+  var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt} ()</b><br>` +
+                     `- Lý trình quy hoạch: <b>${txt}</b><br>` +
+                     `- Cự ly cáp từ Trạm A: <b>${distStr}</b><br>` +
+                     `- Tọa độ: <b>${foundLat.toFixed(6)}, ${foundLng.toFixed(6)}</b><br>` +
+                     `🏛️ Địa chỉ: <span id='lt-addr'>Đang tra cứu tọa độ...</span><br>` +
+                     `<a href='https://maps.google.com/?q=${foundLat},${foundLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>${shareButtonsLt}`;
+                       
+  foundMarkerLayer.bindPopup(popupContent).openPopup();
+  
+  fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${foundLat}&lon=${foundLng}&accept-language=vi`)
+    .then(r => r.json())
+    .then(resData => {
+      var addrEl = document.getElementById('lt-addr');
+      if (addrEl) addrEl.innerText = resData.display_name || "Không rõ địa chỉ chi tiết";
+    })
+    .catch(() => {
+      var addrEl = document.getElementById('lt-addr');
+      if (addrEl) addrEl.innerText = "Không thể kết nối dịch vụ địa danh";
     });
 
-    if (error) throw error;
-    if (!data || !data.success) {
-      throw new Error(data?.message || "Không thể tìm thấy lý trình từ cơ sở dữ liệu.");
-    }
-
-    hideLoading();
-    var foundLat = data.lat;
-    var foundLng = data.lng;
-
-    var distStr = (targetMeters >= 1000) ? (targetMeters / 1000).toFixed(2) + " km" : Math.round(targetMeters) + " m";
-
-    if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
-    map.setView([foundLat, foundLng], 19, { animate: true });
-    
-    var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
-    foundMarkerLayer = L.marker([foundLat, foundLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
-    
-    var shareTextLt = `[TNN NET1] TÌM KIẾM LÝ TRÌNH: ${txt}\n- Cự ly từ Trạm A: ${distStr}\n- Tọa độ: ${foundLat.toFixed(6)}, ${foundLng.toFixed(6)}\n- Bản đồ: https://maps.google.com/?q=${foundLat},${foundLng}`;
-    var encodedShareLt = encodeURIComponent(shareTextLt);
-
-    var shareButtonsLt = `<div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">` +
-                         `<b>Chia sẻ vị trí:</b><br>` +
-                         `<button class="btn-info" onclick="navigator.clipboard.writeText(\`${shareTextLt}\`); showToast('Đã sao chép nội dung!');">📋 Copy</button> ` +
-                         `<button class="btn-info" onclick="window.open('sms:?&body=${encodedShareLt}', '_blank')" style="background:#28a745; color:white;">📩 SMS</button> ` +
-                         `<button class="btn-info" onclick="window.open('viber://forward?text=${encodedShareLt}', '_blank')" style="background:#6f42c1; color:white;">📱 Viber</button>` +
-                         `</div>`;
-
-    var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt} (POSTGIS)</b><br>` +
-                       `- Lý trình quy hoạch: <b>${txt}</b><br>` +
-                       `- Cự ly cáp từ Trạm A: <b>${distStr}</b><br>` +
-                       `- Tọa độ: <b>${foundLat.toFixed(6)}, ${foundLng.toFixed(6)}</b><br>` +
-                       `🏛️ Địa chỉ: <span id='lt-addr'>Đang tra cứu tọa độ...</span><br>` +
-                       `<a href='https://maps.google.com/?q=${foundLat},${foundLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>${shareButtonsLt}`;
-                       
-    foundMarkerLayer.bindPopup(popupContent).openPopup();
-    
-    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${foundLat}&lon=${foundLng}&accept-language=vi`)
-      .then(r => r.json())
-      .then(resData => {
-        var addrEl = document.getElementById('lt-addr');
-        if (addrEl) addrEl.innerText = resData.display_name || "Không rõ địa chỉ chi tiết";
-      })
-      .catch(() => {
-        var addrEl = document.getElementById('lt-addr');
-        if (addrEl) addrEl.innerText = "Không thể kết nối dịch vụ địa danh";
-      });
-
-    showToast("Đã tìm thấy vị trí lý trình thành công!", "success");
-  } catch (err) {
-    hideLoading();
-    showToast("Lỗi tìm lý trình PostGIS: " + err.message, "error");
-  }
+  showToast("Đã nội suy lý trình  thành công!", "success");
 }
