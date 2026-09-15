@@ -1,4 +1,4 @@
-// data.js - Đồng bộ dữ liệu Supabase, quản lý ComboBox theo phân quyền, phân tích OTDR và tìm lý trình
+// data_2.js - Xử lý phân quyền đăng nhập, lọc Combobox và tự động vẽ bản đồ GIS cáp quang
 
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
@@ -11,7 +11,7 @@ async function fetchAllRowsSafe(tableName) {
 }
 
 /**
- * 1. HÀM TẢI DỮ LIỆU TỪ SUPABASE & TỰ ĐỘNG HÓA CHỌN TUYẾN/VẼ BẢN ĐỒ SAU ĐĂNG NHẬP
+ * 1. HÀM TẢI DỮ LIỆU TỪ SUPABASE & TỰ ĐỘNG CHỌN TUYẾN/ĐOẠN VẼ BẢN ĐỒ CHO TẤT CẢ VAI TRÒ
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   showLoading("Đang tải dữ liệu...");
@@ -52,7 +52,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       });
     });
 
-    // Cập nhật trạng thái tập trung vào AppStore
+    // Cập nhật trạng thái vào AppStore
     AppStore.setState({
       daiList: rawDaiList,
       tramList: rawTramList,
@@ -61,27 +61,27 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       dataPoints: globalDataPoints
     });
 
-    // Khởi tạo combobox phân cấp
+    // Khởi tạo phân cấp ComboBox dựa trên User đăng nhập
     khoiTaoComboDaiTheoPhanCap();
     capNhatComboDiemA();
 
-    // --- TỰ ĐỘNG CHỌN TUYẾN, ĐOẠN CÁP VÀ VẼ BẢN ĐỒ SAU KHI TẢI DỮ LIỆU XONG ---
+    // --- XỬ LÝ TỰ ĐỘNG CHỌN TUYẾN & ĐOẠN ĐỂ VẼ BẢN ĐỒ (CHO TẤT CẢ USER) ---
     var selectTuyenEl = document.getElementById('selectTuyen');
     var selectDoanCapEl = document.getElementById('selectDoanCap');
 
     if (selectTuyenEl && selectTuyenEl.options.length > 1) {
-      if (selectTuyenEl.value === 'ALL') {
-        selectTuyenEl.selectedIndex = 1; // Chọn tuyến đầu tiên trong danh sách phân quyền
-      }
-      onTuyenChange();
+      // 1. Tự động chọn tuyến đầu tiên trong danh sách đã lọc
+      selectTuyenEl.selectedIndex = 1;
+      onTuyenChange(); // Nạp danh sách đoạn cáp tương ứng
 
+      // 2. Tự động chọn đoạn cáp đầu tiên của tuyến đó
       if (selectDoanCapEl && selectDoanCapEl.options.length > 1) {
         if (typeof currentUser !== 'undefined' && currentUser.idDoanCap) {
           selectDoanCapEl.value = currentUser.idDoanCap;
         } else {
-          selectDoanCapEl.selectedIndex = 1; // Chọn đoạn đầu tiên
+          selectDoanCapEl.selectedIndex = 1; // Chọn đoạn đầu tiên trong combobox
         }
-        onDoanCapChange();
+        onDoanCapChange(); // Tự động gọi vẽ bản đồ
       } else {
         veLaiTuyenAB();
       }
@@ -97,7 +97,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 }
 
 /**
- * 2. HÀM KHỞI TẠO COMBOBOX ĐÀI/TRẠM VÀ AN GIẤU GỌN CHO CẤP TRẠM
+ * 2. HÀM KHỞI TẠO COMBOBOX VÀ GÁN/ẨN THEO PHÂN QUYỀN VAI TRÒ
  */
 function khoiTaoComboDaiTheoPhanCap() {
   var selectDai = document.getElementById('selectDai');
@@ -107,26 +107,36 @@ function khoiTaoComboDaiTheoPhanCap() {
 
   var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
 
-  // Nếu là Admin Trạm hoặc Nhân viên Trạm (tram_user/member) -> Ẩn 2 ô chọn Đài & Trạm cho gọn
-  if (userRole === 'tram_admin' || userRole === 'tram_user' || userRole === 'member') {
-    if (groupDai) groupDai.style.display = 'none';
-    if (groupTram) groupTram.style.display = 'none';
+  // Đổ dữ liệu Đài ban đầu
+  if (selectDai) {
+    selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
+    rawDaiList.forEach(dai => selectDai.innerHTML += `<option value="${dai.id_dai}">${dai.ten_dai}</option>`);
+  }
+
+  // 1. Nếu là Admin Trạm hoặc Member (Nhân viên trạm) -> Tra sẵn giá trị và ẨN 2 ô chọn Đài/Trạm
+  if (userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') {
     if (currentUser.idDai && selectDai) selectDai.value = currentUser.idDai;
     if (currentUser.idTram && selectTram) selectTram.value = currentUser.idTram;
-  } else {
-    // Với tài khoản admin cấp cao hơn -> Hiển thị combobox đầy đủ
+
+    if (groupDai) groupDai.style.display = 'none';
+    if (groupTram) groupTram.style.display = 'none';
+  } 
+  // 2. Nếu là Admin Đài -> Khóa ô Chọn Đài theo Đài quản lý, hiển thị ô Trạm
+  else if (userRole === 'dai_admin') {
+    if (groupDai) { groupDai.style.display = 'block'; }
+    if (groupTram) { groupTram.style.display = 'block'; }
+    if (currentUser.idDai && selectDai) { 
+      selectDai.value = currentUser.idDai; 
+      selectDai.disabled = true; 
+    }
+  } 
+  // 3. Admin Sys -> Hiển thị đầy đủ tất cả combobox
+  else {
     if (groupDai) groupDai.style.display = 'block';
     if (groupTram) groupTram.style.display = 'block';
-    
-    if (selectDai) {
-      selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
-      rawDaiList.forEach(dai => selectDai.innerHTML += `<option value="${dai.id_dai}">${dai.ten_dai}</option>`);
-      if (userRole === 'dai_admin' && currentUser.idDai) { 
-        selectDai.value = currentUser.idDai; 
-        selectDai.disabled = true; 
-      }
-    }
+    if (selectDai) selectDai.disabled = false;
   }
+
   onDaiChange();
 }
 
@@ -139,10 +149,13 @@ function onDaiChange() {
 
   var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
 
-  if (userRole !== 'tram_admin' && userRole !== 'tram_user' && userRole !== 'member' && selectTram) {
+  if (userRole !== 'tram_admin' && userRole !== 'member' && userRole !== 'tram_user' && selectTram) {
     selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
     rawTramList.filter(tram => daiVal === 'ALL' || tram.id_dai == daiVal)
                .forEach(tram => selectTram.innerHTML += `<option value="${tram.id_tram}">${tram.ten_tram}</option>`);
+    if (currentUser.idTram && userRole === 'tram_admin') {
+      selectTram.value = currentUser.idTram;
+    }
   }
   updateTuyenOptions();
 }
@@ -155,7 +168,7 @@ function onTramChange() {
 }
 
 /**
- * 3. LỌC DANH SÁCH TUYẾN CÁP THEO PHÂN QUYỀN USER ĐĂNG NHẬP
+ * 3. LỌC COMBOBOX TUYẾN CÁP THEO PHÂN QUYỀN ĐĂNG NHẬP
  */
 function updateTuyenOptions() {
   var selectTuyen = document.getElementById('selectTuyen');
@@ -165,14 +178,25 @@ function updateTuyenOptions() {
   var filteredTuyenList = rawTuyenList;
   var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
   
-  // Nếu thuộc cấp Trạm, lọc các tuyến thuộc trạm user quản lý
-  if ((userRole === 'tram_admin' || userRole === 'tram_user' || userRole === 'member') && currentUser.idTram) {
+  // Nếu là cấp Trạm (tram_admin/member): Lọc tuyến có chứa đoạn cáp thuộc trạm đó
+  if ((userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') && currentUser.idTram) {
     var allowedTuyenIds = rawDoanCapList
       .filter(doan => doan.id_tram == currentUser.idTram || doan.tram_id == currentUser.idTram)
       .map(doan => doan.id_tuyen || doan.tuyen_cap_id);
       
     filteredTuyenList = rawTuyenList.filter(tuyen => 
       allowedTuyenIds.includes(tuyen.id_tuyen_cap || tuyen.id)
+    );
+  } 
+  // Nếu là dai_admin: Lọc tuyến thuộc các trạm nằm trong đài đó
+  else if (userRole === 'dai_admin' && currentUser.idDai) {
+    var tramIdsOfDai = rawTramList.filter(t => t.id_dai == currentUser.idDai).map(t => t.id_tram);
+    var allowedTuyenIdsDai = rawDoanCapList
+      .filter(doan => tramIdsOfDai.includes(doan.id_tram || doan.tram_id))
+      .map(doan => doan.id_tuyen || doan.tuyen_cap_id);
+
+    filteredTuyenList = rawTuyenList.filter(tuyen => 
+      allowedTuyenIdsDai.includes(tuyen.id_tuyen_cap || tuyen.id)
     );
   }
 
@@ -186,7 +210,7 @@ function updateTuyenOptions() {
 }
 
 /**
- * 4. LỌC DANH SÁCH ĐOẠN CÁP THEO PHÂN QUYỀN VÀ TUYẾN CÁP ĐƯỢC CHỌN
+ * 4. LỌC COMBOBOX ĐOẠN CÁP THEO QUYỀN TRUY CẬP VÀ TUYẾN ĐƯỢC CHỌN
  */
 function onTuyenChange() {
   var selectTuyen = document.getElementById('selectTuyen');
@@ -199,9 +223,10 @@ function onTuyenChange() {
     selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
     if (tuyenVal !== 'ALL') {
       var matchedDoan = rawDoanCapList.filter(doan => (doan.id_tuyen || doan.tuyen_cap_id) == tuyenVal);
-
       var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
-      if ((userRole === 'tram_admin' || userRole === 'tram_user' || userRole === 'member') && currentUser.idTram) {
+
+      // Lọc tiếp đoạn cáp nếu là cấp Trạm
+      if ((userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') && currentUser.idTram) {
         matchedDoan = matchedDoan.filter(doan => (doan.id_tram == currentUser.idTram || doan.tram_id == currentUser.idTram));
       }
 
@@ -213,7 +238,6 @@ function onTuyenChange() {
     }
   }
   capNhatComboDiemA();
-  veLaiTuyenAB();
 }
 
 function onDoanCapChange() { 
@@ -238,7 +262,7 @@ function capNhatComboDiemA() {
   });
 }
 
-// --- CÁC HÀM PHÂN TÍCH SỰ CỐ OTDR VÀ TÌM LÝ TRÌNH ĐẦY ĐỦ ---
+// --- CÁC HÀM PHÂN TÍCH SỰ CỐ OTDR VÀ TÌM LÝ TRÌNH ---
 function chiaSeSuCo(lat, lng, khoangCachKm, prevMX, nextMX, shareType) {
   var message = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n- Tọa độ: ${lat}, ${lng}\n- Cự ly đo OTDR: ${khoangCachKm} km\n- Vị trí: Nằm giữa [${prevMX}] và [${nextMX}]\n- Bản đồ: https://maps.google.com/?q=${lat},${lng}`;
   var encoded = encodeURIComponent(message);
@@ -324,7 +348,7 @@ function timLyTrinhBanDo() {
   
   var pts = getPointsCuaTuyenHienTai();
   if (pts.length < 2) {
-    showToast("Vui lòng chọn tuyến cáp ở bảng điều khiển bên trái trước khi tìm kiếm lý trình!");
+    showToast("Vui lòng chọn tuyến cáp trước khi tìm kiếm!");
     return;
   }
 
@@ -426,7 +450,7 @@ function timLyTrinhBanDo() {
 }
 
 /**
- * 5. MODULE VẼ BẢN ĐỒ TUYẾN CÁP PHÂN MÀU & HIỂN THỊ MỐC HẠ TẦNG
+ * 5. MODULE VẼ ĐƯỜNG TUYẾN PHÂN MÀU VÀ MỐC HẠ TẦNG TRÊN BẢN ĐỒ
  */
 var routeColoredLinesGroup = L.featureGroup();
 var pointsMarkersLayer = L.featureGroup();
@@ -531,6 +555,6 @@ function renderColoredRouteOnMap() {
   } catch(e) {}
 }
 
-//function veLaiTuyenAB() {
-//  renderColoredRouteOnMap();
-//}
+function veLaiTuyenAB() {
+  renderColoredRouteOnMap();
+}
