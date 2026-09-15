@@ -42,16 +42,20 @@ async function executeCrudAction() {
           id: newRec.id_diem || newRec.id, ten: newRec.ten_diem, lat: newRec.lat, lng: newRec.long,
           lyTrinh: newRec.ly_trinh || '', idTuyen: tuyenH, idLoaiDiem: loaiMoi, loai: 'Điểm mới'
         });
+        await ghiNhatKyThaoTac("THEM_DIEM", `Thêm mới điểm hạ tầng: [${tenMoi}]`);
       }
     } else if (act === 'EDIT') { 
       const { error } = await supabaseClient.from('diem_ha_tang').update(payload).eq('id_diem', id);
       if (error) throw error;
       var localPt = globalDataPoints.find(p => p.id == id);
-      if (localPt) { localPt.ten = tenMoi; localPt.idLoaiDiem = loaiMoi; localPt.lyTrinh = ltMoi; targetLat = localPt.lat; targetLng = localPt.lng; }
+      if (localPt) { localPt.ten = tenMoi; localPt.idLoaiDiem = loaiMoi; localPt.lyTrinh = ltMoi; targetLat = localPt.lat; targetLng = localPt.lng; 
+                   await ghiNhatKyThaoTac("SUA_DIEM", `Cập nhật thông tin điểm: [${tenMoi}]`);}
     } else if (act === 'DELETE') { 
       var delPt = globalDataPoints.find(p => p.id == id);
       if (delPt) { targetLat = delPt.lat; targetLng = delPt.lng; }
       const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id);
+      var tenDiemXoa = delPt ? delPt.ten : id;
+      await ghiNhatKyThaoTac("XOA_DIEM", `Xóa điểm hạ tầng: [${tenDiemXoa}]`);
       if (error) throw error;
       globalDataPoints = globalDataPoints.filter(p => p.id != id);
     }
