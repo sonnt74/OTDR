@@ -239,17 +239,104 @@ function timLyTrinhBanDo() {
   var targetMeters = parsedTarget ? parsedTarget.meters : null;
   
   if (targetMeters === null || isNaN(targetMeters)) {
-    showToast("Sai định dạng lý trình! VD: 54+100");
+    showToast("Sai định dạng lý trình! Vui lòng nhập theo mẫu: 54+100 hoặc km 54+100");
     return;
   }
   
   var pts = getPointsCuaTuyenHienTai();
-  if (pts.length < 2) { showToast("Vui lòng chọn tuyến cáp trước!"); return; }
+  if (pts.length < 2) {
+    showToast("Vui lòng chọn tuyến cáp ở bảng điều khiển bên trái trước khi tìm kiếm lý trình!");
+    return;
+  }
 
-  var closest = pts.reduce((prev, curr) => 
-    Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev
-  );
+  var isNghichHuong = false;
+  if (pts.length >= 2) {
+    if (pts[1].calculatedLyTrinhMeters < pts[0].calculatedLyTrinhMeters) {
+      isNghichHuong = true; 
+    }
+  }
 
-  map.setView([closest.lat, closest.lng], 19, { animate: true });
-  showToast(`Đã tìm thấy điểm gần lý trình ${txt}`);
+  var sortedPts = [...pts].sort((a, b) => {
+    return isNghichHuong 
+      ? b.calculatedLyTrinhMeters - a.calculatedLyTrinhMeters 
+      : a.calculatedLyTrinhMeters - b.calculatedLyTrinhMeters;
+  });
+
+  var targetSeg = null;
+  var foundLat = null, foundLng = null, bestDescription = "";
+
+  for (var i = 0; i < sortedPts.length - 1; i++) {
+    var p1 = sortedPts[i];
+    var p2 = sortedPts[i+1];
+    var startLt = p1.calculatedLyTrinhMeters;
+    var endLt = p2.calculatedLyTrinhMeters;
+    
+    var minLt = Math.min(startLt, endLt);
+    var maxLt = Math.max(startLt, endLt);
+    
+    if (targetMeters >= minLt && targetMeters <= maxLt) {
+      var span = endLt - startLt;
+      var ratio = (span !== 0) ? (targetMeters - startLt) / span : 0;
+      
+      var testLat = p1.lat + ratio * (p2.lat - p1.lat);
+      var testLng = p1.lng + ratio * (p2.lng - p1.lng);
+      
+      var distToP1 = calculateHaversine(testLat, testLng, p1.lat, p1.lng);
+      var distToP2 = calculateHaversine(testLat, testLng, p2.lat, p2.lng);
+      var segmentRealLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
+
+      if (distToP1 <= segmentRealLen + 100 && distToP2 <= segmentRealLen + 100) {
+        targetSeg = { p1: p1, p2: p2 };
+        foundLat = testLat;
+        foundLng = testLng;
+        bestDescription = `Nằm giữa [${p1.ten}] và [${p2.ten}]`;
+        break;
+      }
+    }
+  }
+
+  if (!targetSeg) {
+    var closest = sortedPts.reduce((prev, curr) => 
+      Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev
+    );
+    
+    var deviationMeters = Math.abs(closest.calculatedLyTrinhMeters - targetMeters);
+    if (deviationMeters > 100) {
+      showToast(`Không tìm thấy vị trí lý trình ${txt} chính xác (Sai số quá ${Math.round(deviationMeters)}m so với mốc gần nhất ${closest.ten}). Vui lòng kiểm tra lại mốc neo!`);
+      return;
+    }
+
+    foundLat = closest.lat;
+    foundLng = closest.lng;
+    bestDescription = `Gần điểm mốc: ${closest.ten} (Sai số ~${Math.round(deviationMeters)}m)`;
+  }
+
+  var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, getMasterRouteBackbone(document.getElementById('selectTuyen').value, document.getElementById('selectTram').value, document.getElementById('selectDoanCap').value));
+  var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
+
+  // Khôi phục hiển thị Marker và Popup chi tiết trên bản đồ
+  if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
+  map.setView([foundLat, foundLng], 19, { animate: true });
+  
+  var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
+  foundMarkerLayer = L.marker([foundLat, foundLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
+  
+  var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
+                     `- Vị trí: <b>${bestDescription}</b><br>` +
+                     `- Cự ly cáp tới Trạm TNN: <b>${distStr}</b><br>` +
+                     `🏛️ Địa chỉ: <span id='lt-addr'>Đang tra cứu tọa độ...</span>`;
+                     
+  foundMarkerLayer.bindPopup(popupContent).openPopup();
+  
+  // Gọi API tra cứu địa chỉ thực tế từ tọa độ (Reverse Geocoding)
+  fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${foundLat}&lon=${foundLng}&accept-language=vi`)
+    .then(r => r.json())
+    .then(data => {
+      var addressText = data.display_name || "Không rõ địa chỉ chi tiết";
+      foundMarkerLayer.setPopupContent(popupContent.replace("Đang tra cứu tọa độ...", addressText));
+    })
+    .catch(() => {
+      foundMarkerLayer.setPopupContent(popupContent.replace("Đang tra cứu tọa độ...", "Không thể kết nối dịch vụ địa danh"));
+    });
 }
+
