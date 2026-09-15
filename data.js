@@ -1,4 +1,5 @@
-// data.js - Tải dữ liệu từ Supabase, quản lý ComboBox và phân tích OTDR
+// data.js - Đồng bộ dữ liệu Supabase, quản lý ComboBox qua AppStore, phân tích OTDR và tìm lý trình
+
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
   while (keep) {
@@ -13,13 +14,20 @@ async function taiDuLieuSupabase(forceRefresh = false) {
   showLoading("Đang tải dữ liệu...");
   try {
     let [daiRes, tramRes, tuyenRes, doanRes, diemRes, dcdRes, loaiRes] = await Promise.all([
-      supabaseClient.from('dai_vt').select('*'), supabaseClient.from('tram_vt').select('*'),
-      supabaseClient.from('tuyen_cap').select('*'), supabaseClient.from('doan_cap').select('*'),
-      fetchAllRowsSafe('diem_ha_tang'), fetchAllRowsSafe('doan_cap_diem'), supabaseClient.from('loai_diem').select('*')
+      supabaseClient.from('dai_vt').select('*'), 
+      supabaseClient.from('tram_vt').select('*'),
+      supabaseClient.from('tuyen_cap').select('*'), 
+      supabaseClient.from('doan_cap').select('*'),
+      fetchAllRowsSafe('diem_ha_tang'), 
+      fetchAllRowsSafe('doan_cap_diem'), 
+      supabaseClient.from('loai_diem').select('*')
     ]);
     
-    rawDaiList = daiRes.data || []; rawTramList = tramRes.data || []; rawTuyenList = tuyenRes.data || [];
-    rawDoanCapList = doanRes.data || []; rawLoaiDiemList = loaiRes.data || [];
+    rawDaiList = daiRes.data || []; 
+    rawTramList = tramRes.data || []; 
+    rawTuyenList = tuyenRes.data || [];
+    rawDoanCapList = doanRes.data || []; 
+    rawLoaiDiemList = loaiRes.data || [];
     
     var diemMap = {}, doanCapMap = {}, loaiDiemMap = {};
     diemRes.forEach(d => diemMap[d.id_diem || d.id] = d);
@@ -41,10 +49,24 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       });
     });
 
+    // Cập nhật trạng thái tập trung vào AppStore
+    AppStore.setState({
+      daiList: rawDaiList,
+      tramList: rawTramList,
+      tuyenList: rawTuyenList,
+      doanCapList: rawDoanCapList,
+      dataPoints: globalDataPoints
+    });
+
     khoiTaoComboDaiTheoPhanCap();
     capNhatComboDiemA();
     if (forceRefresh) showToast("Đã làm mới dữ liệu!");
-  } catch (err) { showToast("Lỗi: " + err.message); } finally { hideLoading(); if (map) map.invalidateSize(); }
+  } catch (err) { 
+    showToast("Lỗi: " + err.message); 
+  } finally { 
+    hideLoading(); 
+    if (map) map.invalidateSize(); 
+  }
 }
 
 function khoiTaoComboDaiTheoPhanCap() {
@@ -64,7 +86,6 @@ function khoiTaoComboDaiTheoPhanCap() {
     
     selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
     rawDaiList.forEach(dai => selectDai.innerHTML += `<option value="${dai.id_dai}">${dai.ten_dai}</option>`);
-    
     if (currentUser.role === 'dai_admin' && currentUser.idDai) { 
       selectDai.value = currentUser.idDai; 
       selectDai.disabled = true; 
@@ -77,6 +98,8 @@ function onDaiChange() {
   var daiVal = document.getElementById('selectDai').value;
   var selectTram = document.getElementById('selectTram');
   
+  AppStore.setState({ selectedDai: daiVal });
+
   if (currentUser.role !== 'tram_admin' && selectTram) {
     selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
     rawTramList.filter(tram => daiVal === 'ALL' || tram.id_dai == daiVal)
@@ -85,12 +108,15 @@ function onDaiChange() {
   updateTuyenOptions();
 }
 
-function onTramChange() { updateTuyenOptions(); }
+function onTramChange() { 
+  var tramVal = document.getElementById('selectTram').value;
+  AppStore.setState({ selectedTram: tramVal });
+  updateTuyenOptions(); 
+}
 
 function updateTuyenOptions() {
   var selectTuyen = document.getElementById('selectTuyen');
   if (!selectTuyen) return;
-  
   selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
   rawTuyenList.forEach(tuyen => selectTuyen.innerHTML += `<option value="${tuyen.id_tuyen_cap}">${tuyen.ma_tuyencap}</option>`);
   onTuyenChange();
@@ -99,6 +125,9 @@ function updateTuyenOptions() {
 function onTuyenChange() {
   var tuyenVal = document.getElementById('selectTuyen').value;
   var selectDoanCap = document.getElementById('selectDoanCap');
+  
+  AppStore.setState({ selectedTuyen: tuyenVal });
+
   if (selectDoanCap) {
     selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
     if (tuyenVal !== 'ALL') {
@@ -110,18 +139,33 @@ function onTuyenChange() {
   veLaiTuyenAB();
 }
 
-function onDoanCapChange() { veLaiTuyenAB(); }
-function onDiemAChange() { veLaiTuyenAB(); }
+function onDoanCapChange() { 
+  var doanVal = document.getElementById('selectDoanCap').value;
+  AppStore.setState({ selectedDoanCap: doanVal });
+  veLaiTuyenAB(); 
+}
+
+function onDiemAChange() { 
+  veLaiTuyenAB(); 
+}
 
 function capNhatComboDiemA() {
   var tuyenVal = document.getElementById('selectTuyen').value;
   var combo = document.getElementById('comboDiemA');
   if (!combo) return;
-  
   combo.innerHTML = '<option value="DEFAULT">📍 Trạm Gốc (TNN)</option>';
   globalDataPoints.filter(pt => isMangXong(pt) && (tuyenVal === 'ALL' || pt.idTuyen == tuyenVal)).forEach(mx => {
     combo.innerHTML += `<option value="${mx.ten}">🔀 ${mx.ten}</option>`;
   });
+}
+
+// --- CÁC HÀM PHÂN TÍCH SỰ CỐ OTDR VÀ TÌM LÝ TRÌNH ĐẦY ĐỦ ---
+function chiaSeSuCo(lat, lng, khoangCachKm, prevMX, nextMX, shareType) {
+  var message = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n- Tọa độ: ${lat}, ${lng}\n- Cự ly đo OTDR: ${khoangCachKm} km\n- Vị trí: Nằm giữa [${prevMX}] và [${nextMX}]\n- Bản đồ: https://maps.google.com/?q=${lat},${lng}`;
+  var encoded = encodeURIComponent(message);
+  if (shareType === 'copy') { navigator.clipboard.writeText(message); showToast("Đã sao chép nội dung!"); }
+  else if (shareType === 'sms') window.open(`sms:?&body=${encoded}`, '_blank');
+  else if (shareType === 'viber') window.open(`viber://forward?text=${encoded}`, '_blank');
 }
 
 function timViTriDut() {
@@ -177,8 +221,14 @@ function timViTriDut() {
   var faultMarker = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
   foundMarkerLayer = faultMarker;
 
-  var shareButtons = `<div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;"><b>Chia sẻ sự cố:</b><br><button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'copy')">📋 Copy</button><button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'sms')" style="background:#28a745; color:white;">📩 SMS</button></div>`;
-  var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>Cự ly đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>📍 Lý trình QL: <b>${interpolatedLyTrinhText}</b><br>MX trước: <b>${closestPrevMX}</b><br>MX sau: <b>${closestNextMX}</b>${shareButtons}`;
+  var shareButtons = `<div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;"><b>Chia sẻ sự cố:</b><br><button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'copy')">📋 Copy</button><button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'sms')" style="background:#28a745; color:white;">📩 SMS</button><button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'viber')" style="background:#6f42c1; color:white;">📱 Viber</button></div>`;
+  
+  var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>` +
+                  `Cự ly đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
+                  `📍 Lý trình QL: <b>${interpolatedLyTrinhText}</b><br>` +
+                  `MX trước: <b>${closestPrevMX}</b><br>` +
+                  `MX sau: <b>${closestNextMX}</b><br>` +
+                  `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>${shareButtons}`;
   
   faultMarker.bindPopup(popupHtml).openPopup();
 }
@@ -194,7 +244,7 @@ function timLyTrinhBanDo() {
   }
   
   var pts = getPointsCuaTuyenHienTai();
-  if (pts.length < 2) { showToast("Vui chọn tuyến cáp trước!"); return; }
+  if (pts.length < 2) { showToast("Vui lòng chọn tuyến cáp trước!"); return; }
 
   var closest = pts.reduce((prev, curr) => 
     Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev
