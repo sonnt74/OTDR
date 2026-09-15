@@ -69,3 +69,20 @@ function openModal(id, tabId = null) {
     if (typeof loadAdminMasterData === 'function') loadAdminMasterData();
   }
 }
+
+// Hàm ghi lại lịch sử thao tác của kỹ sư vào cơ sở dữ liệu
+async function ghiNhatKyThaoTac(hanhDong, chiTiet) {
+  try {
+    var userEmail = currentUser && currentUser.isLoggedIn ? (currentUser.email || "Thành viên hệ thống") : "Khách";
+    var userRole = currentUser ? currentUser.role : "member";
+
+    await supabaseClient.from('lich_su_thao_tac').insert([{
+      email_nguoi_dung: userEmail,
+      vai_tro: userRole,
+      hanh_dong: hanhDong,
+      chi_tiet: chiTiet
+    }]);
+  } catch (err) {
+    console.error("Không thể ghi nhật ký thao tác:", err.message);
+  }
+}
