@@ -1,4 +1,4 @@
-// data_2.js - Xử lý phân quyền theo luồng: Đoạn cáp -> Tuyến cáp -> Tự động vẽ bản đồ GIS (Chuẩn OK4)
+// data_2.js - Xử lý phân quyền, đồng bộ AppStore chuẩn xác và tự động vẽ bản đồ GIS cáp quang
 
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
@@ -11,7 +11,7 @@ async function fetchAllRowsSafe(tableName) {
 }
 
 /**
- * HÀM PHỤ TRỢ: Lấy ID chuẩn từ đối tượng (Bất kể tên trường id hay id_doan_cap...)
+ * HÀM PHỤ TRỢ: Lấy ID chuẩn dạng chuỗi (String) để so sánh tuyệt đối chính xác
  */
 function getStandardId(item, primaryKeyName) {
   if (!item) return '';
@@ -21,7 +21,7 @@ function getStandardId(item, primaryKeyName) {
 }
 
 /**
- * 1. HÀM CHÍNH TẢI DỮ LIỆU & TỰ ĐỘNG LỌC TỪ ĐOẠN CÁP -> TUYẾN -> VẼ BẢN ĐỒ
+ * 1. HÀM TẢI DỮ LIỆU TỪ SUPABASE
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   showLoading("Đang tải dữ liệu...");
@@ -71,6 +71,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       });
     });
 
+    // Cập nhật AppStore ban đầu
     AppStore.setState({
       daiList: rawDaiList,
       tramList: rawTramList,
@@ -79,12 +80,12 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       dataPoints: globalDataPoints
     });
 
-    // KHỞI TẠO LUỒNG MỚI: ĐOẠN CÁP -> TUYẾN CÁP -> VẼ BẢN ĐỒ
+    // Thực hiện luồng xử lý phân quyền và đồng bộ trạng thái AppStore
     xuLyPhanQuyenDoanTuyenUser();
 
     if (forceRefresh) showToast("Đã làm mới dữ liệu!");
   } catch (err) { 
-    showToast("Lỗi: " + err.message); 
+    showToast("Lỗi tải dữ liệu: " + err.message); 
   } finally { 
     hideLoading(); 
     if (map) map.invalidateSize(); 
@@ -92,7 +93,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 }
 
 /**
- * 2. LUỒNG TƯ DUY MỚI: LỌC ĐOẠN CÁP CỦA USER ➔ TRUY VẤN NGUỢC TUYẾN & ĐÀI/TRẠM ➔ TỰ ĐỘNG CHỌN VẼ BẢN ĐỒ
+ * 2. LUỒNG XỬ LÝ PHÂN QUYỀN & ĐỒNG BỘ TRẠNG THÁI APPSTORE
  */
 function xuLyPhanQuyenDoanTuyenUser() {
   var selectDai = document.getElementById('selectDai');
@@ -105,7 +106,7 @@ function xuLyPhanQuyenDoanTuyenUser() {
 
   var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
 
-  // BƯỚC 1: LỌC DANH SÁCH ĐOẠN CÁP THUỘC THẨM QUYỀN USER TRƯỚC
+  // BƯỚC 1: LỌC DANH SÁCH ĐOẠN CÁP CỦA USER
   var allowedDoanList = rawDoanCapList;
   
   if (userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') {
@@ -126,7 +127,7 @@ function xuLyPhanQuyenDoanTuyenUser() {
     );
   }
 
-  // BƯỚC 2: RÚT RA DANH SÁCH TUYẾN CÁP TỪ CÁC ĐOẠN CÁP ĐÃ LỌC
+  // BƯỚC 2: RÚT RA DANH SÁCH TUYẾN CÁP
   var allowedTuyenIds = [...new Set(allowedDoanList.map(d => String(d.id_tuyen || d.tuyen_cap_id)))];
   var userTuyenList = rawTuyenList.filter(t => allowedTuyenIds.includes(getStandardId(t, 'id_tuyen_cap')));
 
@@ -140,19 +141,22 @@ function xuLyPhanQuyenDoanTuyenUser() {
     });
   }
 
-  // BƯỚC 4: XỬ LÝ ẨN/HIỂN THỊ VÀ GÁN DỮ LIỆU ĐÀI/TRẠM
+  // BƯỚC 4: AN/HIỂN THỊ ĐÀI/TRẠM VA TRUY VẤN NGUỢC ID
+  var finalDaiVal = 'ALL';
+  var finalTramVal = 'ALL';
+
   if (userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') {
     if (groupDai) groupDai.style.display = 'none';
     if (groupTram) groupTram.style.display = 'none';
     
-    // Tra ngược id_dai và id_tram từ đoạn cáp đầu tiên của user nếu bị thiếu
     if (allowedDoanList.length > 0) {
       var firstDoan = allowedDoanList[0];
-      var firstTramId = String(firstDoan.id_tram || firstDoan.tram_id);
-      var matchedTram = rawTramList.find(t => getStandardId(t, 'id_tram') === firstTramId);
-      
-      if (selectTram && firstTramId) selectTram.value = firstTramId;
-      if (selectDai && matchedTram) selectDai.value = String(matchedTram.id_dai || matchedTram.dai_id);
+      finalTramVal = String(firstDoan.id_tram || firstDoan.tram_id);
+      var matchedTram = rawTramList.find(t => getStandardId(t, 'id_tram') === finalTramVal);
+      if (matchedTram) finalDaiVal = String(matchedTram.id_dai || matchedTram.dai_id);
+
+      if (selectTram) selectTram.value = finalTramVal;
+      if (selectDai) selectDai.value = finalDaiVal;
     }
   } else {
     if (groupDai) groupDai.style.display = 'block';
@@ -162,21 +166,24 @@ function xuLyPhanQuyenDoanTuyenUser() {
       selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
       rawDaiList.forEach(d => selectDai.innerHTML += `<option value="${getStandardId(d, 'id_dai')}">${d.ten_dai}</option>`);
       if (userRole === 'dai_admin' && currentUser.idDai) {
-        selectDai.value = String(currentUser.idDai);
+        finalDaiVal = String(currentUser.idDai);
+        selectDai.value = finalDaiVal;
         selectDai.disabled = true;
       }
     }
   }
 
-  // BƯỚC 5: TỰ ĐỘNG CHỌN TUYẾN 1, ĐOẠN 1 VÀ VẼ BẢN ĐỒ NGAY LẬP TỨC
+  // BƯỚC 5: TỰ ĐỘNG CHỌN TUYẾN 1, ĐOẠN 1 VÀ CẬP NHẬT TRẠNG THÁI APPSTORE
+  var finalTuyenVal = 'ALL';
+  var finalDoanVal = 'ALL';
+
   if (selectTuyen && selectTuyen.options.length > 1) {
-    selectTuyen.selectedIndex = 1; // Chọn tuyến đầu tiên của user
+    selectTuyen.selectedIndex = 1; 
+    finalTuyenVal = selectTuyen.value;
     
-    // Nạp lại danh sách đoạn cáp của tuyến vừa chọn
-    var selectedTuyenVal = selectTuyen.value;
     if (selectDoanCap) {
       selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
-      var matchedDoanOfSelectedTuyen = allowedDoanList.filter(d => String(d.id_tuyen || d.tuyen_cap_id) === String(selectedTuyenVal));
+      var matchedDoanOfSelectedTuyen = allowedDoanList.filter(d => String(d.id_tuyen || d.tuyen_cap_id) === String(finalTuyenVal));
       
       matchedDoanOfSelectedTuyen.forEach(d => {
         var dId = getStandardId(d, 'id_doan_cap');
@@ -185,14 +192,23 @@ function xuLyPhanQuyenDoanTuyenUser() {
       });
 
       if (selectDoanCap.options.length > 1) {
-        selectDoanCap.selectedIndex = 1; // Chọn đoạn đầu tiên
+        selectDoanCap.selectedIndex = 1;
+        finalDoanVal = selectDoanCap.value;
       }
     }
-
-    // Kích hoạt vẽ bản đồ
-    capNhatComboDiemA();
-    veLaiTuyenAB();
   }
+
+  // ĐỒNG BỘ TRẠNG THÁI APPSTORE CHÍNH XÁC (KHÔNG ĐỂ BỊ LỖI 'ALL')
+  AppStore.setState({
+    selectedDai: finalDaiVal,
+    selectedTram: finalTramVal,
+    selectedTuyen: finalTuyenVal,
+    selectedDoanCap: finalDoanVal
+  });
+
+  // KÍCH HOẠT VẼ BẢN ĐỒ
+  capNhatComboDiemA();
+  veLaiTuyenAB();
 }
 
 function onDaiChange() {
@@ -546,6 +562,6 @@ function renderColoredRouteOnMap() {
   } catch(e) {}
 }
 
-//function veLaiTuyenAB() {
-//  renderColoredRouteOnMap();
-//}
+function veLaiTuyenAB() {
+  renderColoredRouteOnMap();
+}
