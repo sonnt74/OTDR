@@ -1,7 +1,6 @@
-// store.js - Quản lý trạng thái tập trung (Centralized State Management)
+// store.js - Quản lý trạng thái tập trung và kết nối lắng nghe sự kiện
 class ApplicationStore {
   constructor() {
-    // Trạng thái gốc của toàn bộ ứng dụng
     this.state = {
       selectedDai: 'ALL',
       selectedTram: 'ALL',
@@ -11,19 +10,15 @@ class ApplicationStore {
       tramList: [],
       tuyenList: [],
       doanCapList: [],
-      dataPoints: [] // Danh sách điểm hạ tầng trên RAM
+      dataPoints: []
     };
-    
-    // Danh sách các hàm lắng nghe sự thay đổi trạng thái
     this.listeners = [];
   }
 
-  // Lấy toàn bộ hoặc một phần trạng thái hiện tại
   getState() {
     return this.state;
   }
 
-  // Cập nhật trạng thái mới và tự động thông báo cho các giao diện đăng ký
   setState(updater) {
     if (typeof updater === 'function') {
       this.state = { ...this.state, ...updater(this.state) };
@@ -33,16 +28,25 @@ class ApplicationStore {
     this.notifyListeners();
   }
 
-  // Đăng ký một hàm lắng nghe khi trạng thái thay đổi
+  // Đăng ký hàm lắng nghe sự thay đổi trạng thái
   subscribe(listener) {
     this.listeners.push(listener);
   }
 
-  // Thông báo cho tất cả các thành phần giao diện cập nhật theo dữ liệu mới
+  // Phát thông báo đến tất cả các thành phần giao diện đã đăng ký
   notifyListeners() {
     this.listeners.forEach(listener => listener(this.state));
   }
 }
 
-// Khởi tạo một thể hiện duy nhất (Singleton Store) cho toàn ứng dụng
 const AppStore = new ApplicationStore();
+
+// --- KẾT NỐI LẮNG NGHE SỰ KIỆN CHO BẢN ĐỒ VÀ BẢNG ĐIỀU KHIỂN ---
+AppStore.subscribe((state) => {
+  console.log("Trạng thái AppStore đã thay đổi:", state);
+  
+  // Tự động kích hoạt vẽ lại bản đồ khi các lựa chọn tuyến/đoạn thay đổi
+  if (typeof veLaiTuyenAB === 'function') {
+    veLaiTuyenAB();
+  }
+});
