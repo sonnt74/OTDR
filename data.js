@@ -329,6 +329,22 @@ function datLichTuXoaMarkerTimKiem() {
 /**
  * 4. TÌM VỊ TRÍ ĐỨT OTDR (CÓ TỰ XÓA SAU 30S)
  */
+// data.js - Phục hồi Popup vị trí sự cố OTDR đầy đủ nút chia sẻ và Măng xông lân cận
+
+function chiaSeSuCo(lat, lng, khoangCachKm, prevMX, nextMX, shareType) {
+  var message = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n- Tọa độ: ${lat}, ${lng}\n- Cự ly đo OTDR: ${khoangCachKm} km\n- Vị trí: Nằm giữa [${prevMX}] và [${nextMX}]\n- Bản đồ: https://maps.google.com/?q=${lat},${lng}`;
+  var encoded = encodeURIComponent(message);
+  
+  if (shareType === 'copy') { 
+    navigator.clipboard.writeText(message); 
+    showToast("📋 Đã sao chép nội dung sự cố!", "success"); 
+  } else if (shareType === 'sms') {
+    window.open(`sms:?&body=${encoded}`, '_blank');
+  } else if (shareType === 'viber') {
+    window.open(`viber://forward?text=${encoded}`, '_blank');
+  }
+}
+
 function timViTriDut() {
   var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value), kcOtdrMeters = kcOtdrKm * 1000; 
   if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { showToast("Nhập cự ly đo hợp lệ!", "error"); return; }
@@ -370,7 +386,9 @@ function timViTriDut() {
         interpolatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}`;
       }
 
-      for (var j = i + 1; j < routeStops.length; j++) { if (routeStops[j].isMX) { closestNextMX = routeStops[j].pt.ten; break; } }
+      for (var j = i + 1; j < routeStops.length; j++) { 
+        if (routeStops[j].isMX) { closestNextMX = routeStops[j].pt.ten; break; } 
+      }
       break;
     }
   }
@@ -382,13 +400,23 @@ function timViTriDut() {
   var faultMarker = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
   foundMarkerLayer = faultMarker;
 
+  // KHỐI POPUP CHIA SẺ SỰ CỐ ĐẦY ĐỦ VÀ KÍCH THƯỚC ĐẸP
+  var shareButtonsHtml = `
+    <div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">
+      <b>Nút chia sẻ nhanh:</b><br>
+      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'copy')">📋 Copy</button>
+      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'sms')" style="background:#28a745; color:white;">📩 SMS</button>
+      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${closestPrevMX}', '${closestNextMX}', 'viber')" style="background:#6f42c1; color:white;">📱 Viber</button>
+    </div>`;
+
   var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>` +
                   `Cự ly đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
                   `📍 Lý trình QL: <b>${interpolatedLyTrinhText}</b><br>` +
-                  `MX trước: <b>${closestPrevMX}</b><br>` +
-                  `MX sau: <b>${closestNextMX}</b><br>` +
-                  `<small style="color:red;">⏱️ Điểm này sẽ tự xóa sau 30 giây</small><br>` +
-                  `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>`;
+                  `🔀 Măng xông trước: <b>${closestPrevMX}</b><br>` +
+                  `🔀 Măng xông sau: <b>${closestNextMX}</b><br>` +
+                  `<small style="color:red;">⏱️ Tự động xóa mốc sau 30s</small><br>` +
+                  `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='btn-info' style='background:#0d6efd; color:white;'>🗺️ Dẫn đường GMaps</a>` +
+                  shareButtonsHtml;
   
   faultMarker.bindPopup(popupHtml).openPopup();
   datLichTuXoaMarkerTimKiem();
