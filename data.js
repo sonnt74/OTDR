@@ -331,24 +331,26 @@ function datLichTuXoaMarkerTimKiem() {
  */
 // data.js - Phục hồi Popup vị trí sự cố OTDR đầy đủ nút chia sẻ và Măng xông lân cận
 
-function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMX, nextMX, shareType) {
-  // Tạo chuỗi thông báo chuẩn có chứa thông tin Lý trình QL
+function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo, shareType) {
   var message = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n` +
                 `- Tọa độ: ${lat}, ${lng}\n` +
                 `- Cự ly đo OTDR: ${khoangCachKm} km\n` +
                 `- Lý trình QL: ${lyTrinhText}\n` +
-                `- Vị trí: Nằm giữa [${prevMX}] và [${nextMX}]\n` +
+                `- MX trước: ${prevMXInfo}\n` +
+                `- MX sau: ${nextMXInfo}\n` +
                 `- Bản đồ: https://maps.google.com/?q=${lat},${lng}`;
   
   if (shareType === 'copy') { 
     navigator.clipboard.writeText(message); 
-    showToast("📋 Đã sao chép nội dung sự cố kèm Lý trình!", "success"); 
+    showToast("📋 Đã sao chép nội dung sự cố!", "success"); 
   } else if (shareType === 'zalo') {
-    // Sao chép nội dung vào bộ nhớ tạm trước khi mở Zalo
+    // 1. Sao chép nội dung tin nhắn vào bộ nhớ tạm
     navigator.clipboard.writeText(message);
-    showToast("📋 Đã sao chép nội dung! Đang mở Zalo...", "success");
+    showToast("📋 Đã sao chép! Đang mở ứng dụng Zalo...", "success");
+    
+    // 2. Mở trực tiếp ứng dụng Zalo trên máy (hoặc chuyển hướng nếu chưa mở được)
     setTimeout(function() {
-      window.open('https://zalo.me', '_blank');
+      window.location.href = 'zalo://';
     }, 500);
   } else if (shareType === 'viber') {
     var encoded = encodeURIComponent(message);
@@ -356,6 +358,9 @@ function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMX, nextMX, shareTy
   }
 }
 
+/**
+ * HÀM PHÂN TÍCH VỊ TRÍ ĐỨT CÁP OTDR VÀ HIỂN THỊ POPUP CÓ KHOẢNG CÁCH MX
+ */
 function timViTriDut() {
   var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value), kcOtdrMeters = kcOtdrKm * 1000; 
   if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { showToast("Nhập cự ly đo hợp lệ!", "error"); return; }
@@ -373,11 +378,11 @@ function timViTriDut() {
   routeStops.sort((a, b) => a.dist - b.dist);
 
   var targetLat = backbone[backbone.length - 1].lat, targetLng = backbone[backbone.length - 1].lng;
-  var closestPrevMX = "Chưa xác định", closestNextMX = "Chưa xác định";
+  var prevMXName = "Chưa xác định", nextMXName = "Chưa xác định";
+  var prevMXDistText = "", nextMXDistText = "";
   var interpolatedLyTrinhText = "Đang xác định...";
 
   for (var i = 0; i < routeStops.length - 1; i++) {
-    if (routeStops[i].isMX) closestPrevMX = routeStops[i].pt.ten;
     var segStartDist = routeStops[i].dist;
     var segEndDist = routeStops[i+1].dist;
     
@@ -397,8 +402,24 @@ function timViTriDut() {
         interpolatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}`;
       }
 
-      for (var j = i + 1; j < routeStops.length; j++) { 
-        if (routeStops[j].isMX) { closestNextMX = routeStops[j].pt.ten; break; } 
+      // TÌM VÀ TÍNH KHOẢNG CÁCH TỚI MĂNG XÔNG TRƯỚC
+      for (var j = i; j >= 0; j--) {
+        if (routeStops[j].isMX) {
+          prevMXName = routeStops[j].pt.ten;
+          var distPrev = Math.round(kcOtdrMeters - routeStops[j].dist);
+          prevMXDistText = (distPrev >= 1000) ? (distPrev / 1000).toFixed(2) + " km" : distPrev + " m";
+          break;
+        }
+      }
+
+      // TÌM VÀ TÍNH KHOẢNG CÁCH TỚI MĂNG XÔNG SAU
+      for (var k = i + 1; k < routeStops.length; k++) { 
+        if (routeStops[k].isMX) { 
+          nextMXName = routeStops[k].pt.ten;
+          var distNext = Math.round(routeStops[k].dist - kcOtdrMeters);
+          nextMXDistText = (distNext >= 1000) ? (distNext / 1000).toFixed(2) + " km" : distNext + " m";
+          break; 
+        } 
       }
       break;
     }
@@ -411,20 +432,24 @@ function timViTriDut() {
   var faultMarker = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
   foundMarkerLayer = faultMarker;
 
-  // TRUYỀN BIẾN interpolatedLyTrinhText VÀO HÀM CHIA SẼ
+  // CHUẨN HÓA CHUỖI THÔNG TIN MĂNG XÔNG TRƯỚC VÀ SAU
+  var prevMXFullInfo = prevMXName + (prevMXDistText ? ` (cách ${prevMXDistText})` : '');
+  var nextMXFullInfo = nextMXName + (nextMXDistText ? ` (cách ${nextMXDistText})` : '');
+
+  // TẠO KHỐI NÚT CHIA SẺ VÀ POPUP LEAFLET
   var shareButtonsHtml = `
     <div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">
       <b>Chia sẻ sự cố nhanh:</b><br>
-      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${closestPrevMX}', '${closestNextMX}', 'copy')">📋 Copy</button>
-      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${closestPrevMX}', '${closestNextMX}', 'zalo')" style="background:#0068ff; color:white;">💬 Zalo</button>
-      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${closestPrevMX}', '${closestNextMX}', 'viber')" style="background:#6f42c1; color:white;">📱 Viber</button>
+      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'copy')">📋 Copy</button>
+      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'zalo')" style="background:#0068ff; color:white;">💬 Zalo App</button>
+      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'viber')" style="background:#6f42c1; color:white;">📱 Viber</button>
     </div>`;
 
   var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>` +
                   `Cự ly đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
                   `📍 Lý trình QL: <b>${interpolatedLyTrinhText}</b><br>` +
-                  `🔀 Măng xông trước: <b>${closestPrevMX}</b><br>` +
-                  `🔀 Măng xông sau: <b>${closestNextMX}</b><br>` +
+                  `🔀 MX trước: <b>${prevMXFullInfo}</b><br>` +
+                  `🔀 MX sau: <b>${nextMXFullInfo}</b><br>` +
                   `<small style="color:red;">⏱️ Tự động xóa mốc sau 30s</small><br>` +
                   `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='btn-info' style='background:#0d6efd; color:white;'>🗺️ Dẫn đường GMaps</a>` +
                   shareButtonsHtml;
