@@ -648,3 +648,194 @@ function renderColoredRouteOnMap() {
 function veLaiTuyenAB() {
   renderColoredRouteOnMap();
 }
+
+// crud_manager.js - Quản lý Phân quyền Xem/Sửa/Xóa User & Danh mục Trạm VT
+
+/**
+ * 1. HÀM MỞ FORM XEM/SỬA NGƯỜI DÙNG CÓ PHÂN QUYỀN
+ */
+function moFormSuaUser(userData) {
+  var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : 'member';
+  var myDaiId = currentUser ? String(currentUser.idDai || currentUser.id_dai).trim() : '';
+  var myTramId = currentUser ? String(currentUser.idTram || currentUser.id_tram).trim() : '';
+
+  var targetDaiId = String(userData.idDai || userData.id_dai).trim();
+  var targetTramId = String(userData.idTram || userData.id_tram).trim();
+
+  // KIỂM TRA QUYỀN XEM/SỬA NGƯỜI DÙNG
+  if (userRole === 'dai_admin' && targetDaiId !== myDaiId) {
+    showToast("⛔ Anh chỉ có quyền Xem/Sửa tài khoản thuộc Đài của mình!");
+    return;
+  }
+  if (userRole === 'tram_admin' && targetTramId !== myTramId) {
+    showToast("⛔ Anh chỉ có quyền Xem/Sửa tài khoản thuộc Trạm của mình!");
+    return;
+  }
+
+  // Cấu hình giao diện Form User
+  document.getElementById('crudTargetType').value = 'user';
+  document.getElementById('modalFormCRUDLabel').innerText = "✏️ Chỉnh Sửa Người Dùng";
+  document.getElementById('groupUserFields').style.display = 'block';
+  document.getElementById('groupTramFields').style.display = 'none';
+
+  // Nạp thông tin người dùng vào ô nhập
+  document.getElementById('crudRecordId').value = userData.id;
+  document.getElementById('txtTenUser').value = userData.ten || userData.name || '';
+  document.getElementById('txtEmailUser').value = userData.email || '';
+  document.getElementById('selectRoleUser').value = userData.role || 'member';
+
+  // Nạp danh sách Đài & Trạm vào Form
+  napComboDaiFormUser(targetDaiId, targetTramId);
+
+  // ÁP DỤNG KHÓA CỤC BỘ THEO ROLE
+  var selectDai = document.getElementById('selectDaiUser');
+  var selectTram = document.getElementById('selectTramUser');
+  var selectRole = document.getElementById('selectRoleUser');
+
+  if (userRole === 'dai_admin') {
+    selectDai.disabled = true; // Khóa không cho đổi Đài
+    selectRole.disabled = false;
+  } else if (userRole === 'tram_admin') {
+    selectDai.disabled = true; // Khóa Đài
+    selectTram.disabled = true; // Khóa Trạm
+    selectRole.disabled = true; // Khóa Vai trò
+  } else {
+    selectDai.disabled = false;
+    selectTram.disabled = false;
+    selectRole.disabled = false;
+  }
+
+  // Hiển thị Modal Form
+  var modalEl = new bootstrap.Modal(document.getElementById('modalFormCRUD'));
+  modalEl.show();
+}
+
+/**
+ * 2. HÀM MỞ FORM XEM/SỬA DANH MỤC TRẠM VT CÓ PHÂN QUYỀN
+ */
+function moFormSuaTram(tramData) {
+  var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : 'member';
+  var myDaiId = currentUser ? String(currentUser.idDai || currentUser.id_dai).trim() : '';
+  var myTramId = currentUser ? String(currentUser.idTram || currentUser.id_tram).trim() : '';
+
+  var targetTramId = String(tramData.id_tram || tramData.id).trim();
+  var targetDaiId = String(tramData.id_dai || tramData.dai_id).trim();
+
+  // KIỂM TRA QUYỀN XEM/SỬA TRẠM VT
+  if (userRole === 'dai_admin' && targetDaiId !== myDaiId) {
+    showToast("⛔ Anh chỉ có quyền Xem/Sửa danh mục Trạm thuộc Đài của mình!");
+    return;
+  }
+  if (userRole === 'tram_admin' && targetTramId !== myTramId) {
+    showToast("⛔ Anh chỉ có quyền Xem/Sửa danh mục thuộc Trạm của mình!");
+    return;
+  }
+
+  // Cấu hình giao diện Form Trạm
+  document.getElementById('crudTargetType').value = 'tram';
+  document.getElementById('modalFormCRUDLabel').innerText = "🏛️ Chỉnh Sửa Danh Mục Trạm VT";
+  document.getElementById('groupUserFields').style.display = 'none';
+  document.getElementById('groupTramFields').style.display = 'block';
+
+  // Nạp thông tin Trạm vào ô nhập
+  document.getElementById('crudRecordId').value = targetTramId;
+  document.getElementById('txtMaTram').value = tramData.ma_tram || '';
+  document.getElementById('txtTenTram').value = tramData.ten_tram || tramData.ten || '';
+  document.getElementById('txtGhiChuTram').value = tramData.ghi_chu || '';
+
+  // Nạp danh sách Đài
+  var selectDai = document.getElementById('selectDaiTramForm');
+  selectDai.innerHTML = '';
+  rawDaiList.forEach(d => {
+    var dId = String(d.id_dai || d.id).trim();
+    selectDai.innerHTML += `<option value="${dId}">${d.ten_dai || d.ten}</option>`;
+  });
+  selectDai.value = targetDaiId;
+
+  // XỬ LÝ KHÓA CỤC BỘ KHÔNG CHO SỬA ĐƠN VỊ CẤP TRÊN
+  if (userRole === 'dai_admin' || userRole === 'tram_admin') {
+    selectDai.disabled = true; // Không cho đổi Trạm sang Đài khác
+  } else {
+    selectDai.disabled = false;
+  }
+
+  // Hiển thị Modal Form
+  var modalEl = new bootstrap.Modal(document.getElementById('modalFormCRUD'));
+  modalEl.show();
+}
+
+/**
+ * 3. HÀM PHỤ TRỢ NẠP DỮ LIỆU ĐÀI VÀ TRẠM VÀO FORM USER
+ */
+function napComboDaiFormUser(selectedDaiId, selectedTramId) {
+  var selectDai = document.getElementById('selectDaiUser');
+  selectDai.innerHTML = '';
+  rawDaiList.forEach(d => {
+    var dId = String(d.id_dai || d.id).trim();
+    selectDai.innerHTML += `<option value="${dId}">${d.ten_dai || d.ten}</option>`;
+  });
+  if (selectedDaiId) selectDai.value = selectedDaiId;
+
+  capNhatComboTramUser(selectedTramId);
+}
+
+function capNhatComboTramUser(selectedTramId) {
+  var selectDaiVal = document.getElementById('selectDaiUser').value;
+  var selectTram = document.getElementById('selectTramUser');
+  selectTram.innerHTML = '';
+
+  rawTramList.filter(t => String(t.id_dai || t.dai_id).trim() === String(selectDaiVal).trim())
+            .forEach(t => {
+              var tId = String(t.id_tram || t.id).trim();
+              selectTram.innerHTML += `<option value="${tId}">${t.ten_tram || t.ten}</option>`;
+            });
+
+  if (selectedTramId) selectTram.value = selectedTramId;
+}
+
+/**
+ * 4. HÀM LƯU DỮ LIỆU CÓ KIỂM TRA QUYỀN KHI BẤM NÚT "LƯU"
+ */
+async function luuDuLieuCRUD() {
+  var targetType = document.getElementById('crudTargetType').value;
+  var recordId = document.getElementById('crudRecordId').value;
+  showLoading("Đang lưu thay đổi vào cơ sở dữ liệu...");
+
+  try {
+    if (targetType === 'user') {
+      var payloadUser = {
+        name: document.getElementById('txtTenUser').value,
+        email: document.getElementById('txtEmailUser').value,
+        role: document.getElementById('selectRoleUser').value,
+        id_dai: document.getElementById('selectDaiUser').value,
+        id_tram: document.getElementById('selectTramUser').value
+      };
+
+      let { error } = await supabaseClient.from('users').update(payloadUser).eq('id', recordId);
+      if (error) throw error;
+      showToast("✅ Đã cập nhật người dùng thành công!");
+
+    } else if (targetType === 'tram') {
+      var payloadTram = {
+        ma_tram: document.getElementById('txtMaTram').value,
+        ten_tram: document.getElementById('txtTenTram').value,
+        id_dai: document.getElementById('selectDaiTramForm').value,
+        ghi_chu: document.getElementById('txtGhiChuTram').value
+      };
+
+      let { error } = await supabaseClient.from('tram_vt').update(payloadTram).eq('id_tram', recordId);
+      if (error) throw error;
+      showToast("✅ Đã cập nhật danh mục Trạm VT thành công!");
+    }
+
+    // Ẩn Modal và làm mới dữ liệu
+    var modalEl = bootstrap.Modal.getInstance(document.getElementById('modalFormCRUD'));
+    if (modalEl) modalEl.hide();
+    taiDuLieuSupabase(true);
+
+  } catch (err) {
+    showToast("❌ Lỗi cập nhật: " + err.message);
+  } finally {
+    hideLoading();
+  }
+}
