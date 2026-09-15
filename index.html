@@ -210,6 +210,86 @@
       </div>
     </div>
   </div>
+    <!-- Modal Giao diện Form Thêm/Sửa Người Dùng & Danh Mục Trạm VT -->
+<div class="modal fade" id="modalFormCRUD" tabindex="-1" aria-labelledby="modalFormCRUDLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="modalFormCRUDLabel">📝 Quản Lý Danh Mục</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formCRUD">
+          <!-- Biến ẩn lưu ID bản ghi đang sửa -->
+          <input type="hidden" id="crudRecordId" value="">
+          <input type="hidden" id="crudTargetType" value="user"> <!-- 'user' hoặc 'tram' -->
+
+          <!-- KHU VỰC 1: FORM NGƯỜI DÙNG (USERS) -->
+          <div id="groupUserFields">
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <label class="form-label">Tên người dùng / Họ tên:</label>
+                <input type="text" class="form-control" id="txtTenUser" placeholder="Nhập tên người dùng..." required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Tài khoản Email:</label>
+                <input type="email" class="form-control" id="txtEmailUser" placeholder="nhanvien@vnpt.vn" required>
+              </div>
+            </div>
+            <div class="row mb-3">
+              <div class="col-md-4">
+                <label class="form-label">Vai trò (Role):</label>
+                <select class="form-select" id="selectRoleUser">
+                  <option value="member">Nhân viên (Member)</option>
+                  <option value="tram_admin">Admin Trạm</option>
+                  <option value="dai_admin">Admin Đài</option>
+                  <option value="sys_admin">Quản trị Hệ thống</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Thuộc Đài VT:</label>
+                <select class="form-select" id="selectDaiUser" onchange="capNhatComboTramUser()"></select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Thuộc Trạm VT:</label>
+                <select class="form-select" id="selectTramUser"></select>
+              </div>
+            </div>
+          </div>
+
+          <!-- KHU VỰC 2: FORM TRẠM VT (TRAM_VT) -->
+          <div id="groupTramFields" style="display: none;">
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <label class="form-label">Mã Trạm VT:</label>
+                <input type="text" class="form-control" id="txtMaTram" placeholder="Ví dụ: TNN_TRAM_01">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Tên Trạm VT:</label>
+                <input type="text" class="form-control" id="txtTenTram" placeholder="Nhập tên trạm...">
+              </div>
+            </div>
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <label class="form-label">Trực thuộc Đài VT:</label>
+                <select class="form-select" id="selectDaiTramForm"></select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Ghi chú Trạm:</label>
+                <input type="text" class="form-control" id="txtGhiChuTram" placeholder="Ghi chú vị trí, liên hệ...">
+              </div>
+            </div>
+          </div>
+
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+        <button type="button" class="btn btn-success" id="btnSaveCRUD" onclick="luuDuLieuCRUD()">💾 Lưu Dữ Liệu</button>
+      </div>
+    </div>
+  </div>
+</div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
