@@ -1,4 +1,4 @@
-// data_2.js - Xử lý sự kiện thay đổi ComboBox Trạm/Đài và đồng bộ chính xác với AppStore
+// data_2.js - Xử lý ánh xạ chuẩn ID CSDL (khắc phục lỗi id_box) và đồng bộ AppStore vẽ bản đồ
 
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
@@ -11,9 +11,9 @@ async function fetchAllRowsSafe(tableName) {
 }
 
 /**
- * HÀM PHỤ TRỢ: Lấy ID chuẩn dạng Chuỗi (String)
+ * HÀM PHỤ TRỢ CHUẨN HÓA: Lấy ID CSDL thật từ bản ghi (Bỏ qua id_box giao diện)
  */
-function getStandardId(item, primaryKeyName) {
+function getRealDbId(item, primaryKeyName) {
   if (!item) return '';
   if (item[primaryKeyName] !== undefined && item[primaryKeyName] !== null) return String(item[primaryKeyName]);
   if (item.id !== undefined && item.id !== null) return String(item.id);
@@ -43,9 +43,9 @@ async function taiDuLieuSupabase(forceRefresh = false) {
     rawLoaiDiemList = loaiRes.data || [];
     
     var diemMap = {}, doanCapMap = {}, loaiDiemMap = {};
-    diemRes.forEach(d => diemMap[getStandardId(d, 'id_diem')] = d);
-    rawDoanCapList.forEach(dc => doanCapMap[getStandardId(dc, 'id_doan_cap')] = dc);
-    rawLoaiDiemList.forEach(l => loaiDiemMap[getStandardId(l, 'id_loaidiem')] = l.ten_loaidiem);
+    diemRes.forEach(d => diemMap[getRealDbId(d, 'id_diem')] = d);
+    rawDoanCapList.forEach(dc => doanCapMap[getRealDbId(dc, 'id_doan_cap')] = dc);
+    rawLoaiDiemList.forEach(l => loaiDiemMap[getRealDbId(l, 'id_loaidiem')] = l.ten_loaidiem);
 
     globalDataPoints = [];
     dcdRes.forEach(item => {
@@ -55,12 +55,12 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       var isMx = (Number(idLoai) === 4 || loaiName.toLowerCase().includes('mx') || loaiName.toLowerCase().includes('măng xông'));
       
       globalDataPoints.push({
-        id: getStandardId(pt, 'id_diem'), 
+        id: getRealDbId(pt, 'id_diem'), 
         ten: pt.ten_diem || pt.ten, 
         lat: parseFloat(pt.lat), 
         lng: parseFloat(pt.long || pt.lng),
         ghiChu: pt.ghi_chu || '', 
-        idTuyen: dc ? getStandardId(dc, 'id_tuyen') : null,
+        idTuyen: dc ? getRealDbId(dc, 'id_tuyen') : null,
         idDoanCap: String(item.id_doan_cap || item.doan_cap_id), 
         idTram: String(pt.id_tram || 2), 
         idLoaiDiem: idLoai,
@@ -79,7 +79,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       dataPoints: globalDataPoints
     });
 
-    xuLyPhanQuyenDoanTuyenUser();
+    khoiTaoComboDaiTheoPhanCap();
 
     if (forceRefresh) showToast("Đã làm mới dữ liệu!");
   } catch (err) { 
@@ -91,103 +91,99 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 }
 
 /**
- * 2. LUỒNG XỬ LÝ PHÂN QUYỀN VÀ KHỞI TẠO DỮ LIỆU BAN ĐẦU
+ * 2. NẠP COMBOBOX ĐÀI/TRẠM BẰNG ID THỰC SỰ CỦA CSDL (BỎ QUA ID_BOX GIAO DIỆN)
  */
-function xuLyPhanQuyenDoanTuyenUser() {
+function khoiTaoComboDaiTheoPhanCap() {
   var selectDai = document.getElementById('selectDai');
   var groupDai = selectDai ? selectDai.closest('.form-group') : null;
   var selectTram = document.getElementById('selectTram');
   var groupTram = selectTram ? selectTram.closest('.form-group') : null;
 
-  var selectTuyen = document.getElementById('selectTuyen');
-  var selectDoanCap = document.getElementById('selectDoanCap');
-
   var userRole = (typeof currentUser !== 'undefined' && currentUser.role) ? currentUser.role : '';
 
-  // Nạp toàn bộ danh sách Đài
+  // 1. Ghi đúng ID CSDL thật vào value của Option Đài
   if (selectDai) {
     selectDai.innerHTML = '<option value="ALL">-- Tất cả Đài --</option>';
     rawDaiList.forEach(d => {
-      selectDai.innerHTML += `<option value="${getStandardId(d, 'id_dai')}">${d.ten_dai || d.ten}</option>`;
+      var realDaiId = getRealDbId(d, 'id_dai');
+      selectDai.innerHTML += `<option value="${realDaiId}">${d.ten_dai || d.ten}</option>`;
     });
   }
 
-  // Nạp toàn bộ danh sách Trạm
-  if (selectTram) {
-    selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
-    rawTramList.forEach(t => {
-      selectTram.innerHTML += `<option value="${getStandardId(t, 'id_tram')}">${t.ten_tram || t.ten}</option>`;
-    });
-  }
-
-  // Lọc đoạn cáp thuộc quyền quản lý của User
-  var allowedDoanList = rawDoanCapList;
-  if (userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') {
-    if (currentUser && currentUser.idTram) {
-      allowedDoanList = rawDoanCapList.filter(d => String(d.id_tram || d.tram_id) === String(currentUser.idTram));
-    }
-  }
-
-  var selectedDaiVal = selectDai ? selectDai.value : 'ALL';
-  var selectedTramVal = selectTram ? selectTram.value : 'ALL';
+  // 2. Xác định ID CSDL thật của User đăng nhập
+  var realUserDaiId = currentUser ? getRealDbId(currentUser, 'idDai') : '';
+  var realUserTramId = currentUser ? getRealDbId(currentUser, 'idTram') : '';
 
   if (userRole === 'tram_admin' || userRole === 'member' || userRole === 'tram_user') {
     if (groupDai) groupDai.style.display = 'none';
     if (groupTram) groupTram.style.display = 'none';
-    if (currentUser && currentUser.idTram) {
-      selectedTramVal = String(currentUser.idTram);
-      var matchedTram = rawTramList.find(t => getStandardId(t, 'id_tram') === selectedTramVal);
-      if (matchedTram) selectedDaiVal = String(matchedTram.id_dai || matchedTram.dai_id);
-
-      if (selectTram) selectTram.value = selectedTramVal;
-      if (selectDai) selectDai.value = selectedDaiVal;
+    
+    // Tìm đài từ trạm của user nếu bị thiếu
+    if (realUserTramId && !realUserDaiId) {
+      var matchedTram = rawTramList.find(t => getRealDbId(t, 'id_tram') === realUserTramId);
+      if (matchedTram) realUserDaiId = getRealDbId(matchedTram, 'id_dai');
     }
+
+    if (selectDai && realUserDaiId) selectDai.value = realUserDaiId;
+    if (selectTram && realUserTramId) selectTram.value = realUserTramId;
   } else {
     if (groupDai) groupDai.style.display = 'block';
     if (groupTram) groupTram.style.display = 'block';
+
+    if (userRole === 'dai_admin' && realUserDaiId && selectDai) {
+      selectDai.value = realUserDaiId;
+      selectDai.disabled = true;
+    }
   }
 
-  updateTuyenOptions();
+  onDaiChange();
 }
 
 /**
- * 3. HÀM XỬ LÝ SỰ KIỆN KHI THAY ĐỔI ĐÀI VT
+ * 3. HÀM KHI ĐỔI ĐÀI VT - ĐỒNG BỘ CHÍNH XÁC ID CSDL THẬT
  */
 function onDaiChange() {
   var selectDai = document.getElementById('selectDai');
   var daiVal = selectDai ? selectDai.value : 'ALL';
   var selectTram = document.getElementById('selectTram');
   
-  // Cập nhật ngay Đài chọn vào AppStore
-  AppStore.setState({ selectedDai: daiVal, selectedTram: 'ALL' });
+  // Cập nhật ID Đài CSDL vào AppStore
+  AppStore.setState({ selectedDai: String(daiVal), selectedTram: 'ALL' });
 
   if (selectTram) {
     selectTram.innerHTML = '<option value="ALL">-- Tất cả Trạm --</option>';
-    rawTramList.filter(tram => daiVal === 'ALL' || String(tram.id_dai || tram.dai_id) === String(daiVal))
+    rawTramList.filter(tram => daiVal === 'ALL' || getRealDbId(tram, 'id_dai') === String(daiVal))
                .forEach(tram => {
-                 var tramId = getStandardId(tram, 'id_tram');
-                 selectTram.innerHTML += `<option value="${tramId}">${tram.ten_tram || tram.ten}</option>`;
+                 var realTramId = getRealDbId(tram, 'id_tram');
+                 selectTram.innerHTML += `<option value="${realTramId}">${tram.ten_tram || tram.ten}</option>`;
                });
+
+    // Nếu có phân quyền trạm sẵn thì tự chọn
+    if (currentUser && currentUser.idTram) {
+      var realUserTramId = getRealDbId(currentUser, 'idTram');
+      var matchedOption = Array.from(selectTram.options).find(opt => String(opt.value) === realUserTramId);
+      if (matchedOption) selectTram.value = realUserTramId;
+    }
   }
-  updateTuyenOptions();
+  
+  onTramChange();
 }
 
 /**
- * 4. HÀM XỬ LÝ SỰ KIỆN KHI THAY ĐỔI TRẠM VT (ĐÃ SỬA LỖI ĐỒNG BỘ APPSTORE)
+ * 4. HÀM KHI ĐỔI TRẠM VT - GÁN ID CSDL THẬT VÀO APPSTORE
  */
 function onTramChange() { 
   var selectTram = document.getElementById('selectTram');
   var tramVal = selectTram ? selectTram.value : 'ALL';
 
-  // ĐỒNG BỘ TRỰC TIẾP GIÁ TRỊ TRẠM MỚI CHỌN VÀO APPSTORE
+  // Đồng bộ ID Trạm thực sự vào AppStore
   AppStore.setState({ selectedTram: String(tramVal) });
   
-  // Cập nhật lại danh sách Tuyến tương ứng với Trạm vừa chọn
   updateTuyenOptions(); 
 }
 
 /**
- * 5. LỌC DANH SÁCH TUYẾN THEO ĐÀI VÀ TRẠM ĐÃ CHỌN
+ * 5. LỌC DANH SÁCH TUYẾN THEO ID CSDL THẬT CỦA ĐÀI VÀ TRẠM
  */
 function updateTuyenOptions() {
   var selectTuyen = document.getElementById('selectTuyen');
@@ -201,22 +197,22 @@ function updateTuyenOptions() {
 
   selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
   
-  // Lọc đoạn cáp theo Đài & Trạm đang chọn trên giao diện
+  // Lọc đoạn cáp theo ID CSDL thật
   var matchedDoan = rawDoanCapList.filter(d => {
     var matchTram = (tramVal === 'ALL' || String(d.id_tram || d.tram_id) === String(tramVal));
     return matchTram;
   });
 
-  var allowedTuyenIds = [...new Set(matchedDoan.map(d => String(d.id_tuyen || d.tuyen_cap_id)))];
-  var filteredTuyenList = rawTuyenList.filter(t => allowedTuyenIds.includes(getStandardId(t, 'id_tuyen_cap')));
+  var allowedTuyenIds = [...new Set(matchedDoan.map(d => getRealDbId(d, 'id_tuyen')))];
+  var filteredTuyenList = rawTuyenList.filter(t => allowedTuyenIds.includes(getRealDbId(t, 'id_tuyen_cap')));
 
   filteredTuyenList.forEach(tuyen => {
-    var tuyenId = getStandardId(tuyen, 'id_tuyen_cap');
+    var realTuyenId = getRealDbId(tuyen, 'id_tuyen_cap');
     var tuyenMa = tuyen.ma_tuyencap || tuyen.ten_tuyen;
-    selectTuyen.innerHTML += `<option value="${tuyenId}">${tuyenMa}</option>`;
+    selectTuyen.innerHTML += `<option value="${realTuyenId}">${tuyenMa}</option>`;
   });
 
-  // Tự động chọn Tuyến đầu tiên nếu có
+  // Tự động chọn Tuyến đầu tiên hợp lệ
   if (selectTuyen.options.length > 1) {
     selectTuyen.selectedIndex = 1;
   }
@@ -225,7 +221,7 @@ function updateTuyenOptions() {
 }
 
 /**
- * 6. LỌC DANH SÁCH ĐOẠN CÁP THEO TUYẾN CÁP ĐÃ CHỌN
+ * 6. LỌC DANH SÁCH ĐOẠN CÁP THEO TUYẾN ĐÃ CHỌN VÀ ĐỒNG BỘ BẢN ĐỒ
  */
 function onTuyenChange() {
   var selectTuyen = document.getElementById('selectTuyen');
@@ -237,12 +233,12 @@ function onTuyenChange() {
   if (selectDoanCap) {
     selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
     if (tuyenVal !== 'ALL') {
-      var matchedDoan = rawDoanCapList.filter(d => String(d.id_tuyen || d.tuyen_cap_id) === String(tuyenVal));
+      var matchedDoan = rawDoanCapList.filter(d => getRealDbId(d, 'id_tuyen') === String(tuyenVal));
 
       matchedDoan.forEach(d => {
-        var dId = getStandardId(d, 'id_doan_cap');
+        var realDoanId = getRealDbId(d, 'id_doan_cap');
         var dName = d.ma_doancap || d.ten_doancap;
-        selectDoanCap.innerHTML += `<option value="${dId}">${dName}</option>`;
+        selectDoanCap.innerHTML += `<option value="${realDoanId}">${dName}</option>`;
       });
 
       if (selectDoanCap.options.length > 1) {
