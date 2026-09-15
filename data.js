@@ -339,3 +339,187 @@ function timLyTrinhBanDo() {
       foundMarkerLayer.setPopupContent(popupContent.replace("Đang tra cứu tọa độ...", "Không thể kết nối dịch vụ địa danh"));
     });
 }
+
+// Hàm tạo icon Leaflet theo loại điểm hạ tầng với màu sắc quy định
+function getMarkerIconByLoaiDiem(loaiDiemStr, idLoaiDiem) {
+  var str = (loaiDiemStr || '').toLowerCase();
+  
+  // Mã màu mặc định
+  var bgColor = '#6c757d'; // Xám cho các điểm khác
+  var symbol = '📍';
+
+  // 1. Bể / Bể cáp cáp -> Màu cam (#fd7e14)
+  if (str.includes('bể') || str.includes('be') || idLoaiDiem == 2) {
+    bgColor = '#fd7e14';
+    symbol = '📦';
+  } 
+  // 2. Mốc / Mốc cáp -> Màu nâu (#795548)
+  else if (str.includes('mốc') || str.includes('moc') || idLoaiDiem == 3) {
+    bgColor = '#795548';
+    symbol = '🧱';
+  } 
+  // 3. Cột / Cột cáp -> Màu xanh lá (#28a745)
+  else if (str.includes('cột') || str.includes('cot') || idLoaiDiem == 1) {
+    bgColor = '#28a745';
+    symbol = '💈';
+  }
+  // 4. Măng xông (MX) -> Màu đỏ (#dc3545)
+  else if (str.includes('măng xông') || str.includes('mx') || idLoaiDiem == 4) {
+    bgColor = '#dc3545';
+    symbol = '⚡';
+  }
+  // 5. Trạm -> Màu xanh dương (#0d6efd)
+  else if (str.includes('trạm') || str.includes('tram')) {
+    bgColor = '#0d6efd';
+    symbol = '🏛️';
+  }
+
+  // Tạo HTML DivIcon hình tròn có bóng đổ
+  var htmlStr = `<div style="
+    background-color: ${bgColor};
+    color: white;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 26px;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 5px rgba(0,0,0,0.4);
+    font-size: 12px;
+  ">${symbol}</div>`;
+
+  return L.divIcon({
+    html: htmlStr,
+    className: '', // Xóa class mặc định của Leaflet để không bị đè CSS
+    iconSize: [26, 26],
+    iconAnchor: [13, 13]
+  });
+}
+
+// Biến lưu trữ layer chứa tất cả các điểm mốc hạ tầng
+var pointsMarkersLayer = L.layerGroup();
+
+function renderPointsOnMap(danhSachDiem) {
+  // Xóa các điểm cũ trên bản đồ
+  pointsMarkersLayer.clearLayers();
+
+  if (!danhSachDiem || danhSachDiem.length === 0) {
+    return;
+  }
+
+  danhSachDiem.forEach(function(diem) {
+    if (diem.lat && diem.lng) {
+      // Gọi hàm lấy Icon theo màu tùy chỉnh
+      var customIcon = getMarkerIconByLoaiDiem(diem.loaiDiem, diem.idLoaiDiem);
+
+      // Tạo Marker với Icon màu tương ứng
+      var marker = L.marker([diem.lat, diem.lng], { icon: customIcon });
+
+      // Gán nội dung Popup khi click vào điểm
+      var popupHtml = `<b>📌 ${diem.tenDiem || 'Điểm hạ tầng'}</b><br>` +
+                      `- Loại điểm: <b>${diem.loaiDiem || 'Khác'}</b><br>` +
+                      `- Lý trình: <b>${diem.lyTrinh || 'N/A'}</b><br>` +
+                      `- Dự trữ cáp: <b>${diem.duTru || 0} m</b>`;
+      
+      marker.bindPopup(popupHtml);
+      pointsMarkersLayer.addLayer(marker);
+    }
+  });
+
+  // Thêm layer chứa toàn bộ điểm lên bản đồ
+  pointsMarkersLayer.addTo(map);
+}
+
+// Biến toàn cục lưu trữ nhóm các đoạn đường polyline trên bản đồ
+var routeColoredLinesGroup = L.featureGroup();
+
+/**
+ * Hàm hỗ trợ xác định màu sắc của đoạn cáp dựa trên loại điểm hạ tầng
+ * @param {string} loaiDiemStr - Tên loại điểm (VD: "Bể cáp", "Cột treo", "Mốc cáp")
+ * @param {number} idLoaiDiem - ID loại điểm (1: Cột, 2: Bể, 3: Mốc, 4: MX)
+ * @returns {string} Mã màu Hex tương ứng
+ */
+function getLineColorByLoaiDiem(loaiDiemStr, idLoaiDiem) {
+  var str = (loaiDiemStr || '').toLowerCase();
+
+  // 1. Bể cáp -> Màu cam
+  if (str.includes('bể') || str.includes('be') || idLoaiDiem == 2) {
+    return '#fd7e14';
+  }
+  // 2. Mốc cáp -> Màu nâu
+  else if (str.includes('mốc') || str.includes('moc') || idLoaiDiem == 3) {
+    return '#795548';
+  }
+  // 3. Cột cáp -> Màu xanh lá
+  else if (str.includes('cột') || str.includes('cot') || idLoaiDiem == 1) {
+    return '#28a745';
+  }
+  // 4. Mặc định cho các loại khác (Trạm, Măng xông, ...) -> Màu xanh dương
+  return '#007bff';
+}
+
+/**
+ * Hàm chính: Vẽ tuyến cáp với đường Polyline phân màu theo từng loại điểm mốc
+ */
+function renderColoredRouteOnMap() {
+  var tuyenVal = document.getElementById('selectTuyen').value;
+  if (tuyenVal === 'ALL') {
+    showToast("Vui lòng chọn tuyến cáp để hiển thị!");
+    return;
+  }
+
+  var tramVal = document.getElementById('selectTram').value;
+  var doanVal = document.getElementById('selectDoanCap').value;
+  
+  // 1. Lấy chuỗi điểm backbone đã sắp xếp tuần tự theo chuẩn OK4
+  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  
+  if (!backbone || backbone.length < 2) {
+    showToast("Tuyến cáp không đủ dữ liệu điểm để vẽ đường tuyến!");
+    return;
+  }
+
+  // 2. Xóa các đường polyline màu cũ trên bản đồ (nếu có)
+  if (map.hasLayer(routeColoredLinesGroup)) {
+    routeColoredLinesGroup.clearLayers();
+  } else {
+    routeColoredLinesGroup.addTo(map);
+  }
+
+  // 3. Vòng lặp vẽ từng đoạn polyline nhỏ giữa 2 điểm kề nhau (P_i -> P_{i+1})
+  for (var i = 0; i < backbone.length - 1; i++) {
+    var p1 = backbone[i];
+    var p2 = backbone[i + 1];
+
+    if (p1.lat && p1.lng && p2.lat && p2.lng) {
+      // Xác định màu sắc của đoạn cáp dựa vào loại điểm của điểm xuất phát p1
+      var lineColor = getLineColorByLoaiDiem(p1.loaiDiem, p1.idLoaiDiem);
+
+      // Tạo đoạn polyline nối giữa p1 và p2
+      var segmentPolyline = L.polyline(
+        [[p1.lat, p1.lng], [p2.lat, p2.lng]],
+        {
+          color: lineColor,  // Màu cam (Bể), Nâu (Mốc), Xanh (Cột)
+          weight: 5,         // Độ dày đường nét 5px
+          opacity: 0.85,     // Độ đục 85%
+          lineJoin: 'round'  // Bo tròn góc nối giữa các đoạn
+        }
+      );
+
+      // Gán Popup thông tin cho đoạn tuyến khi bấm vào
+      var popupText = `<b>Đoạn cáp: ${p1.tenDiem || 'Mốc'} ➔ ${p2.tenDiem || 'Mốc'}</b><br>` +
+                      `- Phân loại đoạn: <b>${p1.loaiDiem || 'Hạ tầng'}</b><br>` +
+                      `- Lý trình xuất phát: <b>${p1.lyTrinh || '0+000'}</b>`;
+      segmentPolyline.bindPopup(popupText);
+
+      // Thêm đoạn polyline vào nhóm lớp
+      routeColoredLinesGroup.addLayer(segmentPolyline);
+    }
+  }
+
+  // 4. Tự động thu phóng bản đồ bao trọn toàn bộ tuyến vừa vẽ
+  map.fitBounds(routeColoredLinesGroup.getBounds(), { padding: [40, 40] });
+
+  showToast("Đã vẽ tuyến cáp đa màu sắc theo loại điểm thành công!", "success");
+}
+
