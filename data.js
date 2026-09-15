@@ -187,7 +187,7 @@ function timViTriDut() {
     return;
   }
 
-  // Lấy dữ liệu backbone và tính toán cự ly tích lũy chuẩn mốc 
+  // 1. Lấy dữ liệu backbone tuyến chuẩn OK4
   var tramVal = document.getElementById('selectTram').value;
   var doanVal = document.getElementById('selectDoanCap').value;
   var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
@@ -207,18 +207,19 @@ function timViTriDut() {
 
   var targetLat = null;
   var targetLng = null;
-  var closestPrevMX = "Trạm TNN";
+  var closestPrevMX = "Trạm gốc (Trạm A)";
   var closestNextMX = "Chưa xác định";
+  var quyHoachLyTrinh = "Đang cập nhật";
   var foundSegment = false;
 
-  // Duyệt qua từng đoạn giữa 2 mốc để tìm vị trí sự cố theo cự ly OTDR
+  // 2. Duyệt tìm đoạn tuyến chứa cự ly OTDR
   for (var i = 0; i < pts.length - 1; i++) {
     var p1 = pts[i];
     var p2 = pts[i + 1];
 
-    // Cập nhật măng xông trước gần nhất
-    if (p1.loaiDiem && (p1.loaiDiem.toUpperCase().includes('MX') || p1.loaiDiem.toUpperCase().includes('MĂNG XÔNG') || p1.idLoaiDiem == 4)) {
-      closestPrevMX = p1.tenDiem;
+    var isMx1 = (p1.loaiDiem && (p1.loaiDiem.toUpperCase().includes('MX') || p1.loaiDiem.toUpperCase().includes('MĂNG XÔNG'))) || p1.idLoaiDiem == 4;
+    if (isMx1) {
+      closestPrevMX = p1.tenDiem || "Măng xông";
     }
 
     var startDist = p1.distanceFromAMeters || 0;
@@ -231,11 +232,19 @@ function timViTriDut() {
       targetLat = p1.lat + ratio * (p2.lat - p1.lat);
       targetLng = p1.lng + ratio * (p2.lng - p1.lng);
 
-      // Tìm măng xông phía sau sự cố
+      var lt1Meters = parseLyTrinhWithSuffix(p1.lyTrinh || "0+000")?.meters || 0;
+      var lt2Meters = parseLyTrinhWithSuffix(p2.lyTrinh || "0+000")?.meters || 0;
+      var interpolatedLtMeters = lt1Meters + ratio * (lt2Meters - lt1Meters);
+      
+      var kmVal = Math.floor(interpolatedLtMeters / 1000);
+      var mVal = Math.round(interpolatedLtMeters % 1000);
+      quyHoachLyTrinh = kmVal + "+" + (mVal < 100 ? "0" : "") + (mVal < 10 ? "0" : "") + mVal;
+
       for (var j = i + 1; j < pts.length; j++) {
         var pj = pts[j];
-        if (pj.loaiDiem && (pj.loaiDiem.toUpperCase().includes('MX') || pj.loaiDiem.toUpperCase().includes('MĂNG XÔNG') || pj.idLoaiDiem == 4)) {
-          closestNextMX = pj.tenDiem;
+        var isMxJ = (pj.loaiDiem && (pj.loaiDiem.toUpperCase().includes('MX') || pj.loaiDiem.toUpperCase().includes('MĂNG XÔNG'))) || pj.idLoaiDiem == 4;
+        if (isMxJ) {
+          closestNextMX = pj.tenDiem || "Măng xông";
           break;
         }
       }
@@ -245,48 +254,70 @@ function timViTriDut() {
     }
   }
 
-  // Nếu cự ly vượt quá điểm cuối, lấy tọa độ điểm cuối cùng của tuyến
   if (!foundSegment) {
     var lastPt = pts[pts.length - 1];
     targetLat = lastPt.lat;
     targetLng = lastPt.lng;
+    quyHoachLyTrinh = lastPt.lyTrinh || "Cuối tuyến";
+    closestPrevMX = pts[pts.length - 2]?.tenDiem || closestPrevMX;
+    closestNextMX = "Điểm cuối tuyến";
   }
 
   var distStr = (kcOtdrMeters >= 1000) ? (kcOtdrMeters / 1000).toFixed(2) + " km" : Math.round(kcOtdrMeters) + " m";
 
+  // 3. Hàm tạo nội dung HTML cho Popup (tái sử dụng khi API trả về giá trị)
+  function buildPopupContent(addressText) {
+    var shareTextOtdr = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n- Cự ly đo OTDR: ${kcOtdrKm.toFixed(2)} km\n- Lý trình: ${quyHoachLyTrinh}\n- MX trước: ${closestPrevMX}\n- MX sau: ${closestNextMX}\n- Địa chỉ: ${addressText}\n- Tọa độ: ${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}`;
+    var encodedOtdr = encodeURIComponent(shareTextOtdr);
+
+    var shareButtons = `<div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">` +
+                       `<b>Chia sẻ sự cố:</b><br>` +
+                       `<button class="btn-info" onclick="navigator.clipboard.writeText(\`${shareTextOtdr}\`); showToast('Đã sao chép nội dung!');">📋 Copy</button> ` +
+                       `<button class="btn-info" onclick="window.open('sms:?&body=${encodedOtdr}', '_blank')" style="background:#28a745; color:white;">📩 SMS</button> ` +
+                       `<button class="btn-info" onclick="window.open('viber://forward?text=${encodedOtdr}', '_blank')" style="background:#6f42c1; color:white;">📱 Viber</button>` +
+                       `</div>`;
+
+    return `<b>⚡ VỊ TRÍ SỰ CỐ OTDR (CHUẨN OK4)</b><br>` +
+           `- Cự ly đo từ Trạm A: <b>${distStr}</b><br>` +
+           `- Lý trình quy hoạch: <b>${quyHoachLyTrinh}</b><br>` +
+           `- MX trước: <b>${closestPrevMX}</b><br>` +
+           `- MX sau: <b>${closestNextMX}</b><br>` +
+           `- Địa chỉ: <b>${addressText}</b><br>` +
+           `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>${shareButtons}`;
+  }
+
+  // 4. Hiển thị marker và Popup ban đầu (trạng thái đang đợi API)
   if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
   map.setView([targetLat, targetLng], 19, { animate: true });
   
   var faultIcon = L.divIcon({ html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>', iconSize: [28, 28] });
   foundMarkerLayer = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
 
-  var shareTextOtdr = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n- Cự ly đo OTDR: ${kcOtdrKm.toFixed(2)} km\n- Lý trình: ${distStr}\n- MX trước: ${closestPrevMX}\n- MX sau: ${closestNextMX}\n- Tọa độ: ${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}`;
-  var encodedOtdr = encodeURIComponent(shareTextOtdr);
-
-  var shareButtons = `<div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">` +
-                     `<b>Chia sẻ sự cố:</b><br>` +
-                     `<button class="btn-info" onclick="navigator.clipboard.writeText(\`${shareTextOtdr}\`); showToast('Đã sao chép nội dung!');">📋 Copy</button> ` +
-                     `<button class="btn-info" onclick="window.open('sms:?&body=${encodedOtdr}', '_blank')" style="background:#28a745; color:white;">📩 SMS</button> ` +
-                     `<button class="btn-info" onclick="window.open('viber://forward?text=${encodedOtdr}', '_blank')" style="background:#6f42c1; color:white;">📱 Viber</button>` +
-                     `</div>`;
-
-  var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR ()</b><br>` +
-                  `Cự ly đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
-                  `📍 Lý trình quy hoạch: <b>${distStr}</b><br>` +
-                  `MX trước: <b>${closestPrevMX}</b><br>` +
-                  `MX sau: <b>${closestNextMX}</b><br>` +
-                  `🏛️ Địa chỉ: <span id='fault-addr'>Đang tra cứu...</span><br>` +
-                  `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='gmaps-btn'>🗺️ Dẫn đường</a>${shareButtons}`;
+  var initialPopupHtml = buildPopupContent("Đang đợi API Nominatim trả về địa chỉ...");
+  foundMarkerLayer.bindPopup(initialPopupHtml).openPopup();
   
-  foundMarkerLayer.bindPopup(popupHtml).openPopup();
-  
+  // 5. Đợi API Nominatim trả về giá trị rồi cập nhật lại nội dung Popup
   fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${targetLat}&lon=${targetLng}&accept-language=vi`)
-    .then(res => res.json()).then(resData => {
-      var addrEl = document.getElementById('fault-addr');
-      if (addrEl) addrEl.innerText = resData.display_name || "Không rõ địa chỉ chi tiết";
+    .then(res => res.json())
+    .then(resData => {
+      var resolvedAddress = resData.display_name || "Không rõ địa chỉ chi tiết";
+      
+      // Cập nhật lại nội dung popup ngay sau khi có kết quả trả về từ API
+      var updatedPopupHtml = buildPopupContent(resolvedAddress);
+      if (foundMarkerLayer.isPopupOpen()) {
+        foundMarkerLayer.setPopupContent(updatedPopupHtml);
+      } else {
+        foundMarkerLayer.bindPopup(updatedPopupHtml);
+      }
+    })
+    .catch(() => {
+      var errorPopupHtml = buildPopupContent("Không thể kết nối dịch vụ địa danh");
+      if (foundMarkerLayer.isPopupOpen()) {
+        foundMarkerLayer.setPopupContent(errorPopupHtml);
+      }
     });
 
-  showToast("Đã định vị thành công vị trí sự cố !", "success");
+  showToast("Đã định vị thành công vị trí sự cố chuẩn OK4!", "success");
 }
 
 
