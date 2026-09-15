@@ -240,6 +240,8 @@ function veLaiTuyenAB() {
         if (localPt) { localPt.lat = newPos.lat; localPt.lng = newPos.lng; }
         
         hideLoading();
+        // Sau khi cập nhật tọa độ xuống Supabase thành công:
+        await ghiNhatKyThaoTac("DOI_TOA_DO", `Kỹ sư thay đổi tọa độ điểm [${ptObj.ten}] sang (${newPos.lat.toFixed(6)}, ${newPos.lng.toFixed(6)})`);
         showToast("Đã lưu và cập nhật tọa độ thành công!", "success");
         veLaiTuyenAB();
         map.setView([newPos.lat, newPos.lng], 19, { animate: true });
