@@ -123,3 +123,26 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
+/* Tối ưu phong cách hiển thị chuyên nghiệp cho Modal Quản trị & Danh mục */
+.badge {
+  display: inline-block;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: bold;
+  border-radius: 4px;
+}
+.bg-info { background-color: #0dcaf0; color: #000; }
+.bg-secondary { background-color: #6c757d; color: #fff; }
+
+.table-data th {
+  background-color: #0d6efd;
+  color: white;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+.table-data tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+.table-data tr:hover {
+  background-color: #e9ecef;
+}
