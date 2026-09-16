@@ -194,3 +194,16 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
   margin-top: 10px !important;
   margin-right: 10px !important;
 }
+
+/* 3. Nút GPS (📍) và Đo khoảng cách (📏) giữ ở góc dưới bên phải */
+#gps-btn {
+  right: 10px !important;
+  left: auto !important;
+  bottom: 30px !important;
+}
+
+#measure-btn {
+  right: 10px !important;
+  left: auto !important;
+  bottom: 75px !important;
+}
