@@ -163,3 +163,22 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
 .table-data tr:hover {
   background-color: #e9ecef;
 }
+
+/* style.css - CẤU HÌNH THU GỌN / MỞ RỘNG BẢNG ĐIỀU KHIỂN (CẢ PC VÀ MOBILE) */
+
+#control-panel {
+  /* Tạo hiệu ứng trượt mượt mà khi thay đổi chiều cao */
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease !important;
+}
+
+/* Khi có class .collapsed (kích hoạt bởi hàm toggleGISPanel) */
+#control-panel.collapsed {
+  max-height: 42px !important; /* Co chiều cao về đúng 42px bằng thanh tiêu đề */
+  overflow: hidden !important; /* Che hoàn toàn các nội dung tràn ra ngoài */
+  padding-bottom: 0 !important;
+}
+
+/* Hide toàn bộ các thẻ con bên trong ngoại trừ thanh tiêu đề panel-header */
+#control-panel.collapsed > div:not(.panel-header) {
+  display: none !important;
+}
