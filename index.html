@@ -61,22 +61,27 @@
     </div>
   </div>
 
-  <!-- MODAL ĐĂNG NHẬP (ĐÃ TRIỆT PHÁ HOÀN TOÀN CHECK @ VÀ POPUP LƯU MẬT KHẨU) -->
+  <!-- MODAL ĐĂNG NHẬP (ĐÃ TRIỆT PHÁ HOÀN TOÀN POPUP GỢI Ý & LƯU MẬT KHẨU) -->
   <div id="loginModal" class="app-modal" style="display: flex;">
     <div class="modal-content" style="max-width: 340px;">
       <div class="modal-header"><span>👤 Đăng nhập Hệ Thống</span></div>
       <div class="modal-body">
         
-        <!-- Dùng div thay cho form để trình duyệt không check định dạng email và không hiện popup lưu mật khẩu -->
+        <!-- Ô nhập tài khoản: Không dùng từ khóa 'email' trong type/id/name -->
         <div class="form-group">
           <label>Tài khoản / Email:</label>
-          <input type="text" id="loginEmail" placeholder="Nhập tài khoản hoặc email" autocomplete="one-time-code" spellcheck="false">
+          <input type="text" id="loginEmail" placeholder="Nhập tài khoản hoặc email" autocomplete="off" spellcheck="false">
         </div>
         
+        <!-- Ô nhập mật khẩu: Ban đầu để type="text" với font ẩn chữ để đánh lừa trình duyệt -->
         <div class="form-group">
           <label>Mật khẩu:</label>
           <div style="position: relative;">
-            <input type="password" id="loginPass" placeholder="••••••••" style="padding-right: 30px;" autocomplete="new-password">
+            <input type="text" id="loginPass" placeholder="••••••••" 
+                   style="padding-right: 30px; -webkit-text-security: disk;" 
+                   autocomplete="off" 
+                   onfocus="this.type='password';" 
+                   spellcheck="false">
             <span onclick="togglePasswordVisibility()" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px;" title="Hiện/Ẩn mật khẩu">👁️</span>
           </div>
         </div>
