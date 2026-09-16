@@ -179,39 +179,50 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
 #control-panel.collapsed > div:not(.panel-header) {
   display: none !important;
 }
-/* style.css - ĐẨY CỤM NÚT ZOOM (+ / -) RA CHÍNH GIỮA SÁT MEP TRÊN MÀN HÌNH */
+/* style.css - SẮP XẾP CÁC NÚT ĐIỀU KHIỂN DẠT PHÍA BÊN PHẢI THEO THỨ TỰ TỪ TRÊN XUỐNG */
 
-/* 1. Can thiệp trực tiếp vào khung chứa nút Zoom của Leaflet */
-.leaflet-top.leaflet-left {
-  left: 50% !important;
-  right: auto !important;
+/* 1. Hộp chọn lớp bản đồ (OSM / Vệ tinh) - Nằm trên cùng góc bên phải */
+.leaflet-top.leaflet-right .leaflet-control-layers {
+  position: fixed !important;
   top: 10px !important;
-  transform: translateX(-50%) !important;
+  right: 10px !important;
   margin: 0 !important;
-  pointer-events: none; /* Tránh cản trở click vùng bản đồ xung quanh */
+  z-index: 3000 !important;
 }
 
-/* 2. Đảm bảo bản thân cụm nút Zoom nhận lại sự kiện click chuột */
-.leaflet-top.leaflet-left .leaflet-control-zoom {
-  pointer-events: auto !important;
+/* 2. Cụm nút Zoom (+ / -) - Nằm dưới Hộp chọn lớp bản đồ (cách khoảng 25px) */
+.leaflet-top.leaflet-left .leaflet-control-zoom,
+.leaflet-top.leaflet-right .leaflet-control-zoom {
+  position: fixed !important;
+  top: 135px !important; /* Đặt dưới hộp chọn lớp bản đồ một khoảng thoáng */
+  right: 10px !important;
+  left: auto !important;
+  transform: none !important;
   margin: 0 !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+  z-index: 3000 !important;
 }
 
-/* 3. Ẩn hoàn toàn dòng link liên kết Leaflet / OpenStreetMap ở góc dưới bên phải */
+/* 3. Nút Đo khoảng cách (📏) - Nằm dưới cụm nút Zoom một khoảng (10px) */
+#measure-btn {
+  position: fixed !important;
+  top: 220px !important;
+  right: 10px !important;
+  left: auto !important;
+  bottom: auto !important;
+  z-index: 3000 !important;
+}
+
+/* 4. Nút GPS (📍) - Nằm ngay dưới nút Đo khoảng cách một khoảng (10px) */
+#gps-btn {
+  position: fixed !important;
+  top: 262px !important;
+  right: 10px !important;
+  left: auto !important;
+  bottom: auto !important;
+  z-index: 3000 !important;
+}
+
+/* 5. Ẩn dòng link liên kết chữ Leaflet / OpenStreetMap ở góc dưới bên phải */
 .leaflet-control-attribution {
   display: none !important;
-}
-
-/* 4. Neo giữ nút GPS (📍) và nút Đo khoảng cách (📏) ở góc dưới bên phải */
-#gps-btn {
-  right: 10px !important;
-  left: auto !important;
-  bottom: 30px !important;
-}
-
-#measure-btn {
-  right: 10px !important;
-  left: auto !important;
-  bottom: 75px !important;
 }
