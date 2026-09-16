@@ -674,3 +674,10 @@ function isMangXong(pt) {
   var name = (pt.loai || '').toUpperCase();
   return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
 }
+// data.js - Hàm kích hoạt trượt thu gọn / mở rộng khay điều khiển trên Di động
+function toggleGISPanel() {
+  var panel = document.getElementById('control-panel');
+  if (panel) {
+    panel.classList.toggle('collapsed');
+  }
+}
