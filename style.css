@@ -179,23 +179,31 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
 #control-panel.collapsed > div:not(.panel-header) {
   display: none !important;
 }
-/* 1. Định vị cụm nút Zoom Leaflet ở chính giữa mép phải */
-.leaflet-top.leaflet-right .leaflet-control-zoom {
-  position: fixed !important;
-  top: 50% !important;
-  right: 10px !important;
-  transform: translateY(-50%) !important;
-  margin-top: 0 !important;
-  z-index: 3000 !important;
+/* style.css - ĐẨY CỤM NÚT ZOOM (+ / -) RA CHÍNH GIỮA SÁT MEP TRÊN MÀN HÌNH */
+
+/* 1. Can thiệp trực tiếp vào khung chứa nút Zoom của Leaflet */
+.leaflet-top.leaflet-left {
+  left: 50% !important;
+  right: auto !important;
+  top: 10px !important;
+  transform: translateX(-50%) !important;
+  margin: 0 !important;
+  pointer-events: none; /* Tránh cản trở click vùng bản đồ xung quanh */
 }
 
-/* 2. Đảm bảo nút Chọn lớp bản đồ (OSM / Vệ tinh) vẫn nằm gọn góc trên bên phải */
-.leaflet-top.leaflet-right .leaflet-control-layers {
-  margin-top: 10px !important;
-  margin-right: 10px !important;
+/* 2. Đảm bảo bản thân cụm nút Zoom nhận lại sự kiện click chuột */
+.leaflet-top.leaflet-left .leaflet-control-zoom {
+  pointer-events: auto !important;
+  margin: 0 !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
 }
 
-/* 3. Nút GPS (📍) và Đo khoảng cách (📏) giữ ở góc dưới bên phải */
+/* 3. Ẩn hoàn toàn dòng link liên kết Leaflet / OpenStreetMap ở góc dưới bên phải */
+.leaflet-control-attribution {
+  display: none !important;
+}
+
+/* 4. Neo giữ nút GPS (📍) và nút Đo khoảng cách (📏) ở góc dưới bên phải */
 #gps-btn {
   right: 10px !important;
   left: auto !important;
