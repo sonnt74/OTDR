@@ -56,6 +56,8 @@ function togglePasswordVisibility() {
   }
 }
 
+// auth.js - Hàm đăng nhập bỏ kiểm tra định dạng email
+
 async function handleCustomLogin() {
   var emailEl = document.getElementById('loginEmail');
   var passEl = document.getElementById('loginPass');
@@ -65,8 +67,9 @@ async function handleCustomLogin() {
   var pass = passEl ? passEl.value : '';
   var rememberMe = chkEl ? chkEl.checked : false;
   
+  // Chỉ kiểm tra rỗng, không bắt buộc phải chứa ký tự '@' hay đúng định dạng email
   if (!email || !pass) { 
-    showToast("Vui lòng nhập đầy đủ email và mật khẩu!", "error"); 
+    showToast("Vui lòng nhập đầy đủ tài khoản và mật khẩu!", "error"); 
     return; 
   }
   
