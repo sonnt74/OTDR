@@ -28,13 +28,15 @@ function getSafeStrId(item, keys) {
 }
 
 /**
- * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (ONLINE & OFFLINE)
+ * TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (ĐÃ SỬA TRIỆT ĐỂ LỖI COMBO BẢNG ĐIỀU KHIỂN)
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
+  let localMaster = null;
+
   try {
-    // BƯỚC A: Đọc nhanh từ IndexedDB nạp ngay vào AppStore (~0ms)
+    // BƯỚC A: Đọc nhanh danh mục từ IndexedDB nạp ngay vào AppStore (~0ms)
     if (typeof idbDocMaster === 'function' && !forceRefresh) {
-      const localMaster = await idbDocMaster();
+      localMaster = await idbDocMaster();
       if (localMaster) {
         rawDaiList = localMaster.rawDaiList || [];
         rawTramList = localMaster.rawTramList || [];
@@ -49,14 +51,16 @@ async function taiDuLieuSupabase(forceRefresh = false) {
           doanCapList: rawDoanCapList
         });
 
+        // Điền dữ liệu vào các ô chọn Combo
         xuLyPhanQuyenDoanTuyenUser();
         if (typeof taiDiemTheoVungXem === 'function') await taiDiemTheoVungXem();
       }
     }
 
-    // BƯỚC B: Đồng bộ danh mục mới nhất từ Supabase nếu có mạng
+    // BƯỚC B: Đồng bộ danh mục mới nhất từ Supabase nếu có kết nối mạng
     if (navigator.onLine) {
-      if (!docMasterCache() || forceRefresh) showLoading("Đang nạp danh mục máy chủ...");
+      // Chỉ hiện màn hình chờ nếu chưa có dữ liệu Offline localMaster
+      if (!localMaster || forceRefresh) showLoading("Đang nạp danh mục máy chủ...");
 
       let [daiRes, tramRes, tuyenRes, doanRes, loaiRes] = await Promise.all([
         supabaseClient.from('dai_vt').select('*'),
@@ -72,7 +76,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       rawDoanCapList = doanRes.data || [];
       rawLoaiDiemList = loaiRes.data || [];
 
-      // Lưu bản ghi danh mục vào IndexedDB
+      // Lưu bản ghi danh mục vào kho master_store của IndexedDB
       if (typeof idbLuuMaster === 'function') {
         await idbLuuMaster({ rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList });
       }
@@ -84,6 +88,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
         doanCapList: rawDoanCapList
       });
 
+      // Cập nhật lại các ô chọn Combo với dữ liệu máy chủ mới nhất
       xuLyPhanQuyenDoanTuyenUser();
       if (forceRefresh) showToast("Đã đồng bộ danh mục mới nhất!", "success");
     }
