@@ -49,48 +49,74 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
 .tab-pane { display: none; }
 .tab-pane.active { display: block; }
 
-/* Tối ưu giao diện cho màn hình điện thoại (Mobile) */
+/* style.css - KHÔI PHỤC GIAO DIỆN VUỐT TRƯỢT TƯƠNG THÍCH DI ĐỘNG (MOBILE BOTTOM SHEET) */
+
 @media (max-width: 768px) {
-  /* Ẩn hoàn toàn thanh sidebar bên trái để tối đa hóa không gian bản đồ */
-  #sidebar-menu { display: none !important; }
+  /* 1. Ẩn thanh Sidebar bên trái trên Di động để tối đa diện tích bản đồ */
+  #sidebar-menu { 
+    display: none !important; 
+  }
 
+  /* 2. Cấu hình Control Panel thành khay vuốt trượt từ đáy màn hình */
   #control-panel {
-    top: auto;
-    bottom: 0;
-    left: 0;
-    width: 100vw;
-    max-height: 65vh; 
-    border-radius: 15px 15px 0 0;
-    box-shadow: 0 -4px 15px rgba(0,0,0,0.2);
-    /* Tạo khoảng đệm an toàn tránh thanh điều hướng của hệ điều hành */
-    padding-bottom: env(safe-area-inset-bottom, 15px); 
-  }
-  
-  /* Tăng chiều cao khi thu gọn để không bị sát đáy màn hình */
-  #control-panel.collapsed { 
-    max-height: 65px !important; 
-    overflow: hidden; 
-  }
-  
-  /* Tăng vùng chạm cho tiêu đề để ngón tay vuốt lên dễ dàng hơn */
-  .panel-header { 
-    position: sticky; 
-    top: 0; 
-    z-index: 10; 
-    padding: 12px 8px; 
-  }
-  .panel-header::after { 
-    content: " (Vuốt ↕)"; 
-    font-size: 10px; 
-    font-weight: normal; 
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100vw !important;
+    max-height: 65vh !important;
+    border-radius: 18px 18px 0 0 !important;
+    box-shadow: 0 -5px 25px rgba(0, 0, 0, 0.3) !important;
+    z-index: 4000 !important;
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    padding-bottom: calc(15px + env(safe-area-inset-bottom)) !important;
+    box-sizing: border-box !important;
   }
 
-  #gps-btn { bottom: calc(65vh + 15px); transition: bottom 0.3s ease; }
-  #measure-btn { bottom: calc(65vh + 60px); transition: bottom 0.3s ease; }
+  /* State khi thu gọn khay điều khiển */
+  #control-panel.collapsed {
+    max-height: 60px !important;
+    overflow: hidden !important;
+  }
+
+  /* 3. Thanh tiêu đề kéo vuốt rõ ràng */
+  .panel-header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
+    padding: 10px 8px !important;
+    border-radius: 12px 12px 0 0 !important;
+    user-select: none !important;
+    touch-action: pan-y !important;
+  }
+
+  .panel-header::after {
+    content: " (Vuốt ↕)" !important;
+    font-size: 10px !important;
+    font-weight: normal !important;
+    opacity: 0.8 !important;
+  }
+
+  /* 4. Tự động đẩy các nút công cụ GPS & Đo khoảng cách lên trên khay vuốt */
+  #gps-btn { 
+    bottom: calc(65vh + 15px) !important; 
+    transition: bottom 0.3s ease !important; 
+  }
   
-  /* Đẩy các nút công cụ lên cao hơn tương ứng với chiều cao khay 65px */
-  #control-panel.collapsed ~ #gps-btn { bottom: 80px; }
-  #control-panel.collapsed ~ #measure-btn { bottom: 125px; }
+  #measure-btn { 
+    bottom: calc(65vh + 60px) !important; 
+    transition: bottom 0.3s ease !important; 
+  }
+
+  /* Vị trí nút công cụ khi Control Panel bị thu gọn */
+  #control-panel.collapsed ~ #gps-btn { 
+    bottom: 75px !important; 
+  }
+  
+  #control-panel.collapsed ~ #measure-btn { 
+    bottom: 120px !important; 
+  }
 }
 
 /* --- HỆ THỐNG THÔNG BÁO TOAST HIỆN ĐẠI --- */
