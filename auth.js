@@ -1,4 +1,6 @@
-// auth.js - Quản lý tài khoản và đăng nhập an toàn (Đã sửa triệt để lỗi null style)
+// ==========================================================================
+// TỆP AUTH.JS - QUẢN LÝ XÁC THỰC VÀ ĐĂNG NHẬP (HỖ TRỢ ONLINE & OFFLINE)
+// ==========================================================================
 
 window.onload = function() {
   var savedEmail = localStorage.getItem('tnn_saved_email');
@@ -32,7 +34,6 @@ function capNhatGiaoDienSauDangNhap() {
   var controlPanel = document.getElementById('control-panel');
   if (controlPanel) controlPanel.style.display = 'block';
 
-  // Kiểm tra an toàn cho nút Sidebar cũ nếu còn tồn tại
   var sidebar = document.getElementById('sidebar-menu');
   if (sidebar) sidebar.style.display = 'flex';
 
@@ -41,7 +42,6 @@ function capNhatGiaoDienSauDangNhap() {
     adminMenuIcon.style.display = (currentUser && currentUser.role === 'sys_admin') ? 'flex' : 'none';
   }
 
-  // Cập nhật nút Quản trị Admin trên thanh công cụ mới
   var adminMob = document.getElementById('adminMobileBtn');
   if (adminMob) {
     var isAuthorized = currentUser && (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin');
@@ -56,8 +56,9 @@ function togglePasswordVisibility() {
   }
 }
 
-// auth.js - Hàm đăng nhập bỏ kiểm tra định dạng email
-
+/**
+ * HÀM XỬ LÝ ĐĂNG NHẬP THÔNG MINH (TỰ ĐỘNG CHUYỂN ĐỔI ONLINE / OFFLINE)
+ */
 async function handleCustomLogin() {
   var emailEl = document.getElementById('loginEmail');
   var passEl = document.getElementById('loginPass');
@@ -67,7 +68,6 @@ async function handleCustomLogin() {
   var pass = passEl ? passEl.value : '';
   var rememberMe = chkEl ? chkEl.checked : false;
   
-  // Chỉ kiểm tra rỗng, không bắt buộc phải chứa ký tự '@' hay đúng định dạng email
   if (!email || !pass) { 
     showToast("Vui lòng nhập đầy đủ tài khoản và mật khẩu!", "error"); 
     return; 
@@ -75,28 +75,67 @@ async function handleCustomLogin() {
   
   showLoading("Đang xác thực thông tin...");
   try {
-    const { data, error } = await supabaseClient
-      .from('tai_khoan')
-      .select('*')
-      .eq('email', email)
-      .eq('password', pass)
-      .limit(1);
+    if (navigator.onLine) {
+      // 1. KỊCH BẢN ONLINE: Xác thực qua máy chủ Supabase
+      const { data, error } = await supabaseClient
+        .from('tai_khoan')
+        .select('*')
+        .eq('email', email)
+        .eq('password', pass)
+        .limit(1);
 
-    if (error) throw error;
-    if (!data || data.length === 0) {
-      throw new Error("Sai thông tin tài khoản hoặc mật khẩu!");
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Sai thông tin tài khoản hoặc mật khẩu!");
+      }
+
+      var account = data[0];
+      currentUser = { 
+        isLoggedIn: true, 
+        role: account.role || 'member', 
+        idDai: account.id_dai, 
+        idTram: account.id_tram, 
+        canEditMap: account.can_edit_map === true,
+        email: account.email
+      };
+
+      // Đồng bộ thông tin tài khoản vào IndexedDB phục vụ Offline
+      if (typeof idbLuuTaiKhoan === 'function') {
+        await idbLuuTaiKhoan({
+          email: account.email,
+          password: account.password,
+          role: account.role || 'member',
+          id_dai: account.id_dai,
+          id_tram: account.id_tram,
+          can_edit_map: account.can_edit_map === true
+        });
+      }
+
+      showToast("Đăng nhập thành công (Online)!", "success");
+    } else {
+      // 2. KỊCH BẢN OFFLINE: Xác thực qua CSDL nội bộ IndexedDB
+      if (typeof idbDocTaiKhoan !== 'function') {
+        throw new Error("Chưa khởi tạo bộ nhớ đệm Offline!");
+      }
+
+      const localAcc = await idbDocTaiKhoan(email);
+      if (!localAcc || localAcc.password !== pass) {
+        throw new Error("Tài khoản hoặc mật khẩu không đúng (Chế độ Offline)!");
+      }
+
+      currentUser = { 
+        isLoggedIn: true, 
+        role: localAcc.role || 'member', 
+        idDai: localAcc.id_dai, 
+        idTram: localAcc.id_tram, 
+        canEditMap: localAcc.can_edit_map === true,
+        email: localAcc.email
+      };
+
+      showToast("⚡ Đã đăng nhập thành công ở Chế độ Offline!", "info");
     }
-
-    var account = data[0];
-    currentUser = { 
-      isLoggedIn: true, 
-      role: account.role || 'member', 
-      idDai: account.id_dai, 
-      idTram: account.id_tram, 
-      canEditMap: account.can_edit_map === true,
-      email: account.email
-    };
     
+    // Lưu phiên làm việc hiện tại
     localStorage.setItem('tnn_user', JSON.stringify(currentUser));
 
     if (rememberMe) {
@@ -109,8 +148,7 @@ async function handleCustomLogin() {
     
     capNhatGiaoDienSauDangNhap();
     if (typeof khoiTaoBanDoLeaflet === 'function') khoiTaoBanDoLeaflet();
-    await taiDuLieuSupabase();
-    showToast("Đăng nhập thành công!", "success");
+    if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase();
   } catch (err) { 
     showToast("Lỗi đăng nhập: " + err.message, "error"); 
   } finally {
