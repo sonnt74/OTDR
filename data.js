@@ -96,7 +96,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 }
 
 /**
- * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MAN HÌNH (BOUNDING BOX)
+ * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH (CÓ TỰ ĐỘNG FALLBACK INDEXEDDB)
  */
 async function taiDiemTheoVungXem() {
   if (!map) return;
@@ -109,7 +109,7 @@ async function taiDiemTheoVungXem() {
 
   try {
     if (navigator.onLine) {
-      // Online: Truy vấn Supabase theo tọa độ khung hình
+      // Thử tải từ Supabase khi có mạng
       const { data: pts, error: errPts } = await supabaseClient
         .from('diem_ha_tang')
         .select('*')
@@ -154,24 +154,24 @@ async function taiDiemTheoVungXem() {
         };
       });
 
-      // Lưu đệm các điểm vừa tải vào IndexedDB
+      // Lưu đệm các điểm vào IndexedDB
       if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
     } else {
-      // Offline: Đọc từ kho diem_store trong IndexedDB
-      if (typeof idbDocDiemTheoVungXem === 'function') {
-        globalDataPoints = await idbDocDiemTheoVungXem(minLat, maxLat, minLng, maxLng);
-      }
+      throw new Error("Offline Mode");
     }
-
+  } catch (err) {
+    // FALLBACK: Khi gặp lỗi mạng (Failed to fetch) -> Tự động đọc từ IndexedDB
+    if (typeof idbDocDiemTheoVungXem === 'function') {
+      globalDataPoints = await idbDocDiemTheoVungXem(minLat, maxLat, minLng, maxLng);
+    }
+  } finally {
     AppStore.setState({ dataPoints: globalDataPoints });
     if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
-  } catch (err) {
-    console.error("Lỗi nạp điểm vùng xem:", err);
   }
 }
 
 /**
- * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP (DÀNH CHO ĐO OTDR)
+ * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP (CÓ TỰ ĐỘNG FALLBACK INDEXEDDB)
  */
 async function taiDiemTheoTuyen(idTuyen) {
   if (!idTuyen || idTuyen === 'ALL' || idTuyen === 'undefined') {
@@ -182,7 +182,7 @@ async function taiDiemTheoTuyen(idTuyen) {
 
   try {
     if (navigator.onLine) {
-      // Online: Truy vấn Supabase theo Tuyến
+      // 1. Thử tải dữ liệu từ máy chủ Supabase
       const { data: doanList, error: errDoan } = await supabaseClient.from('doan_cap').select('*').eq('id_tuyen', idTuyen);
       if (errDoan) throw errDoan;
 
@@ -242,20 +242,27 @@ async function taiDiemTheoTuyen(idTuyen) {
       });
 
       if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
+      showToast(`Đã nạp ${globalDataPoints.length} điểm thuộc tuyến!`, "success");
     } else {
-      // Offline: Truy vấn từ IndexedDB theo chỉ mục idTuyen
-      if (typeof idbDocDiemTheoTuyen === 'function') {
-        globalDataPoints = await idbDocDiemTheoTuyen(idTuyen);
-      }
+      throw new Error("Offline Mode");
     }
-
+  } catch (err) {
+    // 2. FALLBACK TỰ ĐỘNG: Nếu lỗi kết nối (Failed to fetch), lấy trực tiếp từ IndexedDB!
+    console.warn("Lỗi kết nối mạng, chuyển sang lấy từ IndexedDB:", err.message);
+    if (typeof idbDocDiemTheoTuyen === 'function') {
+      globalDataPoints = await idbDocDiemTheoTuyen(idTuyen);
+      if (globalDataPoints.length > 0) {
+        showToast(`⚡ Đã nạp ${globalDataPoints.length} điểm từ bộ nhớ Offline (IndexedDB)`, "info");
+      } else {
+        showToast("Tuyến này chưa được lưu dữ liệu Offline!", "error");
+      }
+    } else {
+      showToast("Lỗi nạp tuyến cáp: " + err.message, "error");
+    }
+  } finally {
     AppStore.setState({ dataPoints: globalDataPoints });
     capNhatComboDiemA();
     if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
-    showToast(`Đã nạp ${globalDataPoints.length} điểm thuộc tuyến!`, "success");
-  } catch (err) {
-    showToast("Lỗi nạp tuyến cáp: " + err.message, "error");
-  } finally {
     hideLoading();
   }
 }
