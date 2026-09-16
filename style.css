@@ -1,15 +1,13 @@
 html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Arial, sans-serif; overflow: hidden; display: flex; flex-direction: row; background: #f0f2f5; }
 
-#sidebar-menu { width: 65px; height: 100vh; background-color: #212529; color: white; display: none; flex-direction: column; align-items: center; padding-top: 10px; z-index: 4000; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
-.menu-item { width: 45px; height: 45px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 6px; margin-bottom: 8px; color: #adb5bd; cursor: pointer; font-size: 9px; transition: all 0.2s; text-align: center; }
-.menu-item:hover, .menu-item.active { background-color: #0d6efd; color: white; }
-.menu-item span.icon { font-size: 18px; margin-bottom: 1px; }
+/* ẨN SIDEBAR MENU ĐỂ TỐI ĐA 100% DIỆN TÍCH BẢN ĐỒ */
+#sidebar-menu { display: none !important; }
 
 #workspace { flex: 1; position: relative; height: 100vh; overflow: hidden; }
 #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
 
-#control-panel { position: absolute; top: 10px; left: 10px; z-index: 3000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 290px; display: none; max-height: calc(100vh - 20px); overflow-y: auto; box-sizing: border-box; transition: max-height 0.3s ease-in-out; }
-.panel-header { background-color: #0d6efd; color: white; padding: 6px 8px; font-weight: bold; font-size: 12px; border-radius: 4px; margin-bottom: 6px; text-align: center; cursor: pointer; }
+#control-panel { position: absolute; top: 10px; left: 10px; z-index: 3000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 290px; display: none; max-height: calc(100vh - 20px); overflow-y: auto; box-sizing: border-box; transition: all 0.3s ease-in-out; }
+.panel-header { background-color: #0d6efd; color: white; padding: 8px; font-weight: bold; font-size: 12px; border-radius: 4px; margin-bottom: 6px; text-align: center; cursor: pointer; user-select: none; }
 .form-group { margin-bottom: 6px; }
 .form-group label { display: block; font-size: 9px; font-weight: bold; margin-bottom: 2px; color: #333; text-transform: uppercase; }
 .form-group select, .form-group input { width: 100%; padding: 5px 6px; border-radius: 4px; border: 1px solid #ccc; font-size: 11px; box-sizing: border-box; }
@@ -29,14 +27,20 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
 
 .table-data { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
 .table-data th, .table-data td { border: 1px solid #dee2e6; padding: 6px; text-align: left; }
-.table-data th { background-color: #f8f9fa; }
+.table-data th { background-color: #0d6efd; color: white; text-transform: uppercase; font-size: 10px; }
+.table-data tr:nth-child(even) { background-color: #f8f9fa; }
+.table-data tr:hover { background-color: #e9ecef; }
+
 .btn-small { background: #0d6efd; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer; font-size: 9px; margin-right: 3px; }
 .btn-small.del { background: #dc3545; }
+
+.badge { display: inline-block; padding: 3px 7px; font-size: 10px; font-weight: bold; border-radius: 4px; }
+.bg-info { background-color: #0dcaf0; color: #000; }
+.bg-secondary { background-color: #6c757d; color: #fff; }
 
 .mx-marker { width: 12px; height: 12px; background-color: #198754; border: 2px solid #fff; transform: rotate(45deg); box-shadow: 0 0 5px rgba(0,0,0,0.4); }
 .standard-marker { width: 10px; height: 10px; background-color: #0d6efd; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.4); }
 .point-a-marker { background: linear-gradient(135deg, #ffc107, #ff9800); color: #000; font-weight: bold; font-size: 11px; text-align: center; line-height: 26px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 10px rgba(255,193,7,0.9); }
-.point-b-marker { background: linear-gradient(135deg, #dc3545, #b02a37); color: #fff; font-weight: bold; font-size: 11px; text-align: center; line-height: 26px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 10px rgba(220,53,69,0.9); }
 
 .map-tool-btn { position: absolute; right: 10px; z-index: 3000; background: white; border: 2px solid rgba(0,0,0,0.2); border-radius: 4px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; box-shadow: 0 1px 5px rgba(0,0,0,0.4); }
 .map-tool-btn:hover { background: #f4f4f4; }
@@ -49,15 +53,8 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
 .tab-pane { display: none; }
 .tab-pane.active { display: block; }
 
-/* style.css - KHÔI PHỤC GIAO DIỆN VUỐT TRƯỢT TƯƠNG THÍCH DI ĐỘNG (MOBILE BOTTOM SHEET) */
-
+/* === CẤU HÌNH VUỐT TRƯỢT TƯƠNG THÍCH HOÀN HẢO CHO DI ĐỘNG (MOBILE BOTTOM SHEET) === */
 @media (max-width: 768px) {
-  /* 1. Ẩn thanh Sidebar bên trái trên Di động để tối đa diện tích bản đồ */
-  #sidebar-menu { 
-    display: none !important; 
-  }
-
-  /* 2. Cấu hình Control Panel thành khay vuốt trượt từ đáy màn hình */
   #control-panel {
     position: fixed !important;
     top: auto !important;
@@ -74,20 +71,18 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
     box-sizing: border-box !important;
   }
 
-  /* State khi thu gọn khay điều khiển */
+  /* Trạng thái thu gọn khay điều khiển */
   #control-panel.collapsed {
-    max-height: 60px !important;
+    max-height: 55px !important;
     overflow: hidden !important;
   }
 
-  /* 3. Thanh tiêu đề kéo vuốt rõ ràng */
   .panel-header {
     position: sticky !important;
     top: 0 !important;
     z-index: 10 !important;
     padding: 10px 8px !important;
     border-radius: 12px 12px 0 0 !important;
-    user-select: none !important;
     touch-action: pan-y !important;
   }
 
@@ -98,25 +93,12 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
     opacity: 0.8 !important;
   }
 
-  /* 4. Tự động đẩy các nút công cụ GPS & Đo khoảng cách lên trên khay vuốt */
-  #gps-btn { 
-    bottom: calc(65vh + 15px) !important; 
-    transition: bottom 0.3s ease !important; 
-  }
-  
-  #measure-btn { 
-    bottom: calc(65vh + 60px) !important; 
-    transition: bottom 0.3s ease !important; 
-  }
+  /* Tự động đẩy nút công cụ GPS & Đo khoảng cách lên trên khay vuốt */
+  #gps-btn { bottom: calc(65vh + 15px) !important; transition: bottom 0.3s ease !important; }
+  #measure-btn { bottom: calc(65vh + 60px) !important; transition: bottom 0.3s ease !important; }
 
-  /* Vị trí nút công cụ khi Control Panel bị thu gọn */
-  #control-panel.collapsed ~ #gps-btn { 
-    bottom: 75px !important; 
-  }
-  
-  #control-panel.collapsed ~ #measure-btn { 
-    bottom: 120px !important; 
-  }
+  #control-panel.collapsed ~ #gps-btn { bottom: 70px !important; }
+  #control-panel.collapsed ~ #measure-btn { bottom: 115px !important; }
 }
 
 /* --- HỆ THỐNG THÔNG BÁO TOAST HIỆN ĐẠI --- */
