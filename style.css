@@ -72,11 +72,20 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
   }
 
   /* Trạng thái thu gọn khay điều khiển */
+   #control-panel {
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease !important;
+  }
+  /* Khi có class .collapsed trên Desktop và Mobile */
   #control-panel.collapsed {
     max-height: 55px !important;
     overflow: hidden !important;
+    padding-bottom: 0 !important;
   }
-
+  
+  #control-panel.collapsed > div:not(.panel-header) {
+    display: none !important;
+  }
+ 
   .panel-header {
     position: sticky !important;
     top: 0 !important;
