@@ -44,9 +44,6 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
 
 .map-tool-btn { position: absolute; right: 10px; z-index: 3000; background: white; border: 2px solid rgba(0,0,0,0.2); border-radius: 4px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; box-shadow: 0 1px 5px rgba(0,0,0,0.4); }
 .map-tool-btn:hover { background: #f4f4f4; }
-#gps-btn { bottom: 30px; }
-#measure-btn { bottom: 75px; }
-
 .admin-tabs { display: flex; gap: 5px; margin-bottom: 10px; border-bottom: 1px solid #dee2e6; padding-bottom: 5px; overflow-x: auto; }
 .tab-btn { background: #e9ecef; border: none; padding: 6px 10px; font-size: 11px; font-weight: bold; cursor: pointer; border-radius: 4px; white-space: nowrap; }
 .tab-btn.active { background: #0d6efd; color: white; }
@@ -181,4 +178,19 @@ html, body { width: 100vw; height: 100vh; margin: 0; padding: 0; font-family: Ar
 /* Hide toàn bộ các thẻ con bên trong ngoại trừ thanh tiêu đề panel-header */
 #control-panel.collapsed > div:not(.panel-header) {
   display: none !important;
+}
+/* 1. Định vị cụm nút Zoom Leaflet ở chính giữa mép phải */
+.leaflet-top.leaflet-right .leaflet-control-zoom {
+  position: fixed !important;
+  top: 50% !important;
+  right: 10px !important;
+  transform: translateY(-50%) !important;
+  margin-top: 0 !important;
+  z-index: 3000 !important;
+}
+
+/* 2. Đảm bảo nút Chọn lớp bản đồ (OSM / Vệ tinh) vẫn nằm gọn góc trên bên phải */
+.leaflet-top.leaflet-right .leaflet-control-layers {
+  margin-top: 10px !important;
+  margin-right: 10px !important;
 }
