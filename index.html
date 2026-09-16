@@ -19,13 +19,7 @@
     <div id="loading-overlay-text">Đang đồng bộ dữ liệu...</div>
   </div>
 
-  <div id="sidebar-menu">
-    <div class="menu-item active" onclick="toggleGISPanel()" title="Ẩn/Hiện Bảng Điều Khiển"><span class="icon">🗺️</span><span>GIS</span></div>
-    <div class="menu-item" onclick="taiDuLieuSupabase(true)" title="Làm mới dữ liệu từ máy chủ"><span class="icon">🔄</span><span>Làm mới</span></div>
-    <div class="menu-item" onclick="xoaTatCaDoiTuongMap()" title="Xóa sạch đối tượng trên bản đồ"><span class="icon">🗑️</span><span>Xóa Maps</span></div>
-    <div class="menu-item" onclick="openModal('adminMasterModal', 'tab-accounts')" id="adminMenuIcon" style="display:none;" title="Quản lý Hệ thống"><span class="icon">⚙️</span><span>Quản trị</span></div>
-    <div class="menu-item" onclick="handleLogout()" title="Đăng xuất" style="margin-top: auto;"><span class="icon">🚪</span><span>Thoát</span></div>
-  </div>
+  <!-- ĐÃ BỎ SIDEBAR MENU ĐỂ TỐI ĐA 100% DIỆN TÍCH BẢN ĐỒ -->
 
   <div id="workspace">
     <div id="map"></div>
@@ -33,9 +27,10 @@
     <div id="measure-btn" class="map-tool-btn" onclick="toggleMeasureTool()" title="Đo khoảng cách thủ công">📏</div>
 
     <div id="control-panel">
+      <!-- TIÊU ĐỀ HỖ TRỢ BẤM / VUỐT ĐỂ THU GỌN VÀ MỞ RỘNG -->
       <div class="panel-header" onclick="toggleGISPanel()"><span>🗺️ ĐIỀU KHIỂN & PHÂN TÍCH OTDR</span></div>
       
-      <!-- Thanh công cụ nhanh cho Mobile -->
+      <!-- THANH NÚT BẤM CHỨC NĂNG CHÍNH (THAY THẾ SIDEBAR MENU) -->
       <div style="display: flex; gap: 4px; margin-bottom: 8px;">
         <button class="btn-action" style="flex: 1; background: #6c757d; padding: 6px 0; margin: 0; font-size: 10px;" onclick="handleLogout()">🚪 Thoát</button>
         <button class="btn-action" style="flex: 1; background: #17a2b8; padding: 6px 0; margin: 0; font-size: 10px;" onclick="taiDuLieuSupabase(true)">🔄 Làm mới</button>
@@ -128,7 +123,7 @@
         
         <div id="tab-tram" class="tab-pane">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><b style="font-size:11px;">Trạm VT:</b><button class="btn-small btn-success" id="btnAddTramCmd" onclick="moFormThemTram()">+ Thêm Trạm</button></div>
-          <table class="table-data"><thead><tr><th>ID</th><th>Mã Trạm</th><th>Tên Trạm</th><th>Đài quản lý</th><th>Thao tác</th></tr></thead><tbody id="masterTramTableBody"></tbody></table>
+          <table class="table-data"><thead><tr><th>ID</th><th>Tên Trạm</th><th>Đài quản lý</th><th>Thao tác</th></tr></thead><tbody id="masterTramTableBody"></tbody></table>
         </div>
         
         <div id="tab-tuyen" class="tab-pane">
