@@ -1,6 +1,6 @@
-// data.js - Xử lý phân quyền currentUser, tự động dọn dẹp Marker sau 30s và nút Xóa Maps
+// data.js - Xử lý dữ liệu tập trung, phân quyền tài khoản, nạp điểm thông minh & OTDR
 
-var autoClearMarkerTimer = null; // Biến lưu bộ đếm thời gian 30s tự động xóa marker
+var autoClearMarkerTimer = null; // Bộ đếm thời gian tự động xóa mốc tìm kiếm sau 30s
 
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
@@ -23,18 +23,16 @@ function getSafeStrId(item, keys) {
 }
 
 /**
- * 1. TẢI DỮ LIỆU SUPABASE VÀO APPSTORE
+ * 1. TẢI BAN ĐẦU: Chỉ tải danh mục nền nhẹ (Đài, Trạm, Tuyến, Đoạn, Loại điểm)
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
-  showLoading("Đang tải dữ liệu...");
+  showLoading("Đang khởi tạo danh mục...");
   try {
-    let [daiRes, tramRes, tuyenRes, doanRes, diemRes, dcdRes, loaiRes] = await Promise.all([
+    let [daiRes, tramRes, tuyenRes, doanRes, loaiRes] = await Promise.all([
       supabaseClient.from('dai_vt').select('*'), 
       supabaseClient.from('tram_vt').select('*'),
       supabaseClient.from('tuyen_cap').select('*'), 
       supabaseClient.from('doan_cap').select('*'),
-      fetchAllRowsSafe('diem_ha_tang'), 
-      fetchAllRowsSafe('doan_cap_diem'), 
       supabaseClient.from('loai_diem').select('*')
     ]);
     
@@ -43,49 +41,23 @@ async function taiDuLieuSupabase(forceRefresh = false) {
     rawTuyenList = tuyenRes.data || [];
     rawDoanCapList = doanRes.data || []; 
     rawLoaiDiemList = loaiRes.data || [];
-    
-    var diemMap = {}, doanCapMap = {}, loaiDiemMap = {};
-    diemRes.forEach(d => diemMap[getSafeStrId(d, ['id_diem', 'id'])] = d);
-    rawDoanCapList.forEach(dc => doanCapMap[getSafeStrId(dc, ['id_doan_cap', 'id'])] = dc);
-    rawLoaiDiemList.forEach(l => loaiDiemMap[getSafeStrId(l, ['id_loaidiem', 'id'])] = l.ten_loaidiem);
-
-    globalDataPoints = [];
-    dcdRes.forEach(item => {
-      var pt = diemMap[getSafeStrId(item, ['id_diem', 'diem_id'])];
-      var dc = doanCapMap[getSafeStrId(item, ['id_doan_cap', 'doan_cap_id'])];
-      if (!pt || isNaN(parseFloat(pt.lat))) return;
-      var idLoai = pt.id_loaidiem || 1;
-      var loaiName = loaiDiemMap[String(idLoai)] || 'Điểm';
-      var isMx = (Number(idLoai) === 4 || loaiName.toLowerCase().includes('mx') || loaiName.toLowerCase().includes('măng xông'));
-      
-      globalDataPoints.push({
-        id: getSafeStrId(pt, ['id_diem', 'id']), 
-        ten: pt.ten_diem || pt.ten, 
-        lat: parseFloat(pt.lat), 
-        lng: parseFloat(pt.long || pt.lng),
-        ghiChu: pt.ghi_chu || '', 
-        idTuyen: dc ? getSafeStrId(dc, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap', 'id']) : null,
-        idDoanCap: getSafeStrId(item, ['id_doan_cap', 'doan_cap_id']), 
-        idTram: getSafeStrId(pt, ['id_tram', 'tram_id']), 
-        idLoaiDiem: idLoai,
-        loai: loaiName, 
-        lyTrinh: pt.ly_trinh || '', 
-        duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0, 
-        stt: isMx ? 9999 : (item.thu_tu || 1)
-      });
-    });
 
     AppStore.setState({
       daiList: rawDaiList,
       tramList: rawTramList,
       tuyenList: rawTuyenList,
       doanCapList: rawDoanCapList,
-      dataPoints: globalDataPoints
+      dataPoints: []
     });
 
     xuLyPhanQuyenDoanTuyenUser();
 
-    if (forceRefresh) showToast("Đã làm mới dữ liệu!", "success");
+    // Tự động tải điểm theo vùng màn hình ban đầu
+    if (typeof taiDiemTheoVungXem === 'function') {
+      await taiDiemTheoVungXem();
+    }
+
+    if (forceRefresh) showToast("Đã làm mới danh mục dữ liệu!", "success");
   } catch (err) { 
     showToast("Lỗi tải dữ liệu: " + err.message, "error"); 
   } finally { 
@@ -95,7 +67,140 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 }
 
 /**
- * 2. PHÂN QUYỀN GIAO DIỆN THEO CURRENTUSER
+ * 2. TẢI ĐIỂM THEO VÙNG XEM MAN HÌNH (BOUNDING BOX)
+ */
+async function taiDiemTheoVungXem() {
+  if (!map) return;
+  var selectTuyen = document.getElementById('selectTuyen');
+  if (selectTuyen && selectTuyen.value !== 'ALL') return; // Nếu đang chọn Tuyến riêng thì không nạp đè
+
+  var bounds = map.getBounds();
+  var minLat = bounds.getSouth(), maxLat = bounds.getNorth();
+  var minLng = bounds.getWest(), maxLng = bounds.getEast();
+
+  try {
+    const { data: pts, error: errPts } = await supabaseClient
+      .from('diem_ha_tang')
+      .select('*')
+      .gte('lat', minLat).lte('lat', maxLat)
+      .gte('long', minLng).lte('long', maxLng);
+
+    if (errPts) throw errPts;
+    if (!pts || pts.length === 0) {
+      globalDataPoints = [];
+      if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+      return;
+    }
+
+    var diemIds = pts.map(p => getSafeStrId(p, ['id_diem', 'id']));
+    const { data: dcd } = await supabaseClient.from('doan_cap_diem').select('*').in('diem_id', diemIds);
+
+    var loaiMap = {}, dcdMap = {};
+    rawLoaiDiemList.forEach(l => loaiMap[getSafeStrId(l, ['id_loaidiem', 'id'])] = l.ten_loaidiem);
+    (dcd || []).forEach(item => dcdMap[getSafeStrId(item, ['id_diem', 'diem_id'])] = item);
+
+    globalDataPoints = pts.map(pt => {
+      var ptId = getSafeStrId(pt, ['id_diem', 'id']);
+      var link = dcdMap[ptId];
+      var idLoai = pt.id_loaidiem || 1;
+      var loaiName = loaiMap[String(idLoai)] || 'Điểm';
+      var isMx = (Number(idLoai) === 4 || loaiName.toLowerCase().includes('mx') || loaiName.toLowerCase().includes('măng xông'));
+
+      return {
+        id: ptId,
+        ten: pt.ten_diem || pt.ten,
+        lat: parseFloat(pt.lat),
+        lng: parseFloat(pt.long || pt.lng),
+        ghiChu: pt.ghi_chu || '',
+        idTuyen: pt.id_tuyen || null,
+        idDoanCap: link ? getSafeStrId(link, ['id_doan_cap', 'doan_cap_id']) : null,
+        idTram: getSafeStrId(pt, ['id_tram', 'tram_id']),
+        idLoaiDiem: idLoai,
+        loai: loaiName,
+        lyTrinh: pt.ly_trinh || '',
+        duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
+        stt: isMx ? 9999 : (link ? link.thu_tu : 1)
+      };
+    });
+
+    AppStore.setState({ dataPoints: globalDataPoints });
+    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+  } catch (err) {
+    console.error("Lỗi tải điểm vùng xem:", err);
+  }
+}
+
+/**
+ * 3. TẢI TOÀN BỘ ĐIỂM THEO TUYẾN CÁP ĐƯỢC CHỌN
+ */
+async function taiDiemTheoTuyen(idTuyen) {
+  if (!idTuyen || idTuyen === 'ALL') {
+    await taiDiemTheoVungXem();
+    return;
+  }
+  showLoading("Đang nạp dữ liệu tuyến cáp...");
+
+  try {
+    const { data: doanList, error: errDoan } = await supabaseClient.from('doan_cap').select('id_doan_cap').eq('id_tuyen', idTuyen);
+    if (errDoan) throw errDoan;
+    var doanIds = (doanList || []).map(d => d.id_doan_cap);
+
+    if (doanIds.length === 0) {
+      globalDataPoints = [];
+      AppStore.setState({ dataPoints: [] });
+      if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+      showToast("Tuyến cáp này chưa có đoạn cáp!", "info");
+      return;
+    }
+
+    const { data: dcdList, error: errDcd } = await supabaseClient.from('doan_cap_diem').select('*').in('id_doan_cap', doanIds);
+    if (errDcd) throw errDcd;
+    var diemIds = (dcdList || []).map(item => item.diem_id);
+
+    const { data: pts, error: errPts } = await supabaseClient.from('diem_ha_tang').select('*').in('id_diem', diemIds);
+    if (errPts) throw errPts;
+
+    var loaiMap = {}, dcdMap = {};
+    rawLoaiDiemList.forEach(l => loaiMap[getSafeStrId(l, ['id_loaidiem', 'id'])] = l.ten_loaidiem);
+    (dcdList || []).forEach(item => dcdMap[getSafeStrId(item, ['id_diem', 'diem_id'])] = item);
+
+    globalDataPoints = (pts || []).map(pt => {
+      var ptId = getSafeStrId(pt, ['id_diem', 'id']);
+      var link = dcdMap[ptId];
+      var idLoai = pt.id_loaidiem || 1;
+      var loaiName = loaiMap[String(idLoai)] || 'Điểm';
+      var isMx = (Number(idLoai) === 4 || loaiName.toLowerCase().includes('mx') || loaiName.toLowerCase().includes('măng xông'));
+
+      return {
+        id: ptId,
+        ten: pt.ten_diem || pt.ten,
+        lat: parseFloat(pt.lat),
+        lng: parseFloat(pt.long || pt.lng),
+        ghiChu: pt.ghi_chu || '',
+        idTuyen: idTuyen,
+        idDoanCap: link ? getSafeStrId(link, ['id_doan_cap', 'doan_cap_id']) : null,
+        idTram: getSafeStrId(pt, ['id_tram', 'tram_id']),
+        idLoaiDiem: idLoai,
+        loai: loaiName,
+        lyTrinh: pt.ly_trinh || '',
+        duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
+        stt: isMx ? 9999 : (link ? link.thu_tu : 1)
+      };
+    });
+
+    AppStore.setState({ dataPoints: globalDataPoints });
+    capNhatComboDiemA();
+    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+    showToast(`Đã nạp ${globalDataPoints.length} điểm thuộc tuyến!`, "success");
+  } catch (err) {
+    showToast("Lỗi nạp tuyến cáp: " + err.message, "error");
+  } finally {
+    hideLoading();
+  }
+}
+
+/**
+ * 4. PHÂN QUYỀN GIAO DIỆN THEO CURRENTUSER
  */
 function xuLyPhanQuyenDoanTuyenUser() {
   var selectDai = document.getElementById('selectDai');
@@ -212,7 +317,6 @@ function updateTuyenOptions() {
   
   var doanCapList = state.doanCapList || rawDoanCapList;
   var tuyenList = state.tuyenList || rawTuyenList;
-  var dataPoints = state.dataPoints || globalDataPoints;
 
   var allowedTuyenIds = [];
 
@@ -223,13 +327,7 @@ function updateTuyenOptions() {
       var tramIdInDoan = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'id_diem_a', 'id_diem_b']);
       return tramIdInDoan === tramVal;
     });
-
     allowedTuyenIds = [...new Set(matchedDoan.map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap'])))];
-
-    if (allowedTuyenIds.length === 0 && dataPoints.length > 0) {
-      var matchedPoints = dataPoints.filter(p => String(p.idTram).trim() === tramVal);
-      allowedTuyenIds = [...new Set(matchedPoints.map(p => String(p.idTuyen).trim()))];
-    }
   }
 
   var filteredTuyenList = tuyenList.filter(t => {
@@ -252,7 +350,7 @@ function updateTuyenOptions() {
   onTuyenChange();
 }
 
-function onTuyenChange() {
+async function onTuyenChange() {
   var selectTuyen = document.getElementById('selectTuyen');
   var tuyenVal = selectTuyen ? String(selectTuyen.value).trim() : 'ALL';
   var selectDoanCap = document.getElementById('selectDoanCap');
@@ -266,7 +364,6 @@ function onTuyenChange() {
     selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
     if (tuyenVal !== 'ALL') {
       var matchedDoan = doanCapList.filter(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']) === tuyenVal);
-
       matchedDoan.forEach(d => {
         var dId = getSafeStrId(d, ['id_doan_cap', 'id']);
         var dName = d.ma_doancap || d.ten_doancap;
@@ -283,19 +380,19 @@ function onTuyenChange() {
   var doanVal = selectDoanCapEl ? String(selectDoanCapEl.value).trim() : 'ALL';
   AppStore.setState({ selectedDoanCap: doanVal });
 
-  capNhatComboDiemA();
-  veLaiTuyenAB();
+  // Tải dữ liệu điểm tương ứng với tuyến chọn
+  await taiDiemTheoTuyen(tuyenVal);
 }
 
 function onDoanCapChange() { 
   var selectDoanCap = document.getElementById('selectDoanCap');
   var doanVal = selectDoanCap ? String(selectDoanCap.value).trim() : 'ALL';
   AppStore.setState({ selectedDoanCap: doanVal });
-  veLaiTuyenAB(); 
+  if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB(); 
 }
 
 function onDiemAChange() { 
-  veLaiTuyenAB(); 
+  if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB(); 
 }
 
 function capNhatComboDiemA() {
@@ -310,7 +407,7 @@ function capNhatComboDiemA() {
 }
 
 /**
- * 3. HÀM TỰ ĐỘNG XÓA MARKER ĐIỂM TÌM KIẾM SAU 30 GIÂY
+ * 5. HÀM TỰ ĐỘNG XÓA MARKER ĐIỂM TÌM KIẾM SAU 30 GIÂY
  */
 function datLichTuXoaMarkerTimKiem() {
   if (autoClearMarkerTimer) {
@@ -327,10 +424,8 @@ function datLichTuXoaMarkerTimKiem() {
 }
 
 /**
- * 4. TÌM VỊ TRÍ ĐỨT OTDR (CÓ TỰ XÓA SAU 30S)
+ * 6. CHIA SẺ VỊ TRÍ SỰ CỐ QUA ZALO, VIBER, COPY
  */
-// data.js - Phục hồi Popup vị trí sự cố OTDR đầy đủ nút chia sẻ và Măng xông lân cận
-
 function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo, shareType) {
   var message = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n` +
                 `- Tọa độ: ${lat}, ${lng}\n` +
@@ -344,14 +439,9 @@ function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo,
     navigator.clipboard.writeText(message); 
     showToast("📋 Đã sao chép nội dung sự cố!", "success"); 
   } else if (shareType === 'zalo') {
-    // 1. Sao chép nội dung tin nhắn vào bộ nhớ tạm
     navigator.clipboard.writeText(message);
     showToast("📋 Đã sao chép! Đang mở ứng dụng Zalo...", "success");
-    
-    // 2. Mở trực tiếp ứng dụng Zalo trên máy (hoặc chuyển hướng nếu chưa mở được)
-    setTimeout(function() {
-      window.location.href = 'zalo://';
-    }, 500);
+    setTimeout(function() { window.location.href = 'zalo://'; }, 500);
   } else if (shareType === 'viber') {
     var encoded = encodeURIComponent(message);
     window.open(`viber://forward?text=${encoded}`, '_blank');
@@ -359,7 +449,7 @@ function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo,
 }
 
 /**
- * HÀM PHÂN TÍCH VỊ TRÍ ĐỨT CÁP OTDR VÀ HIỂN THỊ POPUP CÓ KHOẢNG CÁCH MX
+ * 7. TÌM VỊ TRÍ ĐỨT OTDR VÀ POPUP KHOẢNG CÁCH MĂNG XÔNG LÂN CẬN
  */
 function timViTriDut() {
   var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value), kcOtdrMeters = kcOtdrKm * 1000; 
@@ -402,7 +492,6 @@ function timViTriDut() {
         interpolatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}`;
       }
 
-      // TÌM VÀ TÍNH KHOẢNG CÁCH TỚI MĂNG XÔNG TRƯỚC
       for (var j = i; j >= 0; j--) {
         if (routeStops[j].isMX) {
           prevMXName = routeStops[j].pt.ten;
@@ -412,7 +501,6 @@ function timViTriDut() {
         }
       }
 
-      // TÌM VÀ TÍNH KHOẢNG CÁCH TỚI MĂNG XÔNG SAU
       for (var k = i + 1; k < routeStops.length; k++) { 
         if (routeStops[k].isMX) { 
           nextMXName = routeStops[k].pt.ten;
@@ -432,11 +520,9 @@ function timViTriDut() {
   var faultMarker = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
   foundMarkerLayer = faultMarker;
 
-  // CHUẨN HÓA CHUỖI THÔNG TIN MĂNG XÔNG TRƯỚC VÀ SAU
   var prevMXFullInfo = prevMXName + (prevMXDistText ? ` (cách ${prevMXDistText})` : '');
   var nextMXFullInfo = nextMXName + (nextMXDistText ? ` (cách ${nextMXDistText})` : '');
 
-  // TẠO KHỐI NÚT CHIA SẺ VÀ POPUP LEAFLET
   var shareButtonsHtml = `
     <div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">
       <b>Chia sẻ sự cố nhanh:</b><br>
@@ -459,7 +545,7 @@ function timViTriDut() {
 }
 
 /**
- * 5. TÌM LÝ TRÌNH TRÊN BẢN ĐỒ (CÓ TỰ XÓA SAU 30S)
+ * 8. TÌM LÝ TRÌNH TRÊN BẢN ĐỒ
  */
 function timLyTrinhBanDo() {
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
@@ -477,18 +563,8 @@ function timLyTrinhBanDo() {
     return;
   }
 
-  var isNghichHuong = false;
-  if (pts.length >= 2) {
-    if (pts[1].calculatedLyTrinhMeters < pts[0].calculatedLyTrinhMeters) {
-      isNghichHuong = true; 
-    }
-  }
-
-  var sortedPts = [...pts].sort((a, b) => {
-    return isNghichHuong 
-      ? b.calculatedLyTrinhMeters - a.calculatedLyTrinhMeters 
-      : a.calculatedLyTrinhMeters - b.calculatedLyTrinhMeters;
-  });
+  var isNghichHuong = (pts.length >= 2 && pts[1].calculatedLyTrinhMeters < pts[0].calculatedLyTrinhMeters);
+  var sortedPts = [...pts].sort((a, b) => isNghichHuong ? b.calculatedLyTrinhMeters - a.calculatedLyTrinhMeters : a.calculatedLyTrinhMeters - b.calculatedLyTrinhMeters);
 
   var targetSeg = null;
   var foundLat = null, foundLng = null, bestDescription = "";
@@ -524,16 +600,12 @@ function timLyTrinhBanDo() {
   }
 
   if (!targetSeg) {
-    var closest = sortedPts.reduce((prev, curr) => 
-      Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev
-    );
-    
+    var closest = sortedPts.reduce((prev, curr) => Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev);
     var deviationMeters = Math.abs(closest.calculatedLyTrinhMeters - targetMeters);
     if (deviationMeters > 100) {
       showToast(`Không tìm thấy vị trí lý trình ${txt} chính xác (Sai số quá ${Math.round(deviationMeters)}m).`, "error");
       return;
     }
-
     foundLat = closest.lat;
     foundLng = closest.lng;
     bestDescription = `Gần điểm mốc: ${closest.ten} (Sai số ~${Math.round(deviationMeters)}m)`;
@@ -566,7 +638,7 @@ function timLyTrinhBanDo() {
 }
 
 /**
- * 6. HÀM NÚT "XÓA MAPS": XÓA SẠCH ĐỐI TƯỢNG TRÊN BẢN ĐỒ LEAFLET
+ * 9. NÚT "XÓA MAPS" VÀ BẬT/TẮT KHAY ĐIỀU KHIỂN
  */
 function xoaTatCaDoiTuongMap() {
   if (typeof polylinesLayer !== 'undefined' && polylinesLayer) polylinesLayer.clearLayers();
@@ -586,95 +658,6 @@ function xoaTatCaDoiTuongMap() {
   showToast("🧹 Đã xóa sạch tất cả đối tượng trên bản đồ!", "info");
 }
 
-function veLaiTuyenAB() {
-  if (!map) return;
-  markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
-  
-  var selectTuyen = document.getElementById('selectTuyen');
-  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
-
-  if (tuyenVal === 'ALL' || !tuyenVal) return;
-
-  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
-  var doanVal = document.getElementById('selectDoanCap') ? document.getElementById('selectDoanCap').value : 'ALL';
-
-  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
-  if (!backbone || backbone.length < 2) return;
-
-  precalculateRouteDataForPoints(backbone, backbone);
-
-  var pts = getPointsCuaTuyenHienTai();
-  if (pts.length === 0) return;
-  
-  var bounds = [];
-  var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
-
-  function taoNutHanhDong(id, ten, lat, lng) {
-    return isDraggable ? `<hr style="margin:4px 0;"><button class="btn-small" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa Tên</button><button class="btn-small del" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>` : '';
-  }
-
-  async function handleDragEnd(e, ptObj) {
-    var newPos = e.target.getLatLng();
-    var isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu tọa độ mới cho điểm [${ptObj.ten}] không?`);
-    
-    if (isConfirmed) {
-      showLoading("Đang lưu tọa độ...");
-      try {
-        const { error } = await supabaseClient.from('diem_ha_tang').update({ lat: newPos.lat, long: newPos.lng }).eq('id_diem', ptObj.id);
-        if (error) throw error;
-        
-        var localPt = globalDataPoints.find(p => p.id == ptObj.id);
-        if (localPt) { localPt.lat = newPos.lat; localPt.lng = newPos.lng; }
-        
-        hideLoading();
-        await ghiNhatKyThaoTac("DOI_TOA_DO", `Kỹ sư thay đổi tọa độ điểm [${ptObj.ten}] sang (${newPos.lat.toFixed(6)}, ${newPos.lng.toFixed(6)})`);
-        showToast("Đã lưu và cập nhật tọa độ thành công!", "success");
-        veLaiTuyenAB();
-        map.setView([newPos.lat, newPos.lng], 19, { animate: true });
-      } catch (err) { 
-        showToast("Lỗi: " + err.message, "error"); 
-        hideLoading(); 
-        e.target.setLatLng([ptObj.lat, ptObj.lng]); 
-      }
-    } else { 
-      e.target.setLatLng([ptObj.lat, ptObj.lng]); 
-    }
-  }
-
-  pts.forEach((pt, index) => {
-    bounds.push([pt.lat, pt.lng]);
-    var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : '<div class="standard-marker"></div>';
-    var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
-    
-    var popupHtml = `<b>${pt.ten}</b><br>Loại: ${pt.loai}<br>📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b><br>📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText}</b>` + taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng);
-    marker.bindPopup(popupHtml);
-    marker.on('dragend', e => handleDragEnd(e, pt));
-    markersLayer.addLayer(marker);
-  });
-
-  var mxList = backbone.filter(p => isMangXong(p));
-  mxList.forEach(mx => {
-    bounds.push([mx.lat, mx.lng]);
-    var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
-    var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}')">📝 Ghi chú</button>`;
-    var popupHtml = `<b>${mx.ten}</b><br>📍 Lý trình QL: <b>${mx.calculatedLyTrinhText}</b><br>📏 Cự ly từ Trạm A: <b>${mx.distanceFromAText}</b><br>` + taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng) + ghiChuBtn;
-
-    mxMarker.bindPopup(popupHtml);
-    mxMarker.on('dragend', e => handleDragEnd(e, mx));
-    mxLayer.addLayer(mxMarker);
-  });
-
-  var lineCoordinates = backbone.map(p => [p.lat, p.lng]);
-  if (lineCoordinates.length > 1) polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: '#0d6efd', weight: 4, opacity: 0.85 }));
-  if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
-}
-window.veLaiTuyenAB = veLaiTuyenAB;
-
-function isMangXong(pt) {
-  var name = (pt.loai || '').toUpperCase();
-  return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
-}
-// data.js - Hàm kích hoạt trượt thu gọn / mở rộng khay điều khiển trên Di động
 function toggleGISPanel() {
   var panel = document.getElementById('control-panel');
   if (panel) {
