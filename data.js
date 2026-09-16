@@ -131,19 +131,28 @@ async function taiDiemTheoVungXem() {
 }
 
 /**
- * 3. TẢI TOÀN BỘ ĐIỂM THEO TUYẾN CÁP ĐƯỢC CHỌN
+ * TẢI TOÀN BỘ ĐIỂM THEO TUYẾN CÁP ĐƯỢC CHỌN (ĐÃ SỬA LỖI TẠO MẢNG UNDEFINED)
  */
 async function taiDiemTheoTuyen(idTuyen) {
-  if (!idTuyen || idTuyen === 'ALL') {
+  if (!idTuyen || idTuyen === 'ALL' || idTuyen === 'undefined') {
     await taiDiemTheoVungXem();
     return;
   }
   showLoading("Đang nạp dữ liệu tuyến cáp...");
 
   try {
-    const { data: doanList, error: errDoan } = await supabaseClient.from('doan_cap').select('id_doan_cap').eq('id_tuyen', idTuyen);
+    // 1. Lấy danh sách đoạn cáp thuộc tuyến
+    const { data: doanList, error: errDoan } = await supabaseClient
+      .from('doan_cap')
+      .select('*')
+      .eq('id_tuyen', idTuyen);
+
     if (errDoan) throw errDoan;
-    var doanIds = (doanList || []).map(d => d.id_doan_cap);
+
+    // Lọc lấy ID đoạn cáp an toàn
+    var doanIds = (doanList || [])
+      .map(d => getSafeStrId(d, ['id_doan_cap', 'id']))
+      .filter(id => id && id !== 'undefined');
 
     if (doanIds.length === 0) {
       globalDataPoints = [];
@@ -153,16 +162,43 @@ async function taiDiemTheoTuyen(idTuyen) {
       return;
     }
 
-    const { data: dcdList, error: errDcd } = await supabaseClient.from('doan_cap_diem').select('*').in('id_doan_cap', doanIds);
-    if (errDcd) throw errDcd;
-    var diemIds = (dcdList || []).map(item => item.diem_id);
+    // 2. Lấy danh sách liên kết điểm hạ tầng của các đoạn cáp
+    const { data: dcdList, error: errDcd } = await supabaseClient
+      .from('doan_cap_diem')
+      .select('*')
+      .in('id_doan_cap', doanIds);
 
-    const { data: pts, error: errPts } = await supabaseClient.from('diem_ha_tang').select('*').in('id_diem', diemIds);
+    if (errDcd) throw errDcd;
+
+    // Lọc lấy ID điểm hạ tầng an toàn (tránh bị undefined)
+    var diemIds = (dcdList || [])
+      .map(item => getSafeStrId(item, ['id_diem', 'diem_id']))
+      .filter(id => id && id !== 'undefined');
+
+    if (diemIds.length === 0) {
+      globalDataPoints = [];
+      AppStore.setState({ dataPoints: [] });
+      if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+      showToast("Chưa có điểm hạ tầng trong tuyến này!", "info");
+      return;
+    }
+
+    // 3. Lấy thông tin chi tiết các điểm hạ tầng
+    const { data: pts, error: errPts } = await supabaseClient
+      .from('diem_ha_tang')
+      .select('*')
+      .in('id_diem', diemIds);
+
     if (errPts) throw errPts;
 
-    var loaiMap = {}, dcdMap = {};
+    var loaiMap = {};
     rawLoaiDiemList.forEach(l => loaiMap[getSafeStrId(l, ['id_loaidiem', 'id'])] = l.ten_loaidiem);
-    (dcdList || []).forEach(item => dcdMap[getSafeStrId(item, ['id_diem', 'diem_id'])] = item);
+
+    var dcdMap = {};
+    (dcdList || []).forEach(item => {
+      var ptId = getSafeStrId(item, ['id_diem', 'diem_id']);
+      if (ptId) dcdMap[ptId] = item;
+    });
 
     globalDataPoints = (pts || []).map(pt => {
       var ptId = getSafeStrId(pt, ['id_diem', 'id']);
