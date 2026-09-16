@@ -1,4 +1,4 @@
-// config.js - Cấu hình kết nối, biến toàn cục và hàm tiện ích chung
+// config.js - Cấu hình kết nối Supabase, biến toàn cục và hàm tiện ích dùng chung
 const SUPABASE_URL = 'https://clddwitzwuewwxawuorv.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_U3tMbsj5oQ9Wub1UAJO5Cw_NXt6Px8E';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -23,7 +23,7 @@ var rawDoanCapList = [];
 var rawLoaiDiemList = [];
 var globalDataPoints = [];
 
-// Các hàm tiện ích giao diện chung cho mọi module
+// Hàm tiện ích hiển thị/ẩn xoay tròn chờ dữ liệu
 function showLoading(msg) {
   var el = document.getElementById('loading-overlay-text');
   if (el) el.innerText = msg;
@@ -36,6 +36,7 @@ function hideLoading() {
   if (overlay) overlay.style.display = 'none';
 }
 
+// Hàm hiển thị thông báo Toast góc màn hình duy nhất
 function showToast(message, type = 'info') {
   var container = document.getElementById('toast-container');
   if (!container) {
@@ -54,6 +55,18 @@ function showToast(message, type = 'info') {
   }, 3000);
 }
 
+// Hàm ẩn/hiển thị khay điều khiển GIS
+function toggleGISPanel() {
+  var panel = document.getElementById('control-panel');
+  if (panel) {
+    if (panel.style.display === 'none') {
+      panel.style.display = 'block';
+    } else {
+      panel.classList.toggle('collapsed');
+    }
+  }
+}
+
 function closeModals() {
   document.querySelectorAll('.app-modal').forEach(modal => {
     if (modal.id !== 'loginModal' || !currentUser.isLoggedIn) modal.style.display = 'none';
@@ -70,7 +83,7 @@ function openModal(id, tabId = null) {
   }
 }
 
-// Hàm ghi lại lịch sử thao tác của kỹ sư vào cơ sở dữ liệu
+// Hàm ghi nhật ký thao tác người dùng
 async function ghiNhatKyThaoTac(hanhDong, chiTiet) {
   try {
     var userEmail = currentUser && currentUser.isLoggedIn ? (currentUser.email || "Thành viên hệ thống") : "Khách";
