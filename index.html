@@ -27,10 +27,9 @@
     <div id="measure-btn" class="map-tool-btn" onclick="toggleMeasureTool()" title="Đo khoảng cách thủ công">📏</div>
 
     <div id="control-panel">
-      <!-- TIÊU ĐỀ HỖ TRỢ BẤM / VUỐT ĐỂ THU GỌN VÀ MỞ RỘNG -->
       <div class="panel-header" onclick="toggleGISPanel()"><span>🗺️ ĐIỀU KHIỂN & PHÂN TÍCH OTDR</span></div>
       
-      <!-- THANH NÚT BẤM CHỨC NĂNG CHÍNH (THAY THẾ SIDEBAR MENU) -->
+      <!-- Thanh công cụ nhanh thay thế Sidebar Menu cũ -->
       <div style="display: flex; gap: 4px; margin-bottom: 8px;">
         <button class="btn-action" style="flex: 1; background: #6c757d; padding: 6px 0; margin: 0; font-size: 10px;" onclick="handleLogout()">🚪 Thoát</button>
         <button class="btn-action" style="flex: 1; background: #17a2b8; padding: 6px 0; margin: 0; font-size: 10px;" onclick="taiDuLieuSupabase(true)">🔄 Làm mới</button>
@@ -62,7 +61,6 @@
     </div>
   </div>
 
-  <!-- Modal Đăng Nhập -->
   <div id="loginModal" class="app-modal" style="display: flex;">
     <div class="modal-content" style="max-width: 340px;">
       <div class="modal-header"><span>👤 Đăng nhập Hệ Thống</span></div>
@@ -92,7 +90,6 @@
     </div>
   </div>
 
-  <!-- Modal Quản Trị Hệ Thống -->
   <div id="adminMasterModal" class="app-modal">
     <div class="modal-content">
       <div class="modal-header"><span>⚙️ QUẢN TRỊ HỆ THỐNG & DANH MỤC</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
@@ -107,8 +104,7 @@
 
         <div id="tab-accounts" class="tab-pane active">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <b style="font-size:11px;">Tài khoản Người dùng:</b>
-            <button class="btn-small btn-success" id="btnAddUserCmd" onclick="chuanBiFormThemThanhVien()">+ Thêm User</button>
+            <b style="font-size:11px;">Tài khoản:</b><button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien()">+ Thêm</button>
           </div>
           <table class="table-data">
             <thead><tr><th>Email</th><th>Vai trò</th><th>Đài quản lý</th><th>Trạm quản lý</th><th>Map?</th><th>Thao tác</th></tr></thead>
@@ -117,29 +113,28 @@
         </div>
         
         <div id="tab-dai" class="tab-pane">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><b style="font-size:11px;">Đài VT:</b><button class="btn-small btn-success" id="btnAddDaiCmd" onclick="moFormThemDai()">+ Thêm Đài</button></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><b style="font-size:11px;">Đài VT:</b><button class="btn-small btn-success" onclick="moFormThemDai()">+ Thêm</button></div>
           <table class="table-data"><thead><tr><th>ID</th><th>Tên Đài</th><th>Thao tác</th></tr></thead><tbody id="masterDaiTableBody"></tbody></table>
         </div>
         
         <div id="tab-tram" class="tab-pane">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><b style="font-size:11px;">Trạm VT:</b><button class="btn-small btn-success" id="btnAddTramCmd" onclick="moFormThemTram()">+ Thêm Trạm</button></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><b style="font-size:11px;">Trạm VT:</b><button class="btn-small btn-success" onclick="moFormThemTram()">+ Thêm</button></div>
           <table class="table-data"><thead><tr><th>ID</th><th>Tên Trạm</th><th>Đài quản lý</th><th>Thao tác</th></tr></thead><tbody id="masterTramTableBody"></tbody></table>
         </div>
         
         <div id="tab-tuyen" class="tab-pane">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><b style="font-size:11px;">Tuyến Cáp:</b><button class="btn-small btn-success" onclick="moFormThemTuyen()">+ Thêm Tuyến</button></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><b style="font-size:11px;">Tuyến Cáp:</b><button class="btn-small btn-success" onclick="moFormThemTuyen()">+ Thêm</button></div>
           <table class="table-data"><thead><tr><th>ID</th><th>Mã tuyến</th><th>Tên tuyến</th><th>Thao tác</th></tr></thead><tbody id="masterTuyenTableBody"></tbody></table>
         </div>
         
         <div id="tab-doan" class="tab-pane">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><b style="font-size:11px;">Đoạn Tuyến:</b><button class="btn-small btn-success" onclick="moFormThemDoan()">+ Thêm Đoạn</button></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><b style="font-size:11px;">Đoạn Tuyến:</b><button class="btn-small btn-success" onclick="moFormThemDoan()">+ Thêm</button></div>
           <table class="table-data"><thead><tr><th>ID</th><th>Mã đoạn</th><th>Thuộc Tuyến</th><th>Thao tác</th></tr></thead><tbody id="masterDoanTableBody"></tbody></table>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Modal Thêm/Sửa Tài Khoản -->
   <div id="addMemberModal" class="app-modal">
     <div class="modal-content" style="max-width: 360px;">
       <div class="modal-header"><span id="accountModalTitle">👥 Thêm/Sửa Tài Khoản</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
