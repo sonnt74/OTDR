@@ -4,15 +4,34 @@ function khoiTaoBanDoLeaflet() {
   var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
   var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 19 });
   
-  map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [osmLayer] });
-  polylinesLayer.addTo(map); markersLayer.addTo(map); mxLayer.addTo(map); userLocationLayer.addTo(map); measureLayer.addTo(map);
+  // 1. Khởi tạo bản đồ với nút Zoom mặc định (ở góc trên bên trái topleft) và tắt dòng link Leaflet attribution
+  map = L.map('map', { 
+    center: [21.5942, 105.8481], 
+    zoom: 13, 
+    maxZoom: 21, 
+    layers: [osmLayer],
+    zoomControl: true,           // Bật lại nút Zoom mặc định ở góc trên bên trái
+    attributionControl: false   // TẮT HOÀN TOÀN LINK LEAFLET / OPENSTREETMAP Ở GÓC DƯỚI BÊN PHẢI
+  });
+
+  polylinesLayer.addTo(map); 
+  markersLayer.addTo(map); 
+  mxLayer.addTo(map); 
+  userLocationLayer.addTo(map); 
+  measureLayer.addTo(map);
   
-  L.control.layers({ "Bản đồ OSM": osmLayer, "Vệ tinh": satLayer }, { "Tuyến cáp quang": polylinesLayer, "Cột/Bể cáp": markersLayer, "Măng xông": mxLayer }, { position: 'topright' }).addTo(map);
+  // 2. Hộp chọn lớp bản đồ đặt ở góc trên bên phải (topright)
+  L.control.layers(
+    { "Bản đồ OSM": osmLayer, "Vệ tinh": satLayer }, 
+    { "Tuyến cáp quang": polylinesLayer, "Cột/Bể cáp": markersLayer, "Măng xông": mxLayer }, 
+    { position: 'topright' }
+  ).addTo(map);
   
   map.on('contextmenu', e => {
     if (currentUser.canEditMap || currentUser.role === 'sys_admin') moFormCrud('ADD', null, '', e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6));
     else showToast("Không có quyền thêm điểm.");
   });
+  
   map.on('click', e => { if (isMeasuring) { measurePoints.push(e.latlng); redrawMeasureLayer(); } });
 }
 
