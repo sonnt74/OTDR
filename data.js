@@ -2,7 +2,7 @@
 // TỆP DATA.JS - QUẢN LÝ LUỒNG DỮ LIỆU (TÍCH HỢP VIEW SUPABASE & OFFLINE)
 // ==========================================================================
 
-var autoClearMarkerTimer = null; // Bộ đếm thời gian tự động xóa mốc tìm kiếm sau 30s
+var autoClearMarkerTimer = null; 
 var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], rawLoaiDiemList = [], rawUserList = [];
 
 /**
@@ -35,7 +35,6 @@ async function taiDuLieuSupabase(forceRefresh = false) {
   let localMaster = null;
 
   try {
-    // BƯỚC A: Đọc nhanh danh mục từ IndexedDB nạp ngay vào AppStore (~0ms)
     if (typeof idbDocMaster === 'function' && !forceRefresh) {
       localMaster = await idbDocMaster();
       if (localMaster) {
@@ -63,16 +62,14 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       }
     }
 
-    // BƯỚC B: Đồng bộ danh mục mới nhất từ Supabase nếu có kết nối mạng
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       if (!localMaster || forceRefresh) showLoading("Đang nạp danh mục máy chủ...");
 
-      // TẢI TỪ BẢNG GỐC VÀ CÁC VIEW MỚI TẠO
       let [daiRes, tramRes, tuyenRes, doanRes, loaiRes, userRes] = await Promise.all([
         supabaseClient.from('dai_vt').select('*'),
         supabaseClient.from('tram_vt').select('*'),
         supabaseClient.from('tuyen_cap').select('*'),
-        supabaseClient.from('v_doan_cap_full').select('*'), // Sử dụng View Đoạn cáp
+        supabaseClient.from('v_doan_cap_full').select('*'), 
         supabaseClient.from('loai_diem').select('*'),
         supabaseClient.from('tai_khoan').select('*')
       ]);
@@ -84,7 +81,6 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       rawLoaiDiemList = loaiRes.data || rawLoaiDiemList;
       rawUserList = userRes.data || rawUserList;
 
-      // Lưu bản ghi danh mục vào kho master_store của IndexedDB
       if (typeof idbLuuMaster === 'function') {
         await idbLuuMaster({ rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList, rawUserList });
       }
@@ -114,7 +110,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 }
 
 /**
- * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH (SỬ DỤNG VIEW V_DIEM_HA_TANG_FULL)
+ * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH (SỬ DỤNG VIEW)
  */
 async function taiDiemTheoVungXem() {
   if (typeof map === 'undefined' || !map) return;
@@ -127,7 +123,6 @@ async function taiDiemTheoVungXem() {
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      // Truy vấn 1 lần duy nhất từ View mới
       const { data: pts, error: errPts } = await supabaseClient
         .from('v_diem_ha_tang_full')
         .select('*')
@@ -169,11 +164,13 @@ async function taiDiemTheoVungXem() {
     }
   } finally {
     AppStore.setState({ dataPoints: globalDataPoints });
+    // SỬA LỖI: Gọi lệnh vẽ bản đồ sau khi đã nạp xong điểm
+    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
   }
 }
 
 /**
- * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP (SỬ DỤNG VIEW V_DIEM_HA_TANG_FULL)
+ * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP (SỬ DỤNG VIEW)
  */
 async function taiDiemTheoTuyen(idTuyen) {
   if (!idTuyen || idTuyen === 'ALL' || idTuyen === 'undefined') {
@@ -184,7 +181,6 @@ async function taiDiemTheoTuyen(idTuyen) {
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      // Truy vấn trực tiếp từ View Điểm Hạ Tầng, không cần JOIN ở Client nữa
       const { data: pts, error: errPts } = await supabaseClient
         .from('v_diem_ha_tang_full')
         .select('*')
@@ -195,6 +191,8 @@ async function taiDiemTheoTuyen(idTuyen) {
         globalDataPoints = [];
         AppStore.setState({ dataPoints: [] });
         showToast("Tuyến cáp này chưa có điểm hạ tầng!", "info");
+        // Gọi lệnh vẽ để xóa sạch tuyến cũ (nếu có) trên bản đồ
+        if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
         return;
       }
 
@@ -234,6 +232,8 @@ async function taiDiemTheoTuyen(idTuyen) {
     AppStore.setState({ dataPoints: globalDataPoints });
     capNhatComboDiemA();
     hideLoading();
+    // SỬA LỖI: Gọi lệnh vẽ bản đồ sau khi dữ liệu tuyến đã nạp thành công
+    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
   }
 }
 
@@ -353,7 +353,6 @@ function updateTuyenOptions() {
   var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
   var state = AppStore.getState();
   
-  // doanCapList hiện tại đã chứa id_tram (từ v_doan_cap_full)
   var doanCapList = state.doanCapList || rawDoanCapList || [];
   var tuyenList = state.tuyenList || rawTuyenList || [];
 
@@ -362,10 +361,12 @@ function updateTuyenOptions() {
   if (tramVal === 'ALL') {
     filteredTuyenList = tuyenList;
   } else {
-    // Tìm các ID Tuyến có liên kết với Đoạn Cáp thuộc Trạm đang chọn
     var matchedTuyenIds = doanCapList
-      .filter(d => String(d.id_tram) === tramVal)
-      .map(d => String(d.id_tuyen));
+      .filter(d => {
+        var dTramId = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']);
+        return dTramId === tramVal;
+      })
+      .map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']));
     
     filteredTuyenList = tuyenList.filter(t => {
       var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
@@ -389,9 +390,12 @@ function updateTuyenOptions() {
 
 async function onTuyenChange() {
   var selectTuyen = document.getElementById('selectTuyen');
-  var tuyenVal = selectTuyen ? String(selectTuyen.value).trim() : 'ALL';
-  var selectDoanCap = document.getElementById('selectDoanCap');
+  var selectTram = document.getElementById('selectTram'); 
   
+  var tuyenVal = selectTuyen ? String(selectTuyen.value).trim() : 'ALL';
+  var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
+  
+  var selectDoanCap = document.getElementById('selectDoanCap');
   AppStore.setState({ selectedTuyen: tuyenVal });
 
   var state = AppStore.getState();
@@ -400,7 +404,12 @@ async function onTuyenChange() {
   if (selectDoanCap) {
     selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
     if (tuyenVal !== 'ALL') {
-      var matchedDoan = doanCapList.filter(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']) === tuyenVal);
+      var matchedDoan = doanCapList.filter(d => {
+        var isTuyenMatch = getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']) === tuyenVal;
+        var isTramMatch = (tramVal === 'ALL') ? true : (getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']) === tramVal);
+        return isTuyenMatch && isTramMatch;
+      });
+
       matchedDoan.forEach(d => {
         var dId = getSafeStrId(d, ['id_doan_cap', 'id']);
         var dName = d.ma_doancap || d.ten_doancap;
@@ -424,7 +433,7 @@ function onDoanCapChange() {
   var selectDoanCap = document.getElementById('selectDoanCap');
   var doanVal = selectDoanCap ? String(selectDoanCap.value).trim() : 'ALL';
   AppStore.setState({ selectedDoanCap: doanVal });
-  // CHỈ VẼ BẢN ĐỒ KHI NGƯỜI DÙNG THAY ĐỔI ĐOẠN CÁP HOẶC TUYẾN ĐÃ LOAD XONG
+  
   if (typeof veLaiTuyenAB === 'function') {
     veLaiTuyenAB(); 
   }
@@ -446,7 +455,7 @@ function capNhatComboDiemA() {
 }
 
 /**
- * 6. XỬ LÝ PHÂN TÍCH SỰ CỐ OTDR VÀ TÌM LÝ TRÌNH (GIỮ NGUYÊN HOÀN TOÀN TÍNH NĂNG)
+ * 6. XỬ LÝ PHÂN TÍCH SỰ CỐ OTDR VÀ TÌM LÝ TRÌNH
  */
 function datLichTuXoaMarkerTimKiem() {
   if (autoClearMarkerTimer) {
