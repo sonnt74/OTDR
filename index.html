@@ -1,191 +1,231 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hệ Thống Quản Lý GIS & OTDR</title>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1</title>
   
-  <!-- Thư viện Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
-  <style>
-    /* CSS Cấu trúc giao diện mốc OK6 */
-    * { box-sizing: border-box; }
-    body, html { margin: 0; padding: 0; font-family: Arial, sans-serif; height: 100vh; overflow: hidden; }
-    
-    #header {
-      height: 50px;
-      background: #0d6efd;
-      color: white;
-      padding: 0 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    }
-    
-    #main-container {
-      display: flex;
-      height: calc(100vh - 50px);
-      position: relative;
-      width: 100%;
-    }
-    
-    #map {
-      width: 100%;
-      height: 100%;
-      z-index: 1;
-      background: #e9ecef;
-    }
-    
-    #sidebar {
-      position: absolute;
-      top: 15px;
-      left: 15px;
-      z-index: 1000;
-      background: white;
-      padding: 15px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
-      width: 310px;
-    }
-
-    .btn {
-      padding: 7px 14px;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: bold;
-    }
-
-    .btn-primary { background: #0d6efd; color: white; }
-    .btn-primary:hover { background: #0b5ed7; }
-    
-    .btn-outline-light { background: transparent; border: 1px solid white; color: white; }
-    .btn-outline-light:hover { background: rgba(255,255,255,0.2); }
-
-    /* CSS Khung Modal Quản trị */
-    .admin-modal-overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.6);
-      z-index: 9999;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .admin-modal-content {
-      background: #fff;
-      width: 92%;
-      max-width: 1100px;
-      height: 85vh;
-      border-radius: 8px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    }
-
-    .btn-sm {
-      padding: 3px 8px;
-      font-size: 12px;
-      border-radius: 3px;
-      border: none;
-      cursor: pointer;
-      margin: 0 2px;
-    }
-    .btn-warning { background: #ffc107; color: #000; }
-    .btn-danger { background: #dc3545; color: #fff; }
-  </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- 1. Thanh Menu Tiêu Đề Topbar -->
-  <div id="header">
-    <h3 style="margin: 0; font-size: 18px;">📡 HỆ THỐNG QUẢN LÝ GIS & OTDR</h3>
-    <div>
-      <button id="btn-open-admin" class="btn btn-outline-light" onclick="if(typeof moBangQuanTri === 'function') moBangQuanTri();">⚙️ Quản Trị Hệ Thống</button>
-    </div>
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div id="loading-overlay-text">Đang đồng bộ dữ liệu...</div>
   </div>
 
-  <!-- 2. Vùng Làm Việc Bản Đồ & Bảng Tra Cứu OTDR -->
-  <div id="main-container">
-    <div id="sidebar">
-      <h4 style="margin-top: 0; margin-bottom: 12px;">🔍 Tra Cứu Sự Cố OTDR</h4>
-      <div style="margin-bottom: 10px;">
-        <label style="font-size: 13px; font-weight: bold;">Tuyến cáp quang:</label>
-        <select id="select-tuyen" style="width: 100%; padding: 6px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px;">
-          <option value="ALL">-- Tất cả tuyến cáp --</option>
-        </select>
-      </div>
-      <div style="margin-bottom: 12px;">
-        <label style="font-size: 13px; font-weight: bold;">Cự ly đo OTDR (m):</label>
-        <input type="number" id="input-otdr" placeholder="Nhập số mét, VD: 12500" style="width: 100%; padding: 6px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px;" />
-      </div>
-      <button class="btn btn-primary" style="width: 100%;" onclick="if(typeof timViTriDut === 'function') timViTriDut();">🎯 Xác Định Vị Trí Sự Cố</button>
-    </div>
-
-    <!-- Khung Render Bản đồ Leaflet -->
+  <!-- BẢN ĐỒ VÀ BẢNG ĐIỀU KHIỂN CHÍNH -->
+  <div id="workspace">
     <div id="map"></div>
-  </div>
+    <div id="gps-btn" class="map-tool-btn" onclick="triggerUserLocation()" title="Định vị">📍</div>
+    <div id="measure-btn" class="map-tool-btn" onclick="toggleMeasureTool()" title="Đo khoảng cách thủ công">📏</div>
 
-  <!-- 3. Khung Modal Quản Trị Hệ Thống 5 Tab -->
-  <div id="admin-modal" class="admin-modal-overlay">
-    <div class="admin-modal-content">
+    <div id="control-panel">
+      <div class="panel-header" onclick="toggleGISPanel()"><span>🗺️ ĐIỀU KHIỂN & PHÂN TÍCH OTDR</span></div>
       
-      <!-- Modal Header -->
-      <div style="padding: 12px 20px; background: #0d6efd; color: white; display: flex; justify-content: space-between; align-items: center;">
-        <h3 style="margin: 0; font-size: 16px;">⚙️ QUẢN TRỊ HẠ TẦNG GIS & PHÂN QUYỀN</h3>
-        <button onclick="if(typeof dongBangQuanTri === 'function') dongBangQuanTri();" style="background: none; border: none; color: white; font-size: 22px; cursor: pointer; line-height: 1;">✖</button>
+      <!-- Thanh công cụ nhanh -->
+      <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+        <button class="btn-action" style="flex: 1; background: #6c757d; padding: 6px 0; margin: 0; font-size: 10px;" onclick="handleLogout()">🚪 Thoát</button>
+        <button class="btn-action" style="flex: 1; background: #17a2b8; padding: 6px 0; margin: 0; font-size: 10px;" onclick="taiDuLieuSupabase(true)">🔄 Làm mới</button>
+        <button class="btn-action" style="flex: 1; background: #dc3545; padding: 6px 0; margin: 0; font-size: 10px;" onclick="xoaTatCaDoiTuongMap()">🗑️ Xóa Maps</button>
+        <button id="adminMobileBtn" class="btn-action btn-success" style="flex: 1; padding: 6px 0; margin: 0; font-size: 10px; display: none;" onclick="openModal('adminMasterModal', 'tab-accounts')">⚙️ Quản trị</button>
       </div>
-
-      <!-- Thanh Nút Tab Quản Trị -->
-      <div class="admin-tabs-bar" style="display: flex; background: #e9ecef; border-bottom: 1px solid #dee2e6; padding: 8px 15px 0 15px; gap: 5px;">
-        <button class="admin-tab-btn active" data-tab="tab_dai" style="padding: 8px 15px; border: none; background: #fff; border-radius: 5px 5px 0 0; cursor: pointer;">🏢 Đài VT</button>
-        <button class="admin-tab-btn" data-tab="tab_tram" style="padding: 8px 15px; border: none; background: #e9ecef; border-radius: 5px 5px 0 0; cursor: pointer;">🏠 Trạm VT</button>
-        <button class="admin-tab-btn" data-tab="tab_tuyen" style="padding: 8px 15px; border: none; background: #e9ecef; border-radius: 5px 5px 0 0; cursor: pointer;">🔌 Tuyến Cáp</button>
-        <button class="admin-tab-btn" data-tab="tab_doan" style="padding: 8px 15px; border: none; background: #e9ecef; border-radius: 5px 5px 0 0; cursor: pointer;">✂️ Đoạn Cáp</button>
-        <button class="admin-tab-btn" data-tab="tab_user" style="padding: 8px 15px; border: none; background: #e9ecef; border-radius: 5px 5px 0 0; cursor: pointer;">👥 Tài Khoản</button>
+      
+      <div class="form-group"><label>1. Chọn Đài VT:</label><select id="selectDai" onchange="onDaiChange()"></select></div>
+      <div class="form-group"><label>2. Chọn Trạm VT:</label><select id="selectTram" onchange="onTramChange()"></select></div>
+      <div class="form-group"><label>3. Chọn Tuyến Cáp:</label><select id="selectTuyen" onchange="onTuyenChange()"></select></div>
+      <div class="form-group"><label>4. Chọn Đoạn Cáp:</label><select id="selectDoanCap" onchange="onDoanCapChange()"></select></div>
+      
+      <div class="form-group"><label>5. Nguồn điểm đo:</label><select id="comboDiemA" onchange="onDiemAChange()"></select></div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="chkNghichHuong" onchange="onDiemAChange()">
+        <label style="margin:0;cursor:pointer;" for="chkNghichHuong">Đo ngược hướng</label>
       </div>
-
-      <!-- Vùng Chứa Bảng Dữ Liệu Động do admin.js Render -->
-      <div id="admin-table-container" style="padding: 15px; overflow-y: auto; flex: 1;">
-        <p style="color: #666;">Đang tải dữ liệu bảng quản trị...</p>
+      <div class="form-group"><label>6. Hệ số chùng cáp:</label><input type="number" id="txtDoChung" value="1.075" step="0.001"></div>
+      <div class="form-group"><label>7. Cự ly đo OTDR (km):</label><input type="number" id="txtKcOtdr" value="3.5" step="0.1"></div>
+      <div class="form-group"><button class="btn-action" onclick="timViTriDut()">🔍 PHÂN TÍCH VỊ TRÍ SỰ CỐ</button></div>
+      
+      <div class="form-group" style="border-top: 1px dashed #ccc; padding-top: 8px; margin-top: 8px; background: #f8f9fa; padding: 6px; border-radius: 4px;">
+        <label style="color: #0d6efd;">8. Tìm nhanh Lý trình (QL):</label>
+        <div style="display: flex; gap: 5px; margin-top: 4px;">
+          <input type="text" id="txtTimLyTrinh" placeholder="VD: 54+100">
+          <button class="btn-action btn-success" style="width: auto; padding: 4px 10px; margin:0;" onclick="timLyTrinhBanDo()">🔍</button>
+        </div>
       </div>
-
     </div>
   </div>
 
-  <!-- 4. Nạp Các Thư Viện JavaScript Ngoài -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- MODAL ĐĂNG NHẬP -->
+  <div id="loginModal" class="app-modal" style="display: flex;">
+    <div class="modal-content" style="max-width: 340px;">
+      <div class="modal-header"><span>👤 Đăng nhập Hệ Thống</span></div>
+      <div class="modal-body">
+        
+        <div class="form-group">
+          <label>Tài khoản / Email:</label>
+          <input type="text" id="loginEmail" placeholder="Nhập tài khoản hoặc email" autocomplete="off" spellcheck="false">
+        </div>
+        
+        <div class="form-group">
+          <label>Mật khẩu:</label>
+          <div style="position: relative;">
+            <input type="text" id="loginPass" placeholder="••••••••" 
+                   style="padding-right: 30px; -webkit-text-security: disk;" 
+                   autocomplete="off" 
+                   onfocus="this.type='password';" 
+                   spellcheck="false">
+            <span onclick="togglePasswordVisibility()" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px;" title="Hiện/Ẩn mật khẩu">👁️</span>
+          </div>
+        </div>
 
-  <!-- 5. Nạp Các Tệp Mã Nguồn Ứng Dụng Theo Đúng Thứ Tự -->
-  <script src="idb-helper.js"></script>
+        <div class="checkbox-group" style="margin-top: 8px;">
+          <input type="checkbox" id="chkRememberMe">
+          <label style="margin:0; cursor:pointer;" for="chkRememberMe">Nhớ mật khẩu hệ thống</label>
+        </div>
+
+        <div class="form-group" style="margin-top: 15px;">
+          <button type="button" class="btn-action" style="background:#0d6efd;" onclick="handleCustomLogin()">ĐĂNG NHẬP</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL QUẢN TRỊ TỔNG 5 TAB -->
+  <div id="adminMasterModal" class="app-modal">
+    <div class="modal-content">
+      <div class="modal-header"><span>⚙️ QUẢN TRỊ HỆ THỐNG & DANH MỤC</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
+      <div class="modal-body">
+        <div class="admin-tabs">
+          <button class="tab-btn active" onclick="switchAdminTab('tab-accounts')">👥 Tài khoản</button>
+          <button class="tab-btn" onclick="switchAdminTab('tab-dai')">🏢 Đài VT</button>
+          <button class="tab-btn" onclick="switchAdminTab('tab-tram')">📡 Trạm VT</button>
+          <button class="tab-btn" onclick="switchAdminTab('tab-tuyen')">🛤️ Tuyến Cáp</button>
+          <button class="tab-btn" onclick="switchAdminTab('tab-doan')">🔗 Đoạn Tuyến</button>
+        </div>
+
+        <div id="tab-accounts" class="tab-pane active">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <b style="font-size:11px;">Tài khoản:</b><button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien()">+ Thêm</button>
+          </div>
+          <table class="table-data">
+            <thead><tr><th>Email/Tài khoản</th><th>Vai trò</th><th>Đài quản lý</th><th>Trạm quản lý</th><th>Map?</th><th>Thao tác</th></tr></thead>
+            <tbody id="masterAccountTableBody"></tbody>
+          </table>
+        </div>
+        
+        <div id="tab-dai" class="tab-pane">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><b style="font-size:11px;">Đài VT:</b><button class="btn-small btn-success" onclick="moFormThemDai()">+ Thêm</button></div>
+          <table class="table-data"><thead><tr><th>ID</th><th>Tên Đài</th><th>Thao tác</th></tr></thead><tbody id="masterDaiTableBody"></tbody></table>
+        </div>
+        
+        <div id="tab-tram" class="tab-pane">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><b style="font-size:11px;">Trạm VT:</b><button class="btn-small btn-success" onclick="moFormThemTram()">+ Thêm</button></div>
+          <table class="table-data"><thead><tr><th>ID</th><th>Tên Trạm</th><th>Đài quản lý</th><th>Thao tác</th></tr></thead><tbody id="masterTramTableBody"></tbody></table>
+        </div>
+        
+        <div id="tab-tuyen" class="tab-pane">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><b style="font-size:11px;">Tuyến Cáp:</b><button class="btn-small btn-success" onclick="moFormThemTuyen()">+ Thêm</button></div>
+          <table class="table-data"><thead><tr><th>ID</th><th>Mã tuyến</th><th>Tên tuyến</th><th>Thao tác</th></tr></thead><tbody id="masterTuyenTableBody"></tbody></table>
+        </div>
+        
+        <div id="tab-doan" class="tab-pane">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><b style="font-size:11px;">Đoạn Tuyến:</b><button class="btn-small btn-success" onclick="moFormThemDoan()">+ Thêm</button></div>
+          <table class="table-data"><thead><tr><th>ID</th><th>Mã đoạn</th><th>Thuộc Tuyến</th><th>Trạm quản lý</th><th>Thao tác</th></tr></thead><tbody id="masterDoanTableBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL THÊM / SỬA TÀI KHOẢN -->
+  <div id="addMemberModal" class="app-modal">
+    <div class="modal-content" style="max-width: 360px;">
+      <div class="modal-header"><span id="accountModalTitle">👥 Thêm/Sửa Tài Khoản</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
+      <div class="modal-body">
+        <input type="hidden" id="editingAccountId">
+        <div class="form-group"><label>Tài khoản / Email:</label><input type="text" id="newMemberAccount" placeholder="Nhập tài khoản hoặc email" autocomplete="off"></div>
+        <div class="form-group"><label>Mật khẩu (Để trống nếu không đổi):</label><input type="text" id="newMemberPass"></div>
+        <div class="form-group">
+          <label>Vai trò:</label>
+          <select id="newMemberRole">
+            <option value="nhan_vien">Nhân viên / Member</option>
+            <option value="admin_tram">Admin Trạm</option>
+            <option value="admin_dai">Admin Đài</option>
+            <option value="admin_sys">Admin Hệ thống</option>
+          </select>
+        </div>
+        <div class="checkbox-group" style="margin-top:10px;">
+          <input type="checkbox" id="newMemberCanEdit">
+          <label for="newMemberCanEdit" style="cursor:pointer; color:#0d6efd;">Cho phép chỉnh sửa Bản đồ (Map)</label>
+        </div>
+        <div class="form-group"><label>Đài (id_dai):</label><select id="newMemberDai"></select></div>
+        <div class="form-group"><label>Trạm (id_tram):</label><select id="newMemberTram"></select></div>
+        <button class="btn-action btn-success" onclick="saveAccountAction()">LƯU TÀI KHOẢN</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL THÊM / SỬA DANH MỤC PHỤ (ĐÀI, TRẠM, TUYẾN, ĐOẠN) -->
+  <div id="genericAuxModal" class="app-modal">
+    <div class="modal-content" style="max-width: 350px;">
+      <div class="modal-header"><span id="auxModalTitle">📝 Thêm/Sửa Danh Mục</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
+      <div class="modal-body">
+        <input type="hidden" id="auxTableType">
+        <input type="hidden" id="auxRecordId">
+        <div id="auxFormFields"></div>
+        <button class="btn-action btn-success" style="margin-top:10px;" onclick="saveAuxRecord()">LƯU DỮ LIỆU</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL THÔNG TIN VÀ THAO TÁC ĐỐI TƯỢNG BẢN ĐỒ (GIS) -->
+  <div id="crudModal" class="app-modal">
+    <div class="modal-content" style="max-width: 320px;">
+      <div class="modal-header"><span id="crudTitle">📝 Thông tin Đối tượng</span><button onclick="closeModals()" class="btn-small del">Đóng</button></div>
+      <div class="modal-body">
+        <input type="hidden" id="crudActionType">
+        <input type="hidden" id="crudObjectId">
+        <div class="form-group"><label>Tên Điểm:</label><input type="text" id="crudObjectName"></div>
+        <div class="form-group"><label>Lý trình:</label><input type="text" id="crudObjectLyTrinh"></div>
+        <div class="form-group"><label>Loại đối tượng:</label><select id="crudObjectLoai"></select></div>
+        <div class="form-group"><label>Vĩ độ (Lat):</label><input type="text" id="crudObjectLat" disabled></div>
+        <div class="form-group"><label>Kinh độ (Lng):</label><input type="text" id="crudObjectLng" disabled></div>
+        <button class="btn-action btn-success" id="btnConfirmCrud" style="margin-top:10px;" onclick="executeCrudAction()">XÁC NHẬN</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL XÁC NHẬN HÀNH ĐỘNG -->
+  <div id="customConfirmModal" class="app-modal">
+    <div class="modal-content" style="max-width: 320px; text-align: center;">
+      <div class="modal-header" style="justify-content: center; border-bottom: none; margin-bottom: 5px; color: #dc3545;">
+        <span id="confirmModalTitle" style="font-size: 15px; font-weight: bold;">⚠️ Xác nhận thao tác</span>
+      </div>
+      <div class="modal-body" style="margin-bottom: 15px;">
+        <p id="confirmModalMessage" style="font-size: 12px; color: #495057; margin: 0; line-height: 1.4;">Bạn có chắc chắn muốn thực hiện hành động này?</p>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn-action" style="background: #6c757d; flex: 1;" onclick="resolveConfirm(false)">Hủy bỏ</button>
+        <button class="btn-action btn-success" style="flex: 1;" onclick="resolveConfirm(true)">Đồng ý</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TẢI CÁC SCRIPT THEO ĐÚNG THỨ TỰ HỆ THỐNG -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+  <script src="config.js"></script>
   <script src="store.js"></script>
   <script src="auth.js"></script>
+  <script src="idb-helper.js"></script>
   <script src="data.js"></script>
   <script src="map.js"></script>
   <script src="admin.js"></script>
-
-  <script>
-    // Kịch bản khởi tạo bản đồ Leaflet mốc OK6
-    document.addEventListener("DOMContentLoaded", function() {
-      setTimeout(function() {
-        try {
-          if (typeof khoiTaoBanDoLeaflet === 'function') {
-            khoiTaoBanDoLeaflet();
-          }
-        } catch (err) {
-          console.error("Lỗi khi khởi tạo bản đồ:", err);
-        }
-      }, 100);
-    });
-  </script>
+  
 </body>
 </html>
