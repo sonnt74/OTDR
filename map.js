@@ -1,21 +1,59 @@
-// map.js - Khởi tạo bản đồ và vẽ tuyến cáp quang
+// map.js - Khởi tạo bản đồ Leaflet, lắng nghe sự kiện di chuyển và vẽ tuyến cáp quang
+
+var moveEndDebounceTimer = null;
+
+/**
+ * 1. KHỞI TẠO BẢN ĐỒ LEAFLET
+ */
 function khoiTaoBanDoLeaflet() {
   if (map) return;
   var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
   var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 19 });
   
-  map = L.map('map', { center: [21.5942, 105.8481], zoom: 13, maxZoom: 21, layers: [osmLayer] });
-  polylinesLayer.addTo(map); markersLayer.addTo(map); mxLayer.addTo(map); userLocationLayer.addTo(map); measureLayer.addTo(map);
+  map = L.map('map', { 
+    center: [21.5942, 105.8481], 
+    zoom: 13, 
+    maxZoom: 21, 
+    layers: [osmLayer],
+    zoomControl: true,           
+    attributionControl: false   // Tắt liên kết bản quyền Leaflet ở góc dưới bên phải
+  });
+
+  polylinesLayer.addTo(map); 
+  markersLayer.addTo(map); 
+  mxLayer.addTo(map); 
+  userLocationLayer.addTo(map); 
+  measureLayer.addTo(map);
   
-  L.control.layers({ "Bản đồ OSM": osmLayer, "Vệ tinh": satLayer }, { "Tuyến cáp quang": polylinesLayer, "Cột/Bể cáp": markersLayer, "Măng xông": mxLayer }, { position: 'topright' }).addTo(map);
-  
+  L.control.layers(
+    { "Bản đồ OSM": osmLayer, "Vệ tinh": satLayer }, 
+    { "Tuyến cáp quang": polylinesLayer, "Cột/Bể cáp": markersLayer, "Măng xông": mxLayer }, 
+    { position: 'topright' }
+  ).addTo(map);
+
+  // Sự kiện tự động nạp điểm theo vùng xem khi kéo/zoom bản đồ
+  map.on('moveend', function() {
+    clearTimeout(moveEndDebounceTimer);
+    moveEndDebounceTimer = setTimeout(function() {
+      var selectTuyen = document.getElementById('selectTuyen');
+      var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
+      if (tuyenVal === 'ALL' && typeof taiDiemTheoVungXem === 'function') {
+        taiDiemTheoVungXem();
+      }
+    }, 400);
+  });
+
   map.on('contextmenu', e => {
     if (currentUser.canEditMap || currentUser.role === 'sys_admin') moFormCrud('ADD', null, '', e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6));
     else showToast("Không có quyền thêm điểm.");
   });
+  
   map.on('click', e => { if (isMeasuring) { measurePoints.push(e.latlng); redrawMeasureLayer(); } });
 }
 
+/**
+ * 2. CÔNG CỤ ĐỊNH VỊ GPS VÀ ĐO KHOẢNG CÁCH
+ */
 function triggerUserLocation() {
   if (!navigator.geolocation) { showToast("Trình duyệt không hỗ trợ GPS."); return; }
   showLoading("Đang lấy vị trí GPS...");
@@ -60,6 +98,9 @@ function redrawMeasureLayer() {
   L.marker(measurePoints[measurePoints.length - 1], { icon: textIcon }).addTo(measureLayer);
 }
 
+/**
+ * 3. HÀM TÍNH TOÁN LÝ TRÌNH VÀ KHOẢNG CÁCH THEO TUYẾN
+ */
 function parseLyTrinhWithSuffix(str) {
   if (!str) return null;
   var cleanStr = str.toString().trim();
@@ -105,8 +146,9 @@ function getDistanceAlongRoute(targetPt, pathPts) {
 }
 
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
-  var allPts = globalDataPoints.filter(pt => pt.idTuyen == tuyenVal && (tramVal === 'ALL' || pt.idTram == tramVal) && (doanVal === 'ALL' || pt.idDoanCap == doanVal));
-  
+  var allPts = globalDataPoints.filter(pt => (tuyenVal === 'ALL' || pt.idTuyen == tuyenVal) && (tramVal === 'ALL' || pt.idTram == tramVal) && (doanVal === 'ALL' || pt.idDoanCap == doanVal));
+  if (allPts.length === 0) return [];
+
   var basePt = allPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
   if (!basePt) {
     basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, lyTrinh: "0+000", idTuyen: tuyenVal, stt: -9999, loai: "Trạm", idLoaiDiem: 0, duTru: 0 };
@@ -133,7 +175,6 @@ function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
 function precalculateRouteDataForPoints(pts, backbonePts) {
   if (!pts || pts.length === 0) return pts;
   
-  var heSo = parseFloat(document.getElementById('txtDoChung')?.value) || 1.075;
   var segmentsMap = {};
   backbonePts.forEach(p => {
     var segId = p.idDoanCap || 'default';
@@ -151,11 +192,7 @@ function precalculateRouteDataForPoints(pts, backbonePts) {
       }
     });
 
-    var isSegmentNghich = false;
-    if (anchors.length >= 2 && anchors[1].meters < anchors[0].meters) {
-      isSegmentNghich = true; 
-    }
-
+    var isSegmentNghich = (anchors.length >= 2 && anchors[1].meters < anchors[0].meters);
     var segBaseMeters = anchors.length > 0 ? anchors[0].meters : 0;
     var segSuffix = anchors.length > 0 ? anchors[0].suffix : '';
     var segAnchorDistFromA = anchors.length > 0 ? getDistanceAlongRoute(anchors[0].pt, backbonePts) : 0;
@@ -173,13 +210,7 @@ function precalculateRouteDataForPoints(pts, backbonePts) {
         segAnchorDistFromA = distFromA;
       }
 
-      let effectiveLyTrinhMeters;
-      if (isSegmentNghich) {
-        effectiveLyTrinhMeters = segBaseMeters - (distFromA - segAnchorDistFromA);
-      } else {
-        let baseOffsetMeters = segBaseMeters - segAnchorDistFromA;
-        effectiveLyTrinhMeters = baseOffsetMeters + distFromA;
-      }
+      let effectiveLyTrinhMeters = isSegmentNghich ? (segBaseMeters - (distFromA - segAnchorDistFromA)) : (segBaseMeters - segAnchorDistFromA + distFromA);
 
       pt.calculatedLyTrinhMeters = effectiveLyTrinhMeters;
       let totalMeters = Math.round(pt.calculatedLyTrinhMeters);
@@ -193,31 +224,38 @@ function precalculateRouteDataForPoints(pts, backbonePts) {
 }
 
 function getPointsCuaTuyenHienTai() {
-  var tuyenVal = document.getElementById('selectTuyen').value;
-  var tramVal = document.getElementById('selectTram').value;
-  var doanVal = document.getElementById('selectDoanCap').value;
-  if (tuyenVal === 'ALL') return [];
+  var selectTuyen = document.getElementById('selectTuyen');
+  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
+  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
+  var doanVal = document.getElementById('selectDoanCap') ? document.getElementById('selectDoanCap').value : 'ALL';
   
   var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  if (backbone.length === 0) return [];
+
   var nonMxPts = backbone.filter(pt => !isMangXong(pt) && pt.idLoaiDiem !== 0);
-  
   var basePt = backbone.find(p => p.id === 'TNN_BASE' || Math.abs(p.lat - 21.593365) < 0.0001);
   if (basePt && !nonMxPts.includes(basePt)) nonMxPts.unshift(basePt);
 
   return precalculateRouteDataForPoints(nonMxPts, backbone);
 }
 
+/**
+ * 4. VẼ TUYẾN CÁP VÀ ĐIỂM HẠ TẦNG LÊN BẢN ĐỒ
+ */
 function veLaiTuyenAB() {
   if (!map) return;
   markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
-  var tuyenVal = document.getElementById('selectTuyen').value, tramVal = document.getElementById('selectTram').value, doanVal = document.getElementById('selectDoanCap').value;
-  if (tuyenVal === 'ALL') return;
+  
+  var selectTuyen = document.getElementById('selectTuyen');
+  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
+  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
+  var doanVal = document.getElementById('selectDoanCap') ? document.getElementById('selectDoanCap').value : 'ALL';
 
   var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
-  precalculateRouteDataForPoints(backbone, backbone);
+  if (!backbone || backbone.length === 0) return;
 
+  precalculateRouteDataForPoints(backbone, backbone);
   var pts = getPointsCuaTuyenHienTai();
-  if (pts.length === 0) return;
   
   var bounds = [];
   var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
@@ -240,7 +278,6 @@ function veLaiTuyenAB() {
         if (localPt) { localPt.lat = newPos.lat; localPt.lng = newPos.lng; }
         
         hideLoading();
-        // Sau khi cập nhật tọa độ xuống Supabase thành công:
         await ghiNhatKyThaoTac("DOI_TOA_DO", `Kỹ sư thay đổi tọa độ điểm [${ptObj.ten}] sang (${newPos.lat.toFixed(6)}, ${newPos.lng.toFixed(6)})`);
         showToast("Đã lưu và cập nhật tọa độ thành công!", "success");
         veLaiTuyenAB();
@@ -279,8 +316,8 @@ function veLaiTuyenAB() {
   });
 
   var lineCoordinates = backbone.map(p => [p.lat, p.lng]);
-  if (lineCoordinates.length > 1) polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: '#0d6efd', weight: 3 }));
-  if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
+  if (lineCoordinates.length > 1) polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: '#0d6efd', weight: 4, opacity: 0.85 }));
+  if (bounds.length > 0 && tuyenVal !== 'ALL') map.fitBounds(bounds, { padding: [40, 40] });
 }
 window.veLaiTuyenAB = veLaiTuyenAB;
 

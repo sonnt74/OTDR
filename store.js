@@ -1,4 +1,7 @@
-// store.js - Quản lý trạng thái tập trung và kết nối lắng nghe sự kiện
+// ==========================================================================
+// TỆP STORE.JS - QUẢN LÝ TRẠNG THÁI TẬP TRUNG (ĐÃ BỎ LẮNG NGHE VẼ TỰ ĐỘNG)
+// ==========================================================================
+
 class ApplicationStore {
   constructor() {
     this.state = {
@@ -28,25 +31,14 @@ class ApplicationStore {
     this.notifyListeners();
   }
 
-  // Đăng ký hàm lắng nghe sự thay đổi trạng thái
   subscribe(listener) {
     this.listeners.push(listener);
   }
 
-  // Phát thông báo đến tất cả các thành phần giao diện đã đăng ký
   notifyListeners() {
     this.listeners.forEach(listener => listener(this.state));
   }
 }
 
 const AppStore = new ApplicationStore();
-
-// --- KẾT NỐI LẮNG NGHE SỰ KIỆN CHO BẢN ĐỒ VÀ BẢNG ĐIỀU KHIỂN ---
-AppStore.subscribe((state) => {
-  console.log("Trạng thái AppStore đã thay đổi:", state);
-  
-  // Tự động kích hoạt vẽ lại bản đồ khi các lựa chọn tuyến/đoạn thay đổi
-  if (typeof veLaiTuyenAB === 'function') {
-    veLaiTuyenAB();
-  }
-});
+// Đã loại bỏ hoàn toàn AppStore.subscribe tự động vẽ để tránh load lặp bản đồ
