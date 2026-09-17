@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP MAP.JS - QUẢN LÝ BẢN ĐỒ LEAFLET & THUẬT TOÁN GIS / OTDR (CẬP NHẬT ICONS)
+// TỆP MAP.JS - QUẢN LÝ BẢN ĐỒ LEAFLET & THUẬT TOÁN GIS / OTDR (ĐÃ CHỈNH ID_LOAI)
 // ==========================================================================
 
 // Biến toàn cục quản lý Bản đồ và các Lớp hiển thị
@@ -203,7 +203,7 @@ function isMangXong(pt) {
 }
 
 /**
- * 2.3 Tạo biểu tượng (Icon) điểm hạ tầng theo 5 loại thiết bị
+ * 2.3 Tạo biểu tượng (Icon) điểm hạ tầng khớp chuẩn CSDL
  */
 function taoIconBieuTuong(pt) {
   if (!pt) return L.divIcon({ html: '<div></div>' });
@@ -219,15 +219,15 @@ function taoIconBieuTuong(pt) {
     });
   }
 
-  // 2. Trạm viễn thông (Ô vuông xanh lá)
-  if (idLoai === 2 || loaiStr.includes('trạm')) {
+  // 2. Trạm viễn thông (Chỉ kích hoạt nếu chuỗi loại có chữ 'trạm')
+  if (loaiStr.includes('trạm')) {
     return L.divIcon({
       html: '<div style="background:#198754; color:white; width:22px; height:22px; border-radius:4px; text-align:center; line-height:22px; border:2px solid #fff; font-size:11px; box-shadow:0 0 3px rgba(0,0,0,0.4);">🏢</div>',
       className: '', iconSize: [22, 22], iconAnchor: [11, 11]
     });
   }
 
-  // 3. Cột viễn thông (Hình thon đứng màu xám)
+  // 3. Cột viễn thông (idLoai = 1 hoặc tên chứa 'cột')
   if (idLoai === 1 || loaiStr.includes('cột')) {
     return L.divIcon({
       html: '<div style="background:#6c757d; color:white; width:18px; height:22px; border-radius:8px; text-align:center; line-height:22px; border:2px solid #fff; font-size:10px; box-shadow:0 0 3px rgba(0,0,0,0.4);">💈</div>',
@@ -235,8 +235,8 @@ function taoIconBieuTuong(pt) {
     });
   }
 
-  // 4. Bể cáp quang (Ô vuông xám đậm)
-  if (idLoai === 3 || loaiStr.includes('bể')) {
+  // 4. Bể cáp quang (idLoai = 2 hoặc 3 hoặc tên chứa 'bể')
+  if (idLoai === 2 || idLoai === 3 || loaiStr.includes('bể')) {
     return L.divIcon({
       html: '<div style="background:#343a40; color:white; width:20px; height:20px; border-radius:3px; text-align:center; line-height:20px; border:2px solid #fff; font-size:10px; box-shadow:0 0 3px rgba(0,0,0,0.4);">🔲</div>',
       className: '', iconSize: [20, 20], iconAnchor: [10, 10]
@@ -255,7 +255,7 @@ function taoIconBieuTuong(pt) {
 // ==========================================================================
 
 /**
- * 3.1 Vẽ lại toàn bộ biểu tượng và tuyến cáp trên bản đồ (Giữ nguyên logic OK6)
+ * 3.1 Vẽ lại toàn bộ biểu tượng và tuyến cáp trên bản đồ
  */
 function veLaiTuyenAB() {
   if (!map) return;
