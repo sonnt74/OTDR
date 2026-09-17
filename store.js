@@ -1,4 +1,6 @@
-// store.js - Quản lý trạng thái tập trung và tự động điều phối luồng trình diễn
+// ==========================================================================
+// TỆP STORE.JS - QUẢN LÝ TRẠNG THÁI TẬP TRUNG (ĐÃ BỎ LẮNG NGHE VẼ TỰ ĐỘNG)
+// ==========================================================================
 
 class ApplicationStore {
   constructor() {
@@ -39,11 +41,4 @@ class ApplicationStore {
 }
 
 const AppStore = new ApplicationStore();
-
-// LẮNG NGHE ĐIỀU PHỐI LUỒNG TRÌNH DIỄN BẢN ĐỒ
-AppStore.subscribe((state) => {
-  // Tự động kích hoạt vẽ tuyến cáp khi người dùng chọn một tuyến cụ thể
-  if (typeof veLaiTuyenAB === 'function' && state.selectedTuyen !== 'ALL') {
-    veLaiTuyenAB();
-  }
-});
+// Đã loại bỏ hoàn toàn AppStore.subscribe tự động vẽ để tránh load lặp bản đồ
