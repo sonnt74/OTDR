@@ -1,12 +1,11 @@
 // ==========================================================================
-// TỆP MAP.JS - QUẢN LÝ BẢN ĐỒ LEAFLET & THUẬT TOÁN GIS / OTDR (ĐÃ SỬA LỖI LINE MĂNG XÔNG)
+// TỆP MAP.JS - QUẢN LÝ BẢN ĐỒ LEAFLET & THUẬT TOÁN GIS / OTDR (CẬP NHẬT ICONS)
 // ==========================================================================
 
 // Biến toàn cục quản lý Bản đồ và các Lớp hiển thị
 var map = null;
 var markersLayer = null;      // Lớp chứa các mốc biểu tượng
 var polylinesLayer = null;    // Lớp chứa đường cáp Polyline
-var mxLayer = null;           // Lớp chứa riêng biểu tượng Măng xông
 var foundMarkerLayer = null;  // Lớp chứa mốc sự cố OTDR / Tìm kiếm lý trình
 
 var mapMoveDebounceTimer = null; // Bộ đếm hoãn tải dữ liệu khi kéo bản đồ
@@ -174,7 +173,6 @@ function khoiTaoBanDoLeaflet() {
   L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
 
   polylinesLayer = L.layerGroup().addTo(map);
-  mxLayer = L.layerGroup().addTo(map);
   markersLayer = L.featureGroup().addTo(map);
 
   // Hoãn nạp dữ liệu khi kéo/phóng bản đồ
@@ -205,26 +203,50 @@ function isMangXong(pt) {
 }
 
 /**
- * 2.3 Tạo biểu tượng (Icon) điểm hạ tầng
+ * 2.3 Tạo biểu tượng (Icon) điểm hạ tầng theo 5 loại thiết bị
  */
 function taoIconBieuTuong(pt) {
+  if (!pt) return L.divIcon({ html: '<div></div>' });
+
+  var idLoai = Number(pt.idLoaiDiem);
+  var loaiStr = String(pt.loai || '').toLowerCase();
+
+  // 1. Măng xông cáp quang (Hình tròn màu cam)
   if (isMangXong(pt)) {
     return L.divIcon({
-      html: '<div style="background:#fd7e14; color:white; width:20px; height:20px; border-radius:50%; text-align:center; line-height:20px; border:2px solid #fff; font-size:10px;">🔀</div>',
+      html: '<div style="background:#fd7e14; color:white; width:20px; height:20px; border-radius:50%; text-align:center; line-height:20px; border:2px solid #fff; font-size:10px; box-shadow:0 0 3px rgba(0,0,0,0.4);">🔀</div>',
       className: '', iconSize: [20, 20], iconAnchor: [10, 10]
     });
   }
 
-  if (Number(pt.idLoaiDiem) === 2 || String(pt.loai).toLowerCase().includes('trạm')) {
+  // 2. Trạm viễn thông (Ô vuông xanh lá)
+  if (idLoai === 2 || loaiStr.includes('trạm')) {
     return L.divIcon({
-      html: '<div style="background:#198754; color:white; width:22px; height:22px; border-radius:4px; text-align:center; line-height:22px; border:2px solid #fff; font-size:11px;">🏢</div>',
+      html: '<div style="background:#198754; color:white; width:22px; height:22px; border-radius:4px; text-align:center; line-height:22px; border:2px solid #fff; font-size:11px; box-shadow:0 0 3px rgba(0,0,0,0.4);">🏢</div>',
       className: '', iconSize: [22, 22], iconAnchor: [11, 11]
     });
   }
 
+  // 3. Cột viễn thông (Hình thon đứng màu xám)
+  if (idLoai === 1 || loaiStr.includes('cột')) {
+    return L.divIcon({
+      html: '<div style="background:#6c757d; color:white; width:18px; height:22px; border-radius:8px; text-align:center; line-height:22px; border:2px solid #fff; font-size:10px; box-shadow:0 0 3px rgba(0,0,0,0.4);">💈</div>',
+      className: '', iconSize: [18, 22], iconAnchor: [9, 11]
+    });
+  }
+
+  // 4. Bể cáp quang (Ô vuông xám đậm)
+  if (idLoai === 3 || loaiStr.includes('bể')) {
+    return L.divIcon({
+      html: '<div style="background:#343a40; color:white; width:20px; height:20px; border-radius:3px; text-align:center; line-height:20px; border:2px solid #fff; font-size:10px; box-shadow:0 0 3px rgba(0,0,0,0.4);">🔲</div>',
+      className: '', iconSize: [20, 20], iconAnchor: [10, 10]
+    });
+  }
+
+  // 5. Mốc cáp / Mốc địa lý (Chấm tròn xanh dương)
   return L.divIcon({
-    html: '<div style="background:#0d6efd; color:white; width:12px; height:12px; border-radius:50%; border:2px solid #fff;"></div>',
-    className: '', iconSize: [12, 12], iconAnchor: [6, 6]
+    html: '<div style="background:#0d6efd; color:white; width:14px; height:14px; border-radius:50%; text-align:center; line-height:14px; border:2px solid #fff; font-size:8px; box-shadow:0 0 3px rgba(0,0,0,0.4);">🔵</div>',
+    className: '', iconSize: [14, 14], iconAnchor: [7, 7]
   });
 }
 
@@ -233,7 +255,7 @@ function taoIconBieuTuong(pt) {
 // ==========================================================================
 
 /**
- * 3.1 Vẽ lại toàn bộ biểu tượng và tuyến cáp trên bản đồ
+ * 3.1 Vẽ lại toàn bộ biểu tượng và tuyến cáp trên bản đồ (Giữ nguyên logic OK6)
  */
 function veLaiTuyenAB() {
   if (!map) return;
