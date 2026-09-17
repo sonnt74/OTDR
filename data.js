@@ -1,9 +1,8 @@
 // ==========================================================================
-// TỆP DATA.JS - QUẢN LÝ LUỒNG DỮ LIỆU 3 TẦNG (SUPABASE <-> INDEXEDDB <-> APPSTORE)
+// TỆP DATA.JS - QUẢN LÝ LUỒNG DỮ LIỆU 3 TẦNG (TỐI ƯU SẠCH MÃ NGUỒN)
 // ==========================================================================
 
-var autoClearMarkerTimer = null; // Bộ đếm thời gian tự động xóa mốc tìm kiếm sau 30s
-var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], rawLoaiDiemList = [], rawUserList = [];
+var autoClearMarkerTimer = null; 
 
 /**
  * 1. HÀM TIỆN ÍCH TRUY VẤN VÀ CHUẨN HÓA KHÓA ID AN TOÀN
@@ -29,13 +28,13 @@ function getSafeStrId(item, keys) {
 }
 
 /**
- * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (BẢO TOÀN DANH SÁCH USER OFFLINE & SUPABASE)
+ * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (CHỈ TẢI BẢNG TAI_KHOAN)
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   let localMaster = null;
 
   try {
-    // BƯỚC A: Đọc nhanh danh mục từ IndexedDB nạp ngay vào AppStore (~0ms)
+    // A. Đọc nhanh danh mục từ IndexedDB (~0ms)
     if (typeof idbDocMaster === 'function' && !forceRefresh) {
       localMaster = await idbDocMaster();
       if (localMaster) {
@@ -64,35 +63,27 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       }
     }
 
-    // BƯỚC B: Đồng bộ danh mục mới nhất từ Supabase nếu có kết nối mạng
+    // B. Đồng bộ danh mục từ Supabase
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       if (!localMaster || forceRefresh) showLoading("Đang nạp danh mục máy chủ...");
 
-      let [daiRes, tramRes, tuyenRes, doanRes, loaiRes] = await Promise.all([
+      let [daiRes, tramRes, tuyenRes, doanRes, loaiRes, userRes] = await Promise.all([
         supabaseClient.from('dai_vt').select('*'),
         supabaseClient.from('tram_vt').select('*'),
         supabaseClient.from('tuyen_cap').select('*'),
         supabaseClient.from('doan_cap').select('*'),
-        supabaseClient.from('loai_diem').select('*')
+        supabaseClient.from('loai_diem').select('*'),
+        supabaseClient.from('tai_khoan').select('*') // Chỉ tải từ bảng 'tai_khoan'
       ]);
-
-      // Tải bảng users có bẫy lỗi an toàn
-      try {
-        let { data: uData, error: uErr } = await supabaseClient.from('users').select('*');
-        if (!uErr && uData && uData.length > 0) {
-          rawUserList = uData;
-        }
-      } catch (uErr) {
-        console.warn("Chưa tải được bảng users từ Supabase (giữ dữ liệu từ IndexedDB):", uErr.message);
-      }
 
       rawDaiList = daiRes.data || rawDaiList;
       rawTramList = tramRes.data || rawTramList;
       rawTuyenList = tuyenRes.data || rawTuyenList;
       rawDoanCapList = doanRes.data || rawDoanCapList;
       rawLoaiDiemList = loaiRes.data || rawLoaiDiemList;
+      rawUserList = userRes.data || rawUserList;
 
-      // Lưu bản ghi danh mục vào kho master_store của IndexedDB
+      // Lưu bản ghi danh mục vào IndexedDB
       if (typeof idbLuuMaster === 'function') {
         await idbLuuMaster({ rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList, rawUserList });
       }
@@ -114,7 +105,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       if (forceRefresh) showToast("Đã đồng bộ danh mục mới nhất!", "success");
     }
   } catch (err) {
-    console.warn("Đang sử dụng dữ liệu danh mục Offline:", err.message);
+    console.warn("Đang sử dụng danh mục Offline:", err.message);
   } finally {
     hideLoading();
     if (typeof map !== 'undefined' && map) map.invalidateSize();
@@ -269,16 +260,11 @@ async function taiDiemTheoTuyen(idTuyen) {
       throw new Error("Offline Mode");
     }
   } catch (err) {
-    console.warn("Lỗi kết nối mạng, chuyển sang lấy từ IndexedDB:", err.message);
     if (typeof idbDocDiemTheoTuyen === 'function') {
       globalDataPoints = await idbDocDiemTheoTuyen(idTuyen);
       if (globalDataPoints.length > 0) {
         showToast(`⚡ Đã nạp ${globalDataPoints.length} điểm từ bộ nhớ Offline (IndexedDB)`, "info");
-      } else {
-        showToast("Tuyến này chưa được lưu dữ liệu Offline!", "error");
       }
-    } else {
-      showToast("Lỗi nạp tuyến cáp: " + err.message, "error");
     }
   } finally {
     AppStore.setState({ dataPoints: globalDataPoints });
@@ -413,7 +399,7 @@ function updateTuyenOptions() {
     allowedTuyenIds = tuyenList.map(t => getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']));
   } else {
     var matchedDoan = doanCapList.filter(d => {
-      var tramIdInDoan = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'id_diem_a', 'id_diem_b']);
+      var tramIdInDoan = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt']);
       return tramIdInDoan === tramVal;
     });
     allowedTuyenIds = [...new Set(matchedDoan.map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap'])))];
@@ -498,10 +484,7 @@ function capNhatComboDiemA() {
  * 6. XỬ LÝ PHÂN TÍCH SỰ CỐ OTDR VÀ TÌM LÝ TRÌNH
  */
 function datLichTuXoaMarkerTimKiem() {
-  if (autoClearMarkerTimer) {
-    clearTimeout(autoClearMarkerTimer);
-  }
-
+  if (autoClearMarkerTimer) clearTimeout(autoClearMarkerTimer);
   autoClearMarkerTimer = setTimeout(function() {
     if (typeof foundMarkerLayer !== 'undefined' && foundMarkerLayer && map) {
       map.removeLayer(foundMarkerLayer);
@@ -732,11 +715,4 @@ function xoaTatCaDoiTuongMap() {
   }
 
   showToast("🧹 Đã xóa sạch tất cả đối tượng trên bản đồ!", "info");
-}
-
-function toggleGISPanel() {
-  var panel = document.getElementById('control-panel');
-  if (panel) {
-    panel.classList.toggle('collapsed');
-  }
 }
