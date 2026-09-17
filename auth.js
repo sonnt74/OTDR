@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP AUTH.JS - QUẢN LÝ XÁC THỰC VÀ ĐĂNG NHẬP (HỖ TRỢ ONLINE & OFFLINE)
+// TỆP AUTH.JS - QUẢN LÝ XÁC THỰC VÀ ĐĂNG NHẬP (DÙNG DUY NHẤT BẢNG TAI_KHOAN)
 // ==========================================================================
 
 window.onload = function() {
@@ -44,7 +44,7 @@ function capNhatGiaoDienSauDangNhap() {
 
   var adminMob = document.getElementById('adminMobileBtn');
   if (adminMob) {
-    var isAuthorized = currentUser && (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin');
+    var isAuthorized = currentUser && (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin' || currentUser.role === 'admin_sys');
     adminMob.style.display = isAuthorized ? 'block' : 'none';
   }
 }
@@ -57,7 +57,7 @@ function togglePasswordVisibility() {
 }
 
 /**
- * HÀM XỬ LÝ ĐĂNG NHẬP THÔNG MINH (TỰ ĐỘNG CHUYỂN ĐỔI ONLINE / OFFLINE)
+ * ĐĂNG NHẬP CHUẨN HÓA CSDL (CHỈ TRUY VẤN BẢNG TAI_KHOAN)
  */
 async function handleCustomLogin() {
   var emailEl = document.getElementById('loginEmail');
@@ -76,11 +76,11 @@ async function handleCustomLogin() {
   showLoading("Đang xác thực thông tin...");
   try {
     if (navigator.onLine) {
-      // 1. KỊCH BẢN ONLINE: Xác thực qua máy chủ Supabase
+      // Chỉ truy vấn duy nhất bảng 'tai_khoan'
       const { data, error } = await supabaseClient
         .from('tai_khoan')
         .select('*')
-        .eq('email', email)
+        .or(`email.eq.${email},username.eq.${email}`)
         .eq('password', pass)
         .limit(1);
 
@@ -96,13 +96,13 @@ async function handleCustomLogin() {
         idDai: account.id_dai, 
         idTram: account.id_tram, 
         canEditMap: account.can_edit_map === true,
-        email: account.email
+        email: account.email || account.username
       };
 
-      // Đồng bộ thông tin tài khoản vào IndexedDB phục vụ Offline
+      // Đồng bộ thông tin vào IndexedDB
       if (typeof idbLuuTaiKhoan === 'function') {
         await idbLuuTaiKhoan({
-          email: account.email,
+          email: account.email || account.username,
           password: account.password,
           role: account.role || 'member',
           id_dai: account.id_dai,
@@ -113,15 +113,10 @@ async function handleCustomLogin() {
 
       showToast("Đăng nhập thành công (Online)!", "success");
     } else {
-      // 2. KỊCH BẢN OFFLINE: Xác thực qua CSDL nội bộ IndexedDB
-      if (typeof idbDocTaiKhoan !== 'function') {
-        throw new Error("Chưa khởi tạo bộ nhớ đệm Offline!");
-      }
+      if (typeof idbDocTaiKhoan !== 'function') throw new Error("Chưa khởi tạo bộ nhớ đệm Offline!");
 
       const localAcc = await idbDocTaiKhoan(email);
-      if (!localAcc || localAcc.password !== pass) {
-        throw new Error("Tài khoản hoặc mật khẩu không đúng (Chế độ Offline)!");
-      }
+      if (!localAcc || localAcc.password !== pass) throw new Error("Tài khoản hoặc mật khẩu không đúng (Offline)!");
 
       currentUser = { 
         isLoggedIn: true, 
@@ -135,7 +130,6 @@ async function handleCustomLogin() {
       showToast("⚡ Đã đăng nhập thành công ở Chế độ Offline!", "info");
     }
     
-    // Lưu phiên làm việc hiện tại
     localStorage.setItem('tnn_user', JSON.stringify(currentUser));
 
     if (rememberMe) {
