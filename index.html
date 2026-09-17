@@ -28,12 +28,14 @@
       display: flex;
       height: calc(100vh - 50px);
       position: relative;
+      width: 100%;
     }
     
     #map {
       width: 100%;
       height: 100%;
       z-index: 1;
+      background: #e9ecef; /* Màu nền chờ bản đồ */
     }
     
     #sidebar {
@@ -107,7 +109,7 @@
   <div id="header">
     <h3 style="margin: 0; font-size: 18px;">📡 HỆ THỐNG QUẢN LÝ GIS & OTDR</h3>
     <div>
-      <button id="btn-open-admin" class="btn btn-outline-light" onclick="moBangQuanTri()">⚙️ Quản Trị Hệ Thống</button>
+      <button id="btn-open-admin" class="btn btn-outline-light" onclick="if(typeof moBangQuanTri === 'function') moBangQuanTri();">⚙️ Quản Trị Hệ Thống</button>
     </div>
   </div>
 
@@ -139,7 +141,7 @@
       <!-- Modal Header -->
       <div style="padding: 12px 20px; background: #0d6efd; color: white; display: flex; justify-content: space-between; align-items: center;">
         <h3 style="margin: 0; font-size: 16px;">⚙️ QUẢN TRỊ HẠ TẦNG GIS & PHÂN QUYỀN</h3>
-        <button onclick="dongBangQuanTri()" style="background: none; border: none; color: white; font-size: 22px; cursor: pointer; line-height: 1;">✖</button>
+        <button onclick="if(typeof dongBangQuanTri === 'function') dongBangQuanTri();" style="background: none; border: none; color: white; font-size: 22px; cursor: pointer; line-height: 1;">✖</button>
       </div>
 
       <!-- Thanh Nút Tab Quản Trị -->
@@ -172,11 +174,23 @@
   <script src="admin.js"></script>
 
   <script>
-    // Tự động khởi tạo bản đồ ngay khi trang nạp xong DOM
+    // Kịch bản khởi tạo bản đồ an toàn chống lỗi nạp DOM
     document.addEventListener("DOMContentLoaded", function() {
-      if (typeof khoiTaoBanDoLeaflet === 'function') {
-        khoiTaoBanDoLeaflet();
-      }
+      setTimeout(function() {
+        try {
+          if (typeof khoiTaoBanDoLeaflet === 'function') {
+            khoiTaoBanDoLeaflet();
+          }
+          if (typeof veLaiTuyenAB === 'function') {
+            veLaiTuyenAB();
+          }
+          if (window.map) {
+            window.map.invalidateSize();
+          }
+        } catch (err) {
+          console.error("Lỗi khi nạp bản đồ:", err);
+        }
+      }, 100);
     });
   </script>
 </body>
