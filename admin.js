@@ -112,7 +112,7 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
-// 3.1 Bảng Tài khoản (Đã mở rộng hỗ trợ tất cả tên biến trường tài khoản)
+// 3.1 Bảng Tài khoản (Đã sửa triệt để hiển thị đầy đủ danh sách)
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
@@ -120,7 +120,7 @@ function renderMasterAccountTable() {
   var state = AppStore.getState();
   var users = state.rawUserList || (typeof rawUserList !== 'undefined' ? rawUserList : []);
 
-  // Tự động tải từ tài khoản hiện tại nếu danh sách trống
+  // Chỉ bổ sung tài khoản hiện tại vào danh sách nếu danh sách rỗng
   if (!users || users.length === 0) {
     var curr = getCurrentUser();
     if (curr && (curr.username || curr.email)) users = [curr];
@@ -131,21 +131,26 @@ function renderMasterAccountTable() {
 
   var listDaiMap = {};
   daiList.forEach(d => {
-    var k = getSafeStrId(d, ['id_dai', 'id']);
-    if (k) listDaiMap[k] = d.ten_dai || d.ten;
+    ['id_dai', 'id'].forEach(k => {
+      if (d[k] !== undefined && d[k] !== null && d[k] !== '') {
+        listDaiMap[String(d[k]).trim()] = d.ten_dai || d.ten;
+      }
+    });
   });
 
   var listTramMap = {};
   tramList.forEach(t => {
-    var k = getSafeStrId(t, ['id_tram', 'id']);
-    if (k) listTramMap[k] = t.ten_tram || t.ten;
+    ['id_tram', 'id', 'id_tram_vt'].forEach(k => {
+      if (t[k] !== undefined && t[k] !== null && t[k] !== '') {
+        listTramMap[String(t[k]).trim()] = t.ten_tram || t.ten;
+      }
+    });
   });
 
   var user = getCurrentUser();
   if (user.role === 'admin_dai' || user.role === 'dai_admin') {
     users = users.filter(u => String(u.id_dai || u.idDai) === String(user.id_dai || user.idDai));
-  }
-  if (user.role === 'admin_tram' || user.role === 'tram_admin') {
+  } else if (user.role === 'admin_tram' || user.role === 'tram_admin') {
     users = users.filter(u => String(u.id_tram || u.idTram) === String(user.id_tram || user.idTram));
   }
 
@@ -264,7 +269,7 @@ function renderMasterTuyenTable() {
   tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;">Chưa có dữ liệu Tuyến cáp</td></tr>';
 }
 
-// 3.5 Bảng Đoạn Cáp (Đã khắc phục hoàn toàn liên kết với Trạm viễn thông)
+// 3.5 Bảng Đoạn Cáp (Đã liên kết đa năng với Trạm và Tuyến cáp)
 function renderMasterDoanTable() {
   var tbody = document.getElementById('masterDoanTableBody');
   if (!tbody) return;
@@ -274,21 +279,21 @@ function renderMasterDoanTable() {
   var tuyenList = state.rawTuyenList || state.tuyenList || (typeof rawTuyenList !== 'undefined' ? rawTuyenList : []);
   var tramList = state.rawTramList || state.tramList || (typeof rawTramList !== 'undefined' ? rawTramList : []);
 
-  // Bảng tra cứu Tuyến cáp
+  // Map Tuyến thông minh
   var listTuyenMap = {};
   tuyenList.forEach(t => {
-    ['id_tuyen_cap', 'id_tuyen', 'id'].forEach(k => {
-      if (t[k] !== undefined && t[k] !== null) {
+    ['id_tuyen_cap', 'id_tuyen', 'id', 'ma_tuyencap'].forEach(k => {
+      if (t[k] !== undefined && t[k] !== null && t[k] !== '') {
         listTuyenMap[String(t[k]).trim()] = t.ten_tuyen || t.ten || t.ma_tuyencap;
       }
     });
   });
 
-  // Bảng tra cứu Trạm viễn thông (Quét tất cả các dạng biến ID trạm)
+  // Map Trạm thông minh (Quét tất cả các dạng khóa ID Trạm)
   var listTramMap = {};
   tramList.forEach(tr => {
-    ['id_tram', 'id', 'id_tram_vt', 'ma_tram'].forEach(k => {
-      if (tr[k] !== undefined && tr[k] !== null) {
+    ['id_tram', 'id', 'id_tram_vt', 'ma_tram', 'ten_tram', 'ten'].forEach(k => {
+      if (tr[k] !== undefined && tr[k] !== null && tr[k] !== '') {
         listTramMap[String(tr[k]).trim()] = tr.ten_tram || tr.ten;
       }
     });
@@ -301,9 +306,8 @@ function renderMasterDoanTable() {
 
   var html = list.map(item => {
     var idDoan = getSafeStrId(item, ['id_doan_cap', 'id_doan', 'id']);
-    var idTuyen = getSafeStrId(item, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']);
-    // Quét mở rộng các thuộc tính liên kết Trạm trong bảng Đoạn cáp
-    var idTram = getSafeStrId(item, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql', 'id_diem_a', 'id_diem_b']);
+    var idTuyen = getSafeStrId(item, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap', 'ma_tuyen']);
+    var idTram = getSafeStrId(item, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql', 'id_tram_a', 'id_tram_b', 'id_diem_a', 'id_diem_b']);
     var maDoan = item.ma_doancap || item.ma_doan || item.ten_doancap || 'N/A';
 
     var tenTuyen = listTuyenMap[idTuyen] || (idTuyen ? `ID: ${idTuyen}` : 'Chưa gán');
