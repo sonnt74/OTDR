@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP MAP.JS - QUẢN LÝ BẢN ĐỒ LEAFLET & THUẬT TOÁN GIS / OTDR (ĐẦY ĐỦ 100%)
+// TỆP MAP.JS - QUẢN LÝ BẢN ĐỒ LEAFLET & THUẬT TOÁN GIS / OTDR (ĐÃ SỬA LỖI LINE MĂNG XÔNG)
 // ==========================================================================
 
 // Biến toàn cục quản lý Bản đồ và các Lớp hiển thị
@@ -264,17 +264,18 @@ function veLaiTuyenAB() {
     });
   } 
   
-  // KỊCH BẢN 2: Chọn tuyến cụ thể -> Vẽ ĐÚNG 1 ĐƯỜNG CÁP duy nhất
+  // KỊCH BẢN 2: Chọn tuyến cụ thể -> Vẽ ĐÚNG 1 ĐƯỜNG CÁP nối các mốc chính
   else {
     var sortedPoints = [...validPoints].sort(function(a, b) {
       return (a.stt || 0) - (b.stt || 0);
     });
-    var latLngs = [];
+    
+    var latLngs = []; // Mảng chứa tọa độ để nối đường cáp
 
     sortedPoints.forEach(function(pt) {
       var latLng = [pt.lat, pt.lng];
-      latLngs.push(latLng);
 
+      // A. Vẽ Biểu Tượng (Marker) cho TẤT CẢ các điểm (bao gồm cả Măng xông)
       var marker = L.marker(latLng, { icon: taoIconBieuTuong(pt) });
       var popupText = '<b>📍 ' + pt.ten + '</b><br>' +
                       'Loại: <b>' + pt.loai + '</b><br>' +
@@ -282,9 +283,14 @@ function veLaiTuyenAB() {
                       'Tọa độ: ' + pt.lat.toFixed(6) + ', ' + pt.lng.toFixed(6);
       marker.bindPopup(popupText);
       markersLayer.addLayer(marker);
+
+      // B. Chỉ thêm vào mảng latLngs nối dây cáp nếu KHÔNG PHẢI Măng xông có stt = 9999
+      if (!isMangXong(pt) || (pt.stt && pt.stt < 9999)) {
+        latLngs.push(latLng);
+      }
     });
 
-    // Vẽ đúng 1 đường polyline cáp duy nhất màu đỏ
+    // Vẽ đúng 1 đường polyline cáp duy nhất màu đỏ nối theo chuỗi mốc tuyến
     if (latLngs.length >= 2) {
       var cablePolyline = L.polyline(latLngs, {
         color: '#dc3545',
