@@ -3,6 +3,7 @@
 // ==========================================================================
 
 var autoClearMarkerTimer = null; // Bộ đếm thời gian tự động xóa mốc tìm kiếm sau 30s
+var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], rawLoaiDiemList = [], rawUserList = [];
 
 /**
  * 1. HÀM TIỆN ÍCH TRUY VẤN VÀ CHUẨN HÓA KHÓA ID AN TOÀN
@@ -28,7 +29,7 @@ function getSafeStrId(item, keys) {
 }
 
 /**
- * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (ĐÃ BỔ SUNG NẠP DỮ LIỆU BẢNG QUẢN TRỊ)
+ * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (ĐÃ BỔ SUNG TRUY VẤN BẢNG USERS)
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   let localMaster = null;
@@ -57,7 +58,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
           rawUserList: rawUserList
         });
 
-        // Điền dữ liệu vào các ô chọn Combo và 5 bảng Quản trị
+        // Điền dữ liệu vào các ô chọn Combo và Bảng Quản trị
         xuLyPhanQuyenDoanTuyenUser();
         if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
         if (typeof taiDiemTheoVungXem === 'function') await taiDiemTheoVungXem();
@@ -101,7 +102,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
         rawUserList: rawUserList
       });
 
-      // Cập nhật lại các ô chọn Combo và bảng Quản trị với dữ liệu mới nhất
+      // Cập nhật lại các ô chọn Combo và Bảng Quản trị với dữ liệu mới nhất
       xuLyPhanQuyenDoanTuyenUser();
       if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
       if (forceRefresh) showToast("Đã đồng bộ danh mục mới nhất!", "success");
@@ -128,7 +129,6 @@ async function taiDiemTheoVungXem() {
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      // Thử tải từ Supabase khi có mạng
       const { data: pts, error: errPts } = await supabaseClient
         .from('diem_ha_tang')
         .select('*')
@@ -173,13 +173,11 @@ async function taiDiemTheoVungXem() {
         };
       });
 
-      // Lưu đệm các điểm vào IndexedDB
       if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
     } else {
       throw new Error("Offline Mode");
     }
   } catch (err) {
-    // FALLBACK: Khi gặp lỗi mạng (Failed to fetch) -> Tự động đọc từ IndexedDB
     if (typeof idbDocDiemTheoVungXem === 'function') {
       globalDataPoints = await idbDocDiemTheoVungXem(minLat, maxLat, minLng, maxLng);
     }
@@ -201,7 +199,6 @@ async function taiDiemTheoTuyen(idTuyen) {
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      // 1. Thử tải dữ liệu từ máy chủ Supabase
       const { data: doanList, error: errDoan } = await supabaseClient.from('doan_cap').select('*').eq('id_tuyen', idTuyen);
       if (errDoan) throw errDoan;
 
@@ -266,7 +263,6 @@ async function taiDiemTheoTuyen(idTuyen) {
       throw new Error("Offline Mode");
     }
   } catch (err) {
-    // 2. FALLBACK TỰ ĐỘNG: Nếu lỗi kết nối (Failed to fetch), lấy trực tiếp từ IndexedDB!
     console.warn("Lỗi kết nối mạng, chuyển sang lấy từ IndexedDB:", err.message);
     if (typeof idbDocDiemTheoTuyen === 'function') {
       globalDataPoints = await idbDocDiemTheoTuyen(idTuyen);
