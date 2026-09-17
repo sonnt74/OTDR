@@ -1,16 +1,13 @@
 // ==========================================================================
-// TỆP DATA.JS - QUẢN LÝ LUỒNG DỮ LIỆU 3 TẦNG (TỐI ƯU SẠCH MÃ NGUỒN)
+// TỆP DATA.JS - QUẢN LÝ LUỒNG DỮ LIỆU (CHỈ VẼ BẢN ĐỒ KHI ĐỔI ĐOẠN CÁP)
 // ==========================================================================
 
 var autoClearMarkerTimer = null; 
 
-/**
- * 1. HÀM TIỆN ÍCH TRUY VẤN VÀ CHUẨN HÓA KHÓA ID AN TOÀN
- */
-async function fetchAllRowsSafe(tableName) {
+function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
   while (keep) {
-    let { data, error } = await supabaseClient.from(tableName).select('*').range(from, from + size - 1);
+    let { data, error } = supabaseClient.from(tableName).select('*').range(from, from + size - 1);
     if (error) throw error;
     if (data && data.length > 0) { allData = allData.concat(data); if (data.length < size) keep = false; else from += size; } else keep = false;
   }
@@ -28,13 +25,12 @@ function getSafeStrId(item, keys) {
 }
 
 /**
- * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (CHỈ TẢI BẢNG TAI_KHOAN)
+ * TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   let localMaster = null;
 
   try {
-    // A. Đọc nhanh danh mục từ IndexedDB (~0ms)
     if (typeof idbDocMaster === 'function' && !forceRefresh) {
       localMaster = await idbDocMaster();
       if (localMaster) {
@@ -59,11 +55,9 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 
         xuLyPhanQuyenDoanTuyenUser();
         if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
-        if (typeof taiDiemTheoVungXem === 'function') await taiDiemTheoVungXem();
       }
     }
 
-    // B. Đồng bộ danh mục từ Supabase
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       if (!localMaster || forceRefresh) showLoading("Đang nạp danh mục máy chủ...");
 
@@ -73,7 +67,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
         supabaseClient.from('tuyen_cap').select('*'),
         supabaseClient.from('doan_cap').select('*'),
         supabaseClient.from('loai_diem').select('*'),
-        supabaseClient.from('tai_khoan').select('*') // Chỉ tải từ bảng 'tai_khoan'
+        supabaseClient.from('tai_khoan').select('*')
       ]);
 
       rawDaiList = daiRes.data || rawDaiList;
@@ -83,7 +77,6 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       rawLoaiDiemList = loaiRes.data || rawLoaiDiemList;
       rawUserList = userRes.data || rawUserList;
 
-      // Lưu bản ghi danh mục vào IndexedDB
       if (typeof idbLuuMaster === 'function') {
         await idbLuuMaster({ rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList, rawUserList });
       }
@@ -113,7 +106,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 }
 
 /**
- * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH
+ * TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH
  */
 async function taiDiemTheoVungXem() {
   if (typeof map === 'undefined' || !map) return;
@@ -135,7 +128,6 @@ async function taiDiemTheoVungXem() {
       if (errPts) throw errPts;
       if (!pts || pts.length === 0) {
         globalDataPoints = [];
-        if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
         return;
       }
 
@@ -180,12 +172,11 @@ async function taiDiemTheoVungXem() {
     }
   } finally {
     AppStore.setState({ dataPoints: globalDataPoints });
-    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
   }
 }
 
 /**
- * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP
+ * TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP
  */
 async function taiDiemTheoTuyen(idTuyen) {
   if (!idTuyen || idTuyen === 'ALL' || idTuyen === 'undefined') {
@@ -203,7 +194,6 @@ async function taiDiemTheoTuyen(idTuyen) {
       if (doanIds.length === 0) {
         globalDataPoints = [];
         AppStore.setState({ dataPoints: [] });
-        if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
         showToast("Tuyến cáp này chưa có đoạn cáp!", "info");
         return;
       }
@@ -215,7 +205,6 @@ async function taiDiemTheoTuyen(idTuyen) {
       if (diemIds.length === 0) {
         globalDataPoints = [];
         AppStore.setState({ dataPoints: [] });
-        if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
         showToast("Chưa có điểm hạ tầng trong tuyến này!", "info");
         return;
       }
@@ -269,14 +258,10 @@ async function taiDiemTheoTuyen(idTuyen) {
   } finally {
     AppStore.setState({ dataPoints: globalDataPoints });
     capNhatComboDiemA();
-    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
     hideLoading();
   }
 }
 
-/**
- * 5. PHÂN QUYỀN GIAO DIỆN THEO VAI TRÒ CURRENTUSER
- */
 function xuLyPhanQuyenDoanTuyenUser() {
   var selectDai = document.getElementById('selectDai');
   var groupDai = selectDai ? selectDai.closest('.form-group') : null;
@@ -382,6 +367,9 @@ function onTramChange() {
   updateTuyenOptions();
 }
 
+/**
+ * CẬP NHẬT DANH SÁCH TUYẾN THEO TRẠM (ĐÃ SỬA LỖI LỌC KHI CHỌN MỘT TRẠM CỤ THỂ)
+ */
 function updateTuyenOptions() {
   var selectTuyen = document.getElementById('selectTuyen');
   var selectTram = document.getElementById('selectTram');
@@ -390,26 +378,30 @@ function updateTuyenOptions() {
   var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
   var state = AppStore.getState();
   
-  var doanCapList = state.doanCapList || rawDoanCapList;
-  var tuyenList = state.tuyenList || rawTuyenList;
+  var doanCapList = state.doanCapList || rawDoanCapList || [];
+  var tuyenList = state.tuyenList || rawTuyenList || [];
 
-  var allowedTuyenIds = [];
+  var filteredTuyenList = [];
 
   if (tramVal === 'ALL') {
-    allowedTuyenIds = tuyenList.map(t => getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']));
+    filteredTuyenList = tuyenList;
   } else {
-    var matchedDoan = doanCapList.filter(d => {
-      var tramIdInDoan = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt']);
-      return tramIdInDoan === tramVal;
-    });
-    allowedTuyenIds = [...new Set(matchedDoan.map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap'])))];
-  }
+    // 1. Tìm danh sách ID Tuyến từ bảng Đoạn Cáp thuộc Trạm được chọn
+    var matchedTuyenIdsFromDoan = doanCapList
+      .filter(d => {
+        var tramIdInDoan = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']);
+        return tramIdInDoan && String(tramIdInDoan) === tramVal;
+      })
+      .map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']));
 
-  var filteredTuyenList = tuyenList.filter(t => {
-    if (tramVal === 'ALL') return true;
-    var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
-    return allowedTuyenIds.includes(tId);
-  });
+    // 2. Lọc tuyến thuộc danh sách trên hoặc có thuộc tính trạm trực tiếp trong Tuyến Cáp
+    filteredTuyenList = tuyenList.filter(t => {
+      var tuyenId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
+      var tramIdInTuyen = getSafeStrId(t, ['id_tram', 'tram_id', 'id_tram_vt']);
+      
+      return matchedTuyenIdsFromDoan.includes(tuyenId) || (tramIdInTuyen && String(tramIdInTuyen) === tramVal);
+    });
+  }
 
   selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
   filteredTuyenList.forEach(t => {
@@ -458,11 +450,18 @@ async function onTuyenChange() {
   await taiDiemTheoTuyen(tuyenVal);
 }
 
+/**
+ * SỰ KIỆN DUY NHẤT KÍCH HOẠT VẼ LAI BẢN ĐỒ
+ */
 function onDoanCapChange() { 
   var selectDoanCap = document.getElementById('selectDoanCap');
   var doanVal = selectDoanCap ? String(selectDoanCap.value).trim() : 'ALL';
   AppStore.setState({ selectedDoanCap: doanVal });
-  if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB(); 
+  
+  // Chỉ vẽ bản đồ khi thay đổi combo Đoạn cáp
+  if (typeof veLaiTuyenAB === 'function') {
+    veLaiTuyenAB(); 
+  }
 }
 
 function onDiemAChange() { 
@@ -480,9 +479,6 @@ function capNhatComboDiemA() {
   });
 }
 
-/**
- * 6. XỬ LÝ PHÂN TÍCH SỰ CỐ OTDR VÀ TÌM LÝ TRÌNH
- */
 function datLichTuXoaMarkerTimKiem() {
   if (autoClearMarkerTimer) clearTimeout(autoClearMarkerTimer);
   autoClearMarkerTimer = setTimeout(function() {
