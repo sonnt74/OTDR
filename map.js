@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP MAP.JS - BẢN ĐỒ LEAFLET & THUẬT TOÁN GIS / OTDR (CHUẨN HÓA ID_LOAI 100%)
+// TỆP MAP.JS - BẢN ĐỒ LEAFLET & THUẬT TOÁN GIS / OTDR (NGUYÊN BẢN MỐC OK6)
 // ==========================================================================
 
 // Biến toàn cục quản lý Bản đồ và các Lớp hiển thị
@@ -193,59 +193,37 @@ function khoiTaoBanDoLeaflet() {
 }
 
 /**
- * 2.2 Kiểm tra điểm có phải là Măng xông cáp quang (id_loai = 4)
+ * 2.2 Kiểm tra điểm có phải là Măng xông cáp quang
  */
 function isMangXong(pt) {
   if (!pt) return false;
-  var idLoai = Number(pt.idLoaiDiem || pt.id_loaidiem);
-  return idLoai === 4;
+  var idLoai = Number(pt.idLoaiDiem);
+  var loaiStr = String(pt.loai || '').toLowerCase();
+  return idLoai === 4 || loaiStr.includes('mx') || loaiStr.includes('măng xông');
 }
 
 /**
- * 2.3 Tạo biểu tượng (Icon) điểm hạ tầng CĂN CỨ 100% VÀO ID_LOAI
+ * 2.3 Tạo biểu tượng (Icon) điểm hạ tầng
  */
 function taoIconBieuTuong(pt) {
-  if (!pt) return L.divIcon({ html: '<div></div>' });
-
-  // Ép kiểu id_loai về dạng số nguyên an toàn
-  var idLoai = Number(pt.idLoaiDiem || pt.id_loaidiem);
-
-  switch (idLoai) {
-    case 1:
-      // id_loai = 1: Cột viễn thông (Hình oval thon đứng màu xám)
-      return L.divIcon({
-        html: '<div style="background:#6c757d; color:white; width:18px; height:22px; border-radius:8px; text-align:center; line-height:22px; border:2px solid #fff; font-size:10px; box-shadow:0 0 3px rgba(0,0,0,0.4);">💈</div>',
-        className: '', iconSize: [18, 22], iconAnchor: [9, 11]
-      });
-
-    case 2:
-      // id_loai = 2: Bể cáp quang (Hình ô vuông màu xám đậm)
-      return L.divIcon({
-        html: '<div style="background:#343a40; color:white; width:20px; height:20px; border-radius:3px; text-align:center; line-height:20px; border:2px solid #fff; font-size:10px; box-shadow:0 0 3px rgba(0,0,0,0.4);">🔲</div>',
-        className: '', iconSize: [20, 20], iconAnchor: [10, 10]
-      });
-
-    case 3:
-      // id_loai = 3: Mốc cáp / Mốc địa lý (Chấm tròn màu xanh dương)
-      return L.divIcon({
-        html: '<div style="background:#0d6efd; color:white; width:14px; height:14px; border-radius:50%; text-align:center; line-height:14px; border:2px solid #fff; font-size:8px; box-shadow:0 0 3px rgba(0,0,0,0.4);">🔵</div>',
-        className: '', iconSize: [14, 14], iconAnchor: [7, 7]
-      });
-
-    case 4:
-      // id_loai = 4: Măng xông cáp quang (Hình tròn màu cam)
-      return L.divIcon({
-        html: '<div style="background:#fd7e14; color:white; width:20px; height:20px; border-radius:50%; text-align:center; line-height:20px; border:2px solid #fff; font-size:10px; box-shadow:0 0 3px rgba(0,0,0,0.4);">🔀</div>',
-        className: '', iconSize: [20, 20], iconAnchor: [10, 10]
-      });
-
-    default:
-      // Các trường hợp khác: Render chấm tròn xanh dương mặc định
-      return L.divIcon({
-        html: '<div style="background:#0d6efd; color:white; width:14px; height:14px; border-radius:50%; text-align:center; line-height:14px; border:2px solid #fff; font-size:8px; box-shadow:0 0 3px rgba(0,0,0,0.4);">🔵</div>',
-        className: '', iconSize: [14, 14], iconAnchor: [7, 7]
-      });
+  if (isMangXong(pt)) {
+    return L.divIcon({
+      html: '<div style="background:#fd7e14; color:white; width:20px; height:20px; border-radius:50%; text-align:center; line-height:20px; border:2px solid #fff; font-size:10px;">🔀</div>',
+      className: '', iconSize: [20, 20], iconAnchor: [10, 10]
+    });
   }
+
+  if (Number(pt.idLoaiDiem) === 2 || String(pt.loai).toLowerCase().includes('trạm')) {
+    return L.divIcon({
+      html: '<div style="background:#198754; color:white; width:22px; height:22px; border-radius:4px; text-align:center; line-height:22px; border:2px solid #fff; font-size:11px;">🏢</div>',
+      className: '', iconSize: [22, 22], iconAnchor: [11, 11]
+    });
+  }
+
+  return L.divIcon({
+    html: '<div style="background:#0d6efd; color:white; width:12px; height:12px; border-radius:50%; border:2px solid #fff;"></div>',
+    className: '', iconSize: [12, 12], iconAnchor: [6, 6]
+  });
 }
 
 // ==========================================================================
@@ -253,7 +231,7 @@ function taoIconBieuTuong(pt) {
 // ==========================================================================
 
 /**
- * 3.1 Vẽ lại toàn bộ biểu tượng và tuyến cáp trên bản đồ (Nét vẽ mốc OK6)
+ * 3.1 Vẽ lại toàn bộ biểu tượng và tuyến cáp trên bản đồ
  */
 function veLaiTuyenAB() {
   if (!map) return;
@@ -295,7 +273,7 @@ function veLaiTuyenAB() {
     sortedPoints.forEach(function(pt) {
       var latLng = [pt.lat, pt.lng];
 
-      // A. Vẽ Biểu Tượng (Marker) cho TẤT CẢ các điểm
+      // A. Vẽ Biểu Tượng (Marker) cho TẤT CẢ các điểm (bao gồm cả Măng xông)
       var marker = L.marker(latLng, { icon: taoIconBieuTuong(pt) });
       var popupText = '<b>📍 ' + pt.ten + '</b><br>' +
                       'Loại: <b>' + pt.loai + '</b><br>' +
