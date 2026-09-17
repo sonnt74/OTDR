@@ -5,7 +5,7 @@
 var autoClearMarkerTimer = null; // Bộ đếm thời gian tự động xóa mốc tìm kiếm sau 30s
 
 /**
- * 1. HÀM TIỆN ÍCH TRUYS VẤN VÀ CHUẨN HÓA KHÓA ID AN TOÀN
+ * 1. HÀM TIỆN ÍCH TRUY VẤN VÀ CHUẨN HÓA KHÓA ID AN TOÀN
  */
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
@@ -28,7 +28,7 @@ function getSafeStrId(item, keys) {
 }
 
 /**
- * TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (ĐÃ SỬA TRIỆT ĐỂ LỖI COMBO BẢNG ĐIỀU KHIỂN)
+ * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (ĐÃ BỔ SUNG NẠP DỮ LIỆU BẢNG QUẢN TRỊ)
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   let localMaster = null;
@@ -43,31 +43,38 @@ async function taiDuLieuSupabase(forceRefresh = false) {
         rawTuyenList = localMaster.rawTuyenList || [];
         rawDoanCapList = localMaster.rawDoanCapList || [];
         rawLoaiDiemList = localMaster.rawLoaiDiemList || [];
+        rawUserList = localMaster.rawUserList || [];
 
         AppStore.setState({
           daiList: rawDaiList,
           tramList: rawTramList,
           tuyenList: rawTuyenList,
-          doanCapList: rawDoanCapList
+          doanCapList: rawDoanCapList,
+          rawDaiList: rawDaiList,
+          rawTramList: rawTramList,
+          rawTuyenList: rawTuyenList,
+          rawDoanList: rawDoanCapList,
+          rawUserList: rawUserList
         });
 
-        // Điền dữ liệu vào các ô chọn Combo
+        // Điền dữ liệu vào các ô chọn Combo và 5 bảng Quản trị
         xuLyPhanQuyenDoanTuyenUser();
+        if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
         if (typeof taiDiemTheoVungXem === 'function') await taiDiemTheoVungXem();
       }
     }
 
     // BƯỚC B: Đồng bộ danh mục mới nhất từ Supabase nếu có kết nối mạng
-    if (navigator.onLine) {
-      // Chỉ hiện màn hình chờ nếu chưa có dữ liệu Offline localMaster
+    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       if (!localMaster || forceRefresh) showLoading("Đang nạp danh mục máy chủ...");
 
-      let [daiRes, tramRes, tuyenRes, doanRes, loaiRes] = await Promise.all([
+      let [daiRes, tramRes, tuyenRes, doanRes, loaiRes, userRes] = await Promise.all([
         supabaseClient.from('dai_vt').select('*'),
         supabaseClient.from('tram_vt').select('*'),
         supabaseClient.from('tuyen_cap').select('*'),
         supabaseClient.from('doan_cap').select('*'),
-        supabaseClient.from('loai_diem').select('*')
+        supabaseClient.from('loai_diem').select('*'),
+        supabaseClient.from('users').select('*')
       ]);
 
       rawDaiList = daiRes.data || [];
@@ -75,28 +82,35 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       rawTuyenList = tuyenRes.data || [];
       rawDoanCapList = doanRes.data || [];
       rawLoaiDiemList = loaiRes.data || [];
+      rawUserList = userRes.data || [];
 
       // Lưu bản ghi danh mục vào kho master_store của IndexedDB
       if (typeof idbLuuMaster === 'function') {
-        await idbLuuMaster({ rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList });
+        await idbLuuMaster({ rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList, rawUserList });
       }
 
       AppStore.setState({
         daiList: rawDaiList,
         tramList: rawTramList,
         tuyenList: rawTuyenList,
-        doanCapList: rawDoanCapList
+        doanCapList: rawDoanCapList,
+        rawDaiList: rawDaiList,
+        rawTramList: rawTramList,
+        rawTuyenList: rawTuyenList,
+        rawDoanList: rawDoanCapList,
+        rawUserList: rawUserList
       });
 
-      // Cập nhật lại các ô chọn Combo với dữ liệu máy chủ mới nhất
+      // Cập nhật lại các ô chọn Combo và bảng Quản trị với dữ liệu mới nhất
       xuLyPhanQuyenDoanTuyenUser();
+      if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
       if (forceRefresh) showToast("Đã đồng bộ danh mục mới nhất!", "success");
     }
   } catch (err) {
     console.warn("Đang sử dụng dữ liệu danh mục Offline:", err.message);
   } finally {
     hideLoading();
-    if (map) map.invalidateSize();
+    if (typeof map !== 'undefined' && map) map.invalidateSize();
   }
 }
 
@@ -104,7 +118,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
  * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH (CÓ TỰ ĐỘNG FALLBACK INDEXEDDB)
  */
 async function taiDiemTheoVungXem() {
-  if (!map) return;
+  if (typeof map === 'undefined' || !map) return;
   var selectTuyen = document.getElementById('selectTuyen');
   if (selectTuyen && selectTuyen.value !== 'ALL') return;
 
@@ -113,7 +127,7 @@ async function taiDiemTheoVungXem() {
   var minLng = bounds.getWest(), maxLng = bounds.getEast();
 
   try {
-    if (navigator.onLine) {
+    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       // Thử tải từ Supabase khi có mạng
       const { data: pts, error: errPts } = await supabaseClient
         .from('diem_ha_tang')
@@ -186,7 +200,7 @@ async function taiDiemTheoTuyen(idTuyen) {
   showLoading("Đang nạp dữ liệu tuyến cáp...");
 
   try {
-    if (navigator.onLine) {
+    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       // 1. Thử tải dữ liệu từ máy chủ Supabase
       const { data: doanList, error: errDoan } = await supabaseClient.from('doan_cap').select('*').eq('id_tuyen', idTuyen);
       if (errDoan) throw errDoan;
@@ -273,7 +287,7 @@ async function taiDiemTheoTuyen(idTuyen) {
 }
 
 /**
- * 5. PHÂN QUYỀN GIAO DIỆN THEO VAÌ TRÒ CURRENTUSER
+ * 5. PHÂN QUYỀN GIAO DIỆN THEO VAI TRÒ CURRENTUSER
  */
 function xuLyPhanQuyenDoanTuyenUser() {
   var selectDai = document.getElementById('selectDai');
