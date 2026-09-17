@@ -1,18 +1,13 @@
 // ==========================================================================
-// TỆP ADMIN.JS - ĐIỀU KHIỂN GIAO DIỆN QUẢN TRỊ MỐC OK6 & PHÂN QUYỀN RBAC
+// TỆP ADMIN.JS - ĐIỀU KHIỂN GIAO DIỆN QUẢN TRỊ (SỬ DỤNG BẢNG TAI_KHOAN)
 // ==========================================================================
 
 var confirmPromiseResolver = null;
 
-/**
- * 1. ĐÓNG MỞ MODAL VÀ CHUYỂN TAB QUẢN TRỊ
- */
 function openModal(modalId, tabId) {
   closeModals();
   var targetModal = document.getElementById(modalId);
-  if (targetModal) {
-    targetModal.style.display = 'flex';
-  }
+  if (targetModal) targetModal.style.display = 'flex';
 
   if (modalId === 'adminMasterModal') {
     renderAllAdminTables();
@@ -21,15 +16,11 @@ function openModal(modalId, tabId) {
 }
 
 function closeModals() {
-  var modals = document.querySelectorAll('.app-modal');
-  modals.forEach(function(m) {
-    m.style.display = 'none';
-  });
+  document.querySelectorAll('.app-modal').forEach(m => m.style.display = 'none');
 }
 
 function switchAdminTab(tabPaneId) {
-  var tabBtns = document.querySelectorAll('.admin-tabs .tab-btn');
-  tabBtns.forEach(function(btn) {
+  document.querySelectorAll('.admin-tabs .tab-btn').forEach(btn => {
     if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(tabPaneId)) {
       btn.classList.add('active');
     } else {
@@ -37,22 +28,15 @@ function switchAdminTab(tabPaneId) {
     }
   });
 
-  var tabPanes = document.querySelectorAll('.tab-pane');
-  tabPanes.forEach(function(pane) {
-    if (pane.id === tabPaneId) {
-      pane.classList.add('active');
-    } else {
-      pane.classList.remove('active');
-    }
+  document.querySelectorAll('.tab-pane').forEach(pane => {
+    if (pane.id === tabPaneId) pane.classList.add('active');
+    else pane.classList.remove('active');
   });
 }
 
-/**
- * 2. KIỂM TRA QUYỀN THAO TÁC (RBAC 4 CẤP)
- */
 function getCurrentUser() {
   var state = AppStore.getState();
-  return state.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null) || JSON.parse(localStorage.getItem('TNN_USER_INFO')) || {
+  return state.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null) || JSON.parse(localStorage.getItem('tnn_user')) || {
     username: 'guest',
     role: 'nhan_vien',
     id_dai: null,
@@ -68,9 +52,7 @@ function checkAdminPermission(action, idDaiTarget, idTramTarget, silent = true) 
 
   if (role === 'nhan_vien' || role === 'member' || role === 'tram_user') {
     if (action !== 'XEM') {
-      if (!silent) {
-        alert("⛔ Tài khoản Nhân viên chỉ có quyền xem dữ liệu!");
-      }
+      if (!silent) alert("⛔ Tài khoản Nhân viên chỉ có quyền xem dữ liệu!");
       return false;
     }
     return true;
@@ -79,9 +61,7 @@ function checkAdminPermission(action, idDaiTarget, idTramTarget, silent = true) 
   if (role === 'admin_dai' || role === 'dai_admin') {
     var userDai = String(user.id_dai || user.idDai || '');
     if (idDaiTarget && String(idDaiTarget) !== userDai) {
-      if (!silent) {
-        alert("⛔ Bạn chỉ có quyền quản lý dữ liệu thuộc Đài của mình!");
-      }
+      if (!silent) alert("⛔ Bạn chỉ có quyền quản lý dữ liệu thuộc Đài của mình!");
       return false;
     }
     return true;
@@ -90,9 +70,7 @@ function checkAdminPermission(action, idDaiTarget, idTramTarget, silent = true) 
   if (role === 'admin_tram' || role === 'tram_admin') {
     var userTram = String(user.id_tram || user.idTram || '');
     if (idTramTarget && String(idTramTarget) !== userTram) {
-      if (!silent) {
-        alert("⛔ Bạn chỉ có quyền quản lý dữ liệu thuộc Trạm của mình!");
-      }
+      if (!silent) alert("⛔ Bạn chỉ có quyền quản lý dữ liệu thuộc Trạm của mình!");
       return false;
     }
     return true;
@@ -101,9 +79,6 @@ function checkAdminPermission(action, idDaiTarget, idTramTarget, silent = true) 
   return false;
 }
 
-/**
- * 3. HÀM ĐỔ DỮ LIỆU VÀO 5 BẢNG QUẢN TRỊ (MASTER TABLES)
- */
 function renderAllAdminTables() {
   renderMasterAccountTable();
   renderMasterDaiTable();
@@ -112,7 +87,9 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
-// 3.1 Bảng Tài khoản (Đã sửa triệt để hiển thị đầy đủ danh sách)
+/**
+ * 3.1 BẢNG TÀI KHOẢN (TRUY VẤN DUY NHẤT BẢNG TAI_KHOAN)
+ */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
@@ -120,7 +97,6 @@ function renderMasterAccountTable() {
   var state = AppStore.getState();
   var users = state.rawUserList || (typeof rawUserList !== 'undefined' ? rawUserList : []);
 
-  // Chỉ bổ sung tài khoản hiện tại vào danh sách nếu danh sách rỗng
   if (!users || users.length === 0) {
     var curr = getCurrentUser();
     if (curr && (curr.username || curr.email)) users = [curr];
@@ -170,7 +146,7 @@ function renderMasterAccountTable() {
         <td>${canEdit ? '✅ Có' : '❌ Không'}</td>
         <td>
           <button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien('${accountName}')">✏️ Sửa</button>
-          <button class="btn-small del" onclick="deleteAdminRecord('users', '${accountName}')">🗑️ Xóa</button>
+          <button class="btn-small del" onclick="deleteAdminRecord('tai_khoan', '${accountName}')">🗑️ Xóa</button>
         </td>
       </tr>
     `;
@@ -179,7 +155,6 @@ function renderMasterAccountTable() {
   tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center;">Chưa có dữ liệu tài khoản</td></tr>';
 }
 
-// 3.2 Bảng Đài Viễn thông
 function renderMasterDaiTable() {
   var tbody = document.getElementById('masterDaiTableBody');
   if (!tbody) return;
@@ -209,7 +184,6 @@ function renderMasterDaiTable() {
   tbody.innerHTML = html || '<tr><td colspan="3" style="text-align:center;">Chưa có dữ liệu Đài</td></tr>';
 }
 
-// 3.3 Bảng Trạm Viễn thông
 function renderMasterTramTable() {
   var tbody = document.getElementById('masterTramTableBody');
   if (!tbody) return;
@@ -243,7 +217,6 @@ function renderMasterTramTable() {
   tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;">Chưa có dữ liệu Trạm</td></tr>';
 }
 
-// 3.4 Bảng Tuyến Cáp
 function renderMasterTuyenTable() {
   var tbody = document.getElementById('masterTuyenTableBody');
   if (!tbody) return;
@@ -269,7 +242,6 @@ function renderMasterTuyenTable() {
   tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;">Chưa có dữ liệu Tuyến cáp</td></tr>';
 }
 
-// 3.5 Bảng Đoạn Cáp (Đã liên kết đa năng với Trạm và Tuyến cáp)
 function renderMasterDoanTable() {
   var tbody = document.getElementById('masterDoanTableBody');
   if (!tbody) return;
@@ -279,7 +251,6 @@ function renderMasterDoanTable() {
   var tuyenList = state.rawTuyenList || state.tuyenList || (typeof rawTuyenList !== 'undefined' ? rawTuyenList : []);
   var tramList = state.rawTramList || state.tramList || (typeof rawTramList !== 'undefined' ? rawTramList : []);
 
-  // Map Tuyến thông minh
   var listTuyenMap = {};
   tuyenList.forEach(t => {
     ['id_tuyen_cap', 'id_tuyen', 'id', 'ma_tuyencap'].forEach(k => {
@@ -289,10 +260,9 @@ function renderMasterDoanTable() {
     });
   });
 
-  // Map Trạm thông minh (Quét tất cả các dạng khóa ID Trạm)
   var listTramMap = {};
   tramList.forEach(tr => {
-    ['id_tram', 'id', 'id_tram_vt', 'ma_tram', 'ten_tram', 'ten'].forEach(k => {
+    ['id_tram', 'id', 'id_tram_vt', 'ma_tram'].forEach(k => {
       if (tr[k] !== undefined && tr[k] !== null && tr[k] !== '') {
         listTramMap[String(tr[k]).trim()] = tr.ten_tram || tr.ten;
       }
@@ -307,7 +277,7 @@ function renderMasterDoanTable() {
   var html = list.map(item => {
     var idDoan = getSafeStrId(item, ['id_doan_cap', 'id_doan', 'id']);
     var idTuyen = getSafeStrId(item, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap', 'ma_tuyen']);
-    var idTram = getSafeStrId(item, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql', 'id_tram_a', 'id_tram_b', 'id_diem_a', 'id_diem_b']);
+    var idTram = getSafeStrId(item, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']);
     var maDoan = item.ma_doancap || item.ma_doan || item.ten_doancap || 'N/A';
 
     var tenTuyen = listTuyenMap[idTuyen] || (idTuyen ? `ID: ${idTuyen}` : 'Chưa gán');
@@ -330,9 +300,6 @@ function renderMasterDoanTable() {
   tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;">Chưa có dữ liệu Đoạn cáp</td></tr>';
 }
 
-/**
- * 4. XỬ LÝ FORM THÊM / SỬA TÀI KHOẢN
- */
 function chuanBiFormThemThanhVien(usernameToEdit) {
   var state = AppStore.getState();
   var daiList = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
@@ -376,6 +343,9 @@ function chuanBiFormThemThanhVien(usernameToEdit) {
   openModal('addMemberModal');
 }
 
+/**
+ * LƯU TÀI KHOẢN (CHỈ LƯU VÀO BẢNG TAI_KHOAN)
+ */
 async function saveAccountAction() {
   if (!checkAdminPermission('SUA', null, null, false)) return;
 
@@ -393,6 +363,7 @@ async function saveAccountAction() {
   }
 
   var payload = {
+    email: username,
     username: username,
     role: role,
     can_edit_map: canEdit,
@@ -403,7 +374,7 @@ async function saveAccountAction() {
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      var { error } = await supabaseClient.from('users').upsert([payload]);
+      var { error } = await supabaseClient.from('tai_khoan').upsert([payload]);
       if (error) throw error;
       alert("✅ Đã lưu thông tin tài khoản thành công!");
     } else {
@@ -419,9 +390,6 @@ async function saveAccountAction() {
   }
 }
 
-/**
- * 5. XỬ LÝ FORM THÊM / SỬA DANH MỤC PHỤ (ĐÀI, TRẠM, TUYẾN, ĐOẠN)
- */
 function moFormThemDai(id) { moGenericAuxForm('dai_vt', id); }
 function moFormThemTram(id) { moGenericAuxForm('tram_vt', id); }
 function moFormThemTuyen(id) { moGenericAuxForm('tuyen_cap', id); }
@@ -534,7 +502,7 @@ async function saveAuxRecord() {
 }
 
 /**
- * 6. XÓA BẢN GHI VÀ KIỂM TRA RÀNG BUỘC PHỤ THUỘC CSDL
+ * XÓA BẢN GHI (CHỈ XÓA TRÊN BẢNG TAI_KHOAN KHI CHỌN LOẠI DỮ LIỆU TÀI KHOẢN)
  */
 async function deleteAdminRecord(tableName, idItem) {
   if (!checkAdminPermission('XOA', null, null, false)) return;
@@ -560,7 +528,8 @@ async function deleteAdminRecord(tableName, idItem) {
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      var keyField = (tableName === 'users') ? 'username' : (tableName === 'doan_cap' ? 'id_doan_cap' : 'id_' + tableName.replace('_vt', '').replace('_cap', ''));
+      var keyField = (tableName === 'tai_khoan') ? 'email' : (tableName === 'doan_cap' ? 'id_doan_cap' : 'id_' + tableName.replace('_vt', '').replace('_cap', ''));
+      
       var { error } = await supabaseClient.from(tableName).delete().eq(keyField, idItem);
       if (error) throw error;
       alert("✅ Đã xóa bản ghi thành công!");
@@ -576,9 +545,6 @@ async function deleteAdminRecord(tableName, idItem) {
   }
 }
 
-/**
- * 7. MỞ MODAL VÀ XỬ LÝ ĐỐI TƯỢNG GIS TRÊN BẢN ĐỒ (#crudModal)
- */
 function openCrudModalForPoint(actionType, pointData) {
   var modal = document.getElementById('crudModal');
   if (!modal) return;
@@ -650,9 +616,6 @@ async function executeCrudAction() {
   }
 }
 
-/**
- * 8. XỬ LÝ MODAL XÁC NHẬN (#customConfirmModal)
- */
 function showCustomConfirm(message, title) {
   return new Promise(function(resolve) {
     confirmPromiseResolver = resolve;
