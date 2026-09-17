@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN QUYỀN RBAC & BẢO VỆ CSDL CHUẨN
+// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, KÍCH HOẠT MỞ BẢNG & PHÂN QUYỀN RBAC
 // ==========================================================================
 
 // Biến toàn cục lưu trữ trạng thái Quản trị
@@ -7,7 +7,27 @@ var currentAdminTab = 'tab_dai'; // Mặc định hiển thị Tab Đài Viễn 
 var currentAdminUser = null;     // Thông tin tài khoản đang đăng nhập
 
 /**
- * 1. KHỞI TẠO MODULE QUẢN TRỊ
+ * 1. HÀM MỞ VÀ ĐÓNG BẢNG QUẢN TRỊ (MODAL CONTROLLER)
+ */
+async function moBangQuanTri() {
+  var modal = document.getElementById('admin-modal');
+  if (modal) {
+    modal.style.display = 'flex'; // Hiển thị khung quản trị
+    await khoiTaoAdminModule();  // Tự động nạp dữ liệu và phân quyền
+  } else {
+    alert("❌ Không tìm thấy phần tử #admin-modal trong tệp index.html!");
+  }
+}
+
+function dongBangQuanTri() {
+  var modal = document.getElementById('admin-modal');
+  if (modal) {
+    modal.style.display = 'none'; // Ẩn khung quản trị
+  }
+}
+
+/**
+ * 2. KHỞI TẠO MODULE QUẢN TRỊ
  */
 async function khoiTaoAdminModule() {
   // Lấy thông tin tài khoản đang đăng nhập từ AppStore hoặc LocalStorage
@@ -24,12 +44,12 @@ async function khoiTaoAdminModule() {
   // Lắng nghe sự kiện click trên các nút Tab
   ganSuKienChuyenTab();
 
-  // Nạp dữ liệu và hiển thị Tab mặc định
+  // Nạp dữ liệu và hiển thị Tab hiện tại
   await hienThiAdminTab(currentAdminTab);
 }
 
 /**
- * 2. CHUYỂN ĐỔI TAB QUẢN TRỊ (KHÔNG LÀM TẢI LẠI TRANG)
+ * 3. CHUYỂN ĐỔI TAB QUẢN TRỊ (KHÔNG LÀM TẢI LẠI TRANG)
  */
 function ganSuKienChuyenTab() {
   var tabButtons = document.querySelectorAll('.admin-tab-btn');
@@ -55,8 +75,12 @@ async function hienThiAdminTab(tabName) {
   tabButtons.forEach(function(btn) {
     if (btn.getAttribute('data-tab') === tabName) {
       btn.classList.add('active');
+      btn.style.background = '#fff';
+      btn.style.fontWeight = 'bold';
     } else {
       btn.classList.remove('active');
+      btn.style.background = '#e9ecef';
+      btn.style.fontWeight = 'normal';
     }
   });
 
@@ -65,7 +89,7 @@ async function hienThiAdminTab(tabName) {
 }
 
 /**
- * 3. KIỂM TRA QUYỀN THAO TÁC CỦA NGƯỜI DÙNG (RBAC 4 CẤP)
+ * 4. KIỂM TRA QUYỀN THAO TÁC CỦA NGƯỜI DÙNG (RBAC 4 CẤP)
  */
 function kiemTraQuyenThaoTac(hanhDong, idDaiTarget, idTramTarget) {
   if (!currentAdminUser) return false;
@@ -106,7 +130,7 @@ function kiemTraQuyenThaoTac(hanhDong, idDaiTarget, idTramTarget) {
 }
 
 /**
- * 4. RÀNG BUỘC PHÂN CẤP KHI XÓA DỮ LIỆU (CASCADING CHECK CHUẨN CSDL)
+ * 5. RÀNG BUỘC PHÂN CẤP KHI XÓA DỮ LIỆU (CASCADING CHECK CHUẨN CSDL)
  */
 async function kiemTraRangBuocXoa(tenBang, idItem) {
   var state = AppStore.getState();
@@ -155,7 +179,7 @@ async function kiemTraRangBuocXoa(tenBang, idItem) {
 }
 
 /**
- * 5. HÀM HIỂN THỊ BẢNG DỮ LIỆU ĐẦY ĐỦ CÁC CỘT VÀ THÔNG TIN LIÊN KẾT
+ * 6. HÀM HIỂN THỊ BẢNG DỮ LIỆU ĐẦY ĐỦ CÁC CỘT VÀ THÔNG TIN LIÊN KẾT
  */
 async function renderBangDuLieuAdmin(tabName) {
   var container = document.getElementById('admin-table-container');
@@ -400,7 +424,7 @@ async function renderBangDuLieuAdmin(tabName) {
 }
 
 /**
- * 6. XỬ LÝ XÓA DỮ LIỆU AN TOÀN
+ * 7. XỬ LÝ XÓA DỮ LIỆU AN TOÀN
  */
 async function thucHienXoaItem(tenBang, idItem) {
   // Kiểm tra ràng buộc dữ liệu con trước khi xóa
