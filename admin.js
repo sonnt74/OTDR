@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - ĐIỀU KHIỂN GIAO DIỆN QUẢN TRỊ (SỬ DỤNG BẢNG TAI_KHOAN)
+// TỆP ADMIN.JS - ĐIỀU KHIỂN GIAO DIỆN QUẢN TRỊ (TÍCH HỢP VIEW SUPABASE)
 // ==========================================================================
 
 var confirmPromiseResolver = null;
@@ -88,7 +88,7 @@ function renderAllAdminTables() {
 }
 
 /**
- * 3.1 BẢNG TÀI KHOẢN (TRUY VẤN DUY NHẤT BẢNG TAI_KHOAN)
+ * 3.1 BẢNG TÀI KHOẢN (Ưu tiên lấy Tên Đài/Trạm từ View v_tai_khoan_full)
  */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
@@ -102,25 +102,20 @@ function renderMasterAccountTable() {
     if (curr && (curr.username || curr.email)) users = [curr];
   }
 
+  // Cơ chế dự phòng: Map ID ra Tên nếu dữ liệu chưa load từ View
   var daiList = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
   var tramList = state.rawTramList || state.tramList || (typeof rawTramList !== 'undefined' ? rawTramList : []);
 
   var listDaiMap = {};
   daiList.forEach(d => {
-    ['id_dai', 'id'].forEach(k => {
-      if (d[k] !== undefined && d[k] !== null && d[k] !== '') {
-        listDaiMap[String(d[k]).trim()] = d.ten_dai || d.ten;
-      }
-    });
+    var idDai = getSafeStrId(d, ['id_dai', 'id']);
+    if (idDai) listDaiMap[idDai] = d.ten_dai || d.ten;
   });
 
   var listTramMap = {};
   tramList.forEach(t => {
-    ['id_tram', 'id', 'id_tram_vt'].forEach(k => {
-      if (t[k] !== undefined && t[k] !== null && t[k] !== '') {
-        listTramMap[String(t[k]).trim()] = t.ten_tram || t.ten;
-      }
-    });
+    var idTram = getSafeStrId(t, ['id_tram', 'id', 'id_tram_vt']);
+    if (idTram) listTramMap[idTram] = t.ten_tram || t.ten;
   });
 
   var user = getCurrentUser();
@@ -136,13 +131,17 @@ function renderMasterAccountTable() {
     var daiId = getSafeStrId(u, ['id_dai', 'idDai', 'dai_id']);
     var tramId = getSafeStrId(u, ['id_tram', 'idTram', 'tram_id']);
     var canEdit = !!(u.can_edit_map || u.canEditMap || u.can_edit);
+    
+    // Ưu tiên ten_dai, ten_tram từ View, nếu không có thì tra Map
+    var tenDai = u.ten_dai || listDaiMap[daiId] || 'Tất cả';
+    var tenTram = u.ten_tram || listTramMap[tramId] || 'Tất cả';
 
     return `
       <tr>
         <td><b>${accountName}</b></td>
         <td><span class="badge" style="background:#0d6efd; color:#fff; padding:2px 6px; border-radius:3px;">${roleName}</span></td>
-        <td>${listDaiMap[daiId] || 'Tất cả'}</td>
-        <td>${listTramMap[tramId] || 'Tất cả'}</td>
+        <td>${tenDai}</td>
+        <td>${tenTram}</td>
         <td>${canEdit ? '✅ Có' : '❌ Không'}</td>
         <td>
           <button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien('${accountName}')">✏️ Sửa</button>
@@ -155,6 +154,9 @@ function renderMasterAccountTable() {
   tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center;">Chưa có dữ liệu tài khoản</td></tr>';
 }
 
+/**
+ * 3.2 BẢNG ĐÀI VIỄN THÔNG
+ */
 function renderMasterDaiTable() {
   var tbody = document.getElementById('masterDaiTableBody');
   if (!tbody) return;
@@ -184,6 +186,9 @@ function renderMasterDaiTable() {
   tbody.innerHTML = html || '<tr><td colspan="3" style="text-align:center;">Chưa có dữ liệu Đài</td></tr>';
 }
 
+/**
+ * 3.3 BẢNG TRẠM VIỄN THÔNG (Ưu tiên lấy Tên Đài từ View v_tram_vt_full)
+ */
 function renderMasterTramTable() {
   var tbody = document.getElementById('masterTramTableBody');
   if (!tbody) return;
@@ -191,6 +196,7 @@ function renderMasterTramTable() {
   var state = AppStore.getState();
   var list = state.rawTramList || state.tramList || (typeof rawTramList !== 'undefined' ? rawTramList : []);
   var daiList = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
+  
   var listDaiMap = Object.fromEntries(daiList.map(d => [getSafeStrId(d, ['id_dai', 'id']), d.ten_dai || d.ten]));
 
   var user = getCurrentUser();
@@ -201,11 +207,15 @@ function renderMasterTramTable() {
   var html = list.map(item => {
     var idTram = getSafeStrId(item, ['id_tram', 'id']);
     var idDai = getSafeStrId(item, ['id_dai', 'dai_id']);
+    
+    // Lấy trực tiếp ten_dai từ View nếu có, ngược lại tra Map
+    var tenDai = item.ten_dai || listDaiMap[idDai] || 'Chưa gán';
+
     return `
       <tr>
         <td>${idTram}</td>
         <td><b>${item.ten_tram || item.ten || 'Trạm VT'}</b></td>
-        <td>🏢 ${listDaiMap[idDai] || 'Chưa gán'}</td>
+        <td>🏢 ${tenDai}</td>
         <td>
           ${checkAdminPermission('SUA', idDai, idTram, true) ? `<button class="btn-small btn-success" onclick="moFormThemTram(${idTram})">✏️ Sửa</button>` : ''}
           ${checkAdminPermission('XOA', idDai, idTram, true) ? `<button class="btn-small del" onclick="deleteAdminRecord('tram_vt', ${idTram})">🗑️ Xóa</button>` : ''}
@@ -217,6 +227,9 @@ function renderMasterTramTable() {
   tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;">Chưa có dữ liệu Trạm</td></tr>';
 }
 
+/**
+ * 3.4 BẢNG TUYẾN CÁP
+ */
 function renderMasterTuyenTable() {
   var tbody = document.getElementById('masterTuyenTableBody');
   if (!tbody) return;
@@ -242,32 +255,15 @@ function renderMasterTuyenTable() {
   tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;">Chưa có dữ liệu Tuyến cáp</td></tr>';
 }
 
+/**
+ * 3.5 BẢNG ĐOẠN CÁP (Tối ưu hóa mạnh mẽ nhờ View v_doan_cap_full)
+ */
 function renderMasterDoanTable() {
   var tbody = document.getElementById('masterDoanTableBody');
   if (!tbody) return;
 
   var state = AppStore.getState();
   var list = state.rawDoanList || state.doanCapList || (typeof rawDoanCapList !== 'undefined' ? rawDoanCapList : []);
-  var tuyenList = state.rawTuyenList || state.tuyenList || (typeof rawTuyenList !== 'undefined' ? rawTuyenList : []);
-  var tramList = state.rawTramList || state.tramList || (typeof rawTramList !== 'undefined' ? rawTramList : []);
-
-  var listTuyenMap = {};
-  tuyenList.forEach(t => {
-    ['id_tuyen_cap', 'id_tuyen', 'id', 'ma_tuyencap'].forEach(k => {
-      if (t[k] !== undefined && t[k] !== null && t[k] !== '') {
-        listTuyenMap[String(t[k]).trim()] = t.ten_tuyen || t.ten || t.ma_tuyencap;
-      }
-    });
-  });
-
-  var listTramMap = {};
-  tramList.forEach(tr => {
-    ['id_tram', 'id', 'id_tram_vt', 'ma_tram'].forEach(k => {
-      if (tr[k] !== undefined && tr[k] !== null && tr[k] !== '') {
-        listTramMap[String(tr[k]).trim()] = tr.ten_tram || tr.ten;
-      }
-    });
-  });
 
   var user = getCurrentUser();
   if (user.role === 'admin_tram' || user.role === 'tram_admin') {
@@ -280,8 +276,9 @@ function renderMasterDoanTable() {
     var idTram = getSafeStrId(item, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']);
     var maDoan = item.ma_doancap || item.ma_doan || item.ten_doancap || 'N/A';
 
-    var tenTuyen = listTuyenMap[idTuyen] || (idTuyen ? `ID: ${idTuyen}` : 'Chưa gán');
-    var tenTram = listTramMap[idTram] || (idTram ? `ID: ${idTram}` : 'Chưa gán');
+    // Không cần tra Map nữa vì dữ liệu từ View đã có sẵn tên
+    var tenTuyen = item.ten_tuyen || (idTuyen ? `ID: ${idTuyen}` : 'Chưa gán');
+    var tenTram = item.ten_tram || (idTram ? `ID: ${idTram}` : 'Chưa gán');
 
     return `
       <tr>
@@ -300,6 +297,9 @@ function renderMasterDoanTable() {
   tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;">Chưa có dữ liệu Đoạn cáp</td></tr>';
 }
 
+/**
+ * 4. HÀM CHUẨN BỊ FORM (SỬA/THÊM TÀI KHOẢN)
+ */
 function chuanBiFormThemThanhVien(usernameToEdit) {
   var state = AppStore.getState();
   var daiList = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
@@ -344,7 +344,7 @@ function chuanBiFormThemThanhVien(usernameToEdit) {
 }
 
 /**
- * LƯU TÀI KHOẢN (CHỈ LƯU VÀO BẢNG TAI_KHOAN)
+ * 5. LƯU TÀI KHOẢN (Ghi trực tiếp vào bảng tai_khoan)
  */
 async function saveAccountAction() {
   if (!checkAdminPermission('SUA', null, null, false)) return;
@@ -395,11 +395,14 @@ function moFormThemTram(id) { moGenericAuxForm('tram_vt', id); }
 function moFormThemTuyen(id) { moGenericAuxForm('tuyen_cap', id); }
 function moFormThemDoan(id) { moGenericAuxForm('doan_cap', id); }
 
+/**
+ * 6. CHUẨN BỊ FORM THÊM/SỬA DANH MỤC (Đài, Trạm, Tuyến, Đoạn)
+ */
 function moGenericAuxForm(tableType, recordId) {
   var state = AppStore.getState();
-  var daiList = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
-  var tramList = state.rawTramList || state.tramList || (typeof rawTramList !== 'undefined' ? rawTramList : []);
-  var tuyenList = state.rawTuyenList || state.tuyenList || (typeof rawTuyenList !== 'undefined' ? rawTuyenList : []);
+  var daiList = state.rawDaiList || state.daiList || [];
+  var tramList = state.rawTramList || state.tramList || [];
+  var tuyenList = state.rawTuyenList || state.tuyenList || [];
 
   document.getElementById('auxTableType').value = tableType;
   document.getElementById('auxRecordId').value = recordId || '';
@@ -434,7 +437,7 @@ function moGenericAuxForm(tableType, recordId) {
     `;
   }
   else if (tableType === 'doan_cap') {
-    var doanList = state.rawDoanList || state.doanCapList || (typeof rawDoanCapList !== 'undefined' ? rawDoanCapList : []);
+    var doanList = state.rawDoanList || state.doanCapList || [];
     var rec = doanList.find(d => String(getSafeStrId(d, ['id_doan_cap', 'id_doan', 'id'])) === String(recordId)) || {};
     document.getElementById('auxModalTitle').innerText = recordId ? "✏️ Sửa Đoạn Cáp" : "➕ Thêm Đoạn Cáp";
     html = `
@@ -448,7 +451,8 @@ function moGenericAuxForm(tableType, recordId) {
       <div class="form-group"><label>Trạm Quản Lý:</label><select id="auxTramId">
         ${tramList.map(t => {
           var trId = getSafeStrId(t, ['id_tram', 'id']);
-          return `<option value="${trId}" ${String(trId) === String(rec.id_tram || rec.tram_id) ? 'selected' : ''}>${t.ten_tram || t.ten}</option>`;
+          // Lấy chính xác id_tram để đưa vào ô chọn
+          return `<option value="${trId}" ${String(trId) === String(rec.id_tram) ? 'selected' : ''}>${t.ten_tram || t.ten}</option>`;
         }).join('')}
       </select></div>
     `;
@@ -458,6 +462,9 @@ function moGenericAuxForm(tableType, recordId) {
   openModal('genericAuxModal');
 }
 
+/**
+ * 7. LƯU DANH MỤC (Ghi trực tiếp vào các bảng gốc, không ghi vào View)
+ */
 async function saveAuxRecord() {
   var tableType = document.getElementById('auxTableType').value;
   var recordId = document.getElementById('auxRecordId').value;
@@ -473,16 +480,17 @@ async function saveAuxRecord() {
   } else if (tableType === 'tuyen_cap') {
     payload.ma_tuyencap = document.getElementById('auxMa').value.trim();
     payload.ten_tuyen = document.getElementById('auxTen').value.trim();
-    if (recordId) payload.id_tuyen = Number(recordId);
+    if (recordId) payload.id_tuyen_cap = Number(recordId);
   } else if (tableType === 'doan_cap') {
     payload.ma_doancap = document.getElementById('auxMa').value.trim();
     payload.id_tuyen = Number(document.getElementById('auxTuyenId').value);
-    payload.id_tram = Number(document.getElementById('auxTramId').value);
+    payload.id_tram = Number(document.getElementById('auxTramId').value); // Lưu chuẩn id_tram anh vừa tạo
     if (recordId) payload.id_doan_cap = Number(recordId);
   }
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
+      // Ghi vào bảng vật lý tương ứng với tableType
       var { error } = await supabaseClient.from(tableType).upsert([payload]);
       if (error) throw error;
       alert("✅ Lưu danh mục thành công!");
@@ -502,7 +510,7 @@ async function saveAuxRecord() {
 }
 
 /**
- * XÓA BẢN GHI (CHỈ XÓA TRÊN BẢNG TAI_KHOAN KHI CHỌN LOẠI DỮ LIỆU TÀI KHOẢN)
+ * 8. XÓA BẢN GHI TỪ BẢNG GỐC VÀ RÀ SOÁT RÀNG BUỘC
  */
 async function deleteAdminRecord(tableName, idItem) {
   if (!checkAdminPermission('XOA', null, null, false)) return;
@@ -528,7 +536,7 @@ async function deleteAdminRecord(tableName, idItem) {
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      var keyField = (tableName === 'tai_khoan') ? 'email' : (tableName === 'doan_cap' ? 'id_doan_cap' : 'id_' + tableName.replace('_vt', '').replace('_cap', ''));
+      var keyField = (tableName === 'tai_khoan') ? 'email' : (tableName === 'doan_cap' ? 'id_doan_cap' : (tableName === 'tuyen_cap' ? 'id_tuyen_cap' : 'id_' + tableName.replace('_vt', '')));
       
       var { error } = await supabaseClient.from(tableName).delete().eq(keyField, idItem);
       if (error) throw error;
@@ -545,6 +553,9 @@ async function deleteAdminRecord(tableName, idItem) {
   }
 }
 
+/**
+ * 9. QUẢN LÝ ĐIỂM HẠ TẦNG TRỰC TIẾP TRÊN BẢN ĐỒ
+ */
 function openCrudModalForPoint(actionType, pointData) {
   var modal = document.getElementById('crudModal');
   if (!modal) return;
@@ -616,6 +627,9 @@ async function executeCrudAction() {
   }
 }
 
+/**
+ * 10. HỘP THOẠI XÁC NHẬN TÙY CHỈNH (CUSTOM CONFIRM)
+ */
 function showCustomConfirm(message, title) {
   return new Promise(function(resolve) {
     confirmPromiseResolver = resolve;
