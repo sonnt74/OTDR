@@ -29,7 +29,7 @@ function getSafeStrId(item, keys) {
 }
 
 /**
- * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER
+ * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (BẢO TOÀN DANH SÁCH USER OFFLINE & SUPABASE)
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   let localMaster = null;
@@ -77,26 +77,20 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       ]);
 
       // Tải bảng users có bẫy lỗi an toàn
-      let userRes = { data: [] };
       try {
         let { data: uData, error: uErr } = await supabaseClient.from('users').select('*');
-        if (!uErr && uData) userRes.data = uData;
+        if (!uErr && uData && uData.length > 0) {
+          rawUserList = uData;
+        }
       } catch (uErr) {
-        console.warn("Chưa tải được bảng users từ Supabase:", uErr.message);
+        console.warn("Chưa tải được bảng users từ Supabase (giữ dữ liệu từ IndexedDB):", uErr.message);
       }
 
-      rawDaiList = daiRes.data || [];
-      rawTramList = tramRes.data || [];
-      rawTuyenList = tuyenRes.data || [];
-      rawDoanCapList = doanRes.data || [];
-      rawLoaiDiemList = loaiRes.data || [];
-      rawUserList = (userRes.data && userRes.data.length > 0) ? userRes.data : rawUserList;
-
-      // Nạp tài khoản đăng nhập hiện tại nếu danh sách người dùng trống
-      if (rawUserList.length === 0) {
-        var currUser = JSON.parse(localStorage.getItem('TNN_USER_INFO')) || (typeof currentUser !== 'undefined' ? currentUser : null);
-        if (currUser) rawUserList = [currUser];
-      }
+      rawDaiList = daiRes.data || rawDaiList;
+      rawTramList = tramRes.data || rawTramList;
+      rawTuyenList = tuyenRes.data || rawTuyenList;
+      rawDoanCapList = doanRes.data || rawDoanCapList;
+      rawLoaiDiemList = loaiRes.data || rawLoaiDiemList;
 
       // Lưu bản ghi danh mục vào kho master_store của IndexedDB
       if (typeof idbLuuMaster === 'function') {
