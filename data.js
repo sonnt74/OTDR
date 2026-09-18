@@ -505,6 +505,7 @@ function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo,
 }
 
 function timViTriDut() {
+  anBangDieuKhien();
   var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value), kcOtdrMeters = kcOtdrKm * 1000; 
   if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { showToast("Nhập cự ly đo hợp lệ!", "error"); return; }
   
@@ -583,7 +584,7 @@ function timViTriDut() {
       <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'zalo')" style="background:#0068ff; color:white;">💬 Zalo App</button>
       <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'viber')" style="background:#6f42c1; color:white;">📱 Viber</button>
     </div>`;
-  anBangDieuKhien();
+  
   var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>` +
                   `Cự đoạn đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
                   `📍 Lý trình QL: <b>${interpolatedLyTrinhText}</b><br>` +
@@ -598,6 +599,7 @@ function timViTriDut() {
 }
 
 function timLyTrinhBanDo() {
+  anBangDieuKhien();
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var parsedTarget = parseLyTrinhWithSuffix(txt);
   var targetMeters = parsedTarget ? parsedTarget.meters : null;
@@ -677,7 +679,7 @@ function timLyTrinhBanDo() {
   
   var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
   foundMarkerLayer = L.marker([foundLat, foundLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
-  anBangDieuKhien();
+  
   var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
                      `- Vị trí: <b>${bestDescription}</b><br>` +
                      `- Cự ly cáp tới Trạm TNN: <b>${distStr}</b><br>` ;
