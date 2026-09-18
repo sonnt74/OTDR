@@ -594,7 +594,6 @@ function timViTriDut() {
   
   faultMarker.bindPopup(popupHtml).openPopup();
   datLichTuXoaMarkerTimKiem();
-  anBangDieuKhien();
 }
 
 function timLyTrinhBanDo() {
@@ -685,7 +684,6 @@ function timLyTrinhBanDo() {
                      
   foundMarkerLayer.bindPopup(popupContent).openPopup();
   datLichTuXoaMarkerTimKiem();
-  anBangDieuKhien();
 }
 
 function xoaTatCaDoiTuongMap() {
