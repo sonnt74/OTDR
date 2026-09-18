@@ -14,7 +14,7 @@ async function openModal(modalId, tabId) {
   if (panel) panel.style.display = 'none';
 
   if (modalId === 'adminMasterModal') {
-    // Chủ động nạp dữ liệu trực tiếp từ Supabase để các bảng luôn có số liệu hiển thị đầy đủ
+    // Ép buộc tải dữ liệu trực tiếp từ Supabase để các bảng quản trị luôn có dữ liệu hiển thị
     try {
       if (navigator.onLine && typeof supabaseClient !== 'undefined') {
         var [uRes, dRes, tRes, tuRes, doRes] = await Promise.all([
@@ -24,14 +24,14 @@ async function openModal(modalId, tabId) {
           supabaseClient.from('tuyen_cap').select('*'),
           supabaseClient.from('v_doan_cap_full').select('*')
         ]);
-        if (uRes.data) window.rawUserList = uRes.data;
-        if (dRes.data) window.rawDaiList = dRes.data;
-        if (tRes.data) window.rawTramList = tRes.data;
-        if (tuRes.data) window.rawTuyenList = tuRes.data;
-        if (doRes.data) window.rawDoanCapList = doRes.data;
+        window.rawUserList = uRes.data || [];
+        window.rawDaiList = dRes.data || [];
+        window.rawTramList = tRes.data || [];
+        window.rawTuyenList = tuRes.data || [];
+        window.rawDoanCapList = doRes.data || [];
       }
     } catch (e) {
-      console.warn("Dùng dữ liệu cache cho quản trị:", e);
+      console.warn("Lỗi tải dữ liệu trực tiếp:", e);
     }
 
     renderAllAdminTables();
@@ -51,15 +51,19 @@ function closeModals() {
   }
 }
 
-function switchAdminTab(tabPaneId) {
+function switchAdminTab(tabPaneId, btnEl) {
   document.querySelectorAll('.admin-tabs .tab-btn').forEach(btn => {
-    var onclickAttr = btn.getAttribute('onclick') || '';
-    if (onclickAttr.indexOf(tabPaneId) !== -1) {
-      btn.classList.add('active');
-    } else {
-      btn.classList.remove('active');
-    }
+    btn.classList.remove('active');
   });
+
+  if (btnEl) {
+    btnEl.classList.add('active');
+  } else {
+    document.querySelectorAll('.admin-tabs .tab-btn').forEach(btn => {
+      var attr = btn.getAttribute('onclick') || '';
+      if (attr.indexOf(tabPaneId) !== -1) btn.classList.add('active');
+    });
+  }
 
   document.querySelectorAll('.tab-pane').forEach(pane => {
     if (pane.id === tabPaneId) {
@@ -88,7 +92,7 @@ function getSafeDataList(keyNames) {
     if (state[k] && state[k].length > 0) return state[k];
     if (window[k] && window[k].length > 0) return window[k];
   }
-  // Dự phòng quét trực tiếp biến toàn cục
+  
   if (keyNames.includes('rawUserList') && window.rawUserList && window.rawUserList.length > 0) return window.rawUserList;
   if (keyNames.includes('userList') && window.rawUserList && window.rawUserList.length > 0) return window.rawUserList;
   if (keyNames.includes('users') && window.rawUserList && window.rawUserList.length > 0) return window.rawUserList;
@@ -609,10 +613,13 @@ async function executeCrudAction() {
 
 /** 10. TÍNH NĂNG ĐỔI MẬT KHẨU HOẠT ĐỘNG CHÍNH XÁC */
 function openChangePasswordModal() {
-  document.getElementById('txtCurrentPass').value = '';
-  document.getElementById('txtNewPass').value = '';
-  document.getElementById('txtConfirmPass').value = '';
-  document.getElementById('changePasswordModal').style.display = 'flex';
+  var modal = document.getElementById('changePasswordModal');
+  if (modal) {
+    document.getElementById('txtCurrentPass').value = '';
+    document.getElementById('txtNewPass').value = '';
+    document.getElementById('txtConfirmPass').value = '';
+    modal.style.display = 'flex';
+  }
 }
 
 async function executeChangePassword() {
