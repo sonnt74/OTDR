@@ -84,13 +84,15 @@ function openModal(id, tabId = null) {
 }
 
 // Hàm ghi nhật ký thao tác người dùng
+// Hàm ghi nhật ký thao tác người dùng (Sử dụng account)
 async function ghiNhatKyThaoTac(hanhDong, chiTiet) {
   try {
-    var userEmail = currentUser && currentUser.isLoggedIn ? (currentUser.email || "Thành viên hệ thống") : "Khách";
+    var currentUser = JSON.parse(localStorage.getItem('tnn_user')) || {};
+    var userAccount = currentUser && currentUser.account ? currentUser.account : "Khách";
     var userRole = currentUser ? currentUser.role : "member";
 
     await supabaseClient.from('lich_su_thao_tac').insert([{
-      email_nguoi_dung: userEmail,
+      account_nguoi_dung: userAccount,
       vai_tro: userRole,
       hanh_dong: hanhDong,
       chi_tiet: chiTiet
