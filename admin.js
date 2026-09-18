@@ -1,11 +1,11 @@
 // ==========================================================================
-// TỆP ADMIN.JS - ĐIỀU KHIỂN GIAO DIỆN QUẢN TRỊ (TỐI ƯU UX KHÔNG ĐÓNG FORM TỔNG)
+// TỆP ADMIN.JS - ĐIỀU KHIỂN GIAO DIỆN QUẢN TRỊ (TÍCH HỢP VIEW SUPABASE)
 // ==========================================================================
 
 var confirmPromiseResolver = null;
 
 function openModal(modalId, tabId) {
-  closeModals();
+  closeModals(); // Hàm này đóng tất cả, chỉ dùng khi mở từ menu chính
   var targetModal = document.getElementById(modalId);
   if (targetModal) targetModal.style.display = 'flex';
 
@@ -35,7 +35,7 @@ function switchAdminTab(tabPaneId) {
 }
 
 function getCurrentUser() {
-  var state = (typeof AppStore !== 'undefined') ? AppStore.getState() : {};
+  var state = AppStore.getState();
   return state.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null) || JSON.parse(localStorage.getItem('tnn_user')) || {
     username: 'guest',
     role: 'nhan_vien',
@@ -48,7 +48,7 @@ function checkAdminPermission(action, idDaiTarget, idTramTarget, silent = true) 
   var user = getCurrentUser();
   var role = user.role || user.user_role;
 
-  if (role === 'sys_admin' || role === 'admin_sys') return true;
+  if (role === 'admin_sys' || role === 'sys_admin') return true;
 
   if (role === 'nhan_vien' || role === 'member' || role === 'tram_user') {
     if (action !== 'XEM') {
@@ -87,7 +87,9 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
-/** BẢNG TÀI KHOẢN */
+/**
+ * 3.1 BẢNG TÀI KHOẢN (Ưu tiên lấy Tên Đài/Trạm từ View v_tai_khoan_full)
+ */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
@@ -100,13 +102,20 @@ function renderMasterAccountTable() {
     if (curr && (curr.username || curr.email)) users = [curr];
   }
 
-  var daiList = state.rawDaiList || state.daiList || [];
-  var tramList = state.rawTramList || state.tramList || [];
+  var daiList = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
+  var tramList = state.rawTramList || state.tramList || (typeof rawTramList !== 'undefined' ? rawTramList : []);
 
   var listDaiMap = {};
-  daiList.forEach(d => { var idDai = getSafeStrId(d, ['id_dai', 'id']); if (idDai) listDaiMap[idDai] = d.ten_dai || d.ten; });
+  daiList.forEach(d => {
+    var idDai = getSafeStrId(d, ['id_dai', 'id']);
+    if (idDai) listDaiMap[idDai] = d.ten_dai || d.ten;
+  });
+
   var listTramMap = {};
-  tramList.forEach(t => { var idTram = getSafeStrId(t, ['id_tram', 'id', 'id_tram_vt']); if (idTram) listTramMap[idTram] = t.ten_tram || t.ten; });
+  tramList.forEach(t => {
+    var idTram = getSafeStrId(t, ['id_tram', 'id', 'id_tram_vt']);
+    if (idTram) listTramMap[idTram] = t.ten_tram || t.ten;
+  });
 
   var user = getCurrentUser();
   if (user.role === 'admin_dai' || user.role === 'dai_admin') {
@@ -128,13 +137,13 @@ function renderMasterAccountTable() {
     return `
       <tr>
         <td><b>${accountName}</b></td>
-        <td><span style="background:var(--primary-blue); color:#fff; padding:2px 6px; border-radius:3px; font-size:12px;">${roleName}</span></td>
+        <td><span class="badge" style="background:#0d6efd; color:#fff; padding:2px 6px; border-radius:3px;">${roleName}</span></td>
         <td>${tenDai}</td>
         <td>${tenTram}</td>
         <td>${canEdit ? '✅ Có' : '❌ Không'}</td>
         <td style="white-space: nowrap;">
           <button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien('${accountName}')">✏️ Sửa</button>
-          <button class="btn-small btn-danger" onclick="deleteAdminRecord('tai_khoan', '${accountName}')">🗑️ Xóa</button>
+          <button class="btn-small del" style="background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;" onclick="deleteAdminRecord('tai_khoan', '${accountName}')">🗑️ Xóa</button>
         </td>
       </tr>
     `;
@@ -143,13 +152,15 @@ function renderMasterAccountTable() {
   tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center;">Chưa có dữ liệu tài khoản</td></tr>';
 }
 
-/** BẢNG ĐÀI VIỄN THÔNG */
+/**
+ * 3.2 BẢNG ĐÀI VIỄN THÔNG
+ */
 function renderMasterDaiTable() {
   var tbody = document.getElementById('masterDaiTableBody');
   if (!tbody) return;
 
   var state = AppStore.getState();
-  var list = state.rawDaiList || state.daiList || [];
+  var list = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
   var user = getCurrentUser();
 
   if (user.role === 'admin_dai' || user.role === 'dai_admin') {
@@ -164,7 +175,7 @@ function renderMasterDaiTable() {
         <td><b>${item.ten_dai || item.ten || 'Đài VT'}</b></td>
         <td style="white-space: nowrap;">
           ${checkAdminPermission('SUA', idDai, null, true) ? `<button class="btn-small btn-success" onclick="moFormThemDai(${idDai})">✏️ Sửa</button>` : ''}
-          ${checkAdminPermission('XOA', idDai, null, true) ? `<button class="btn-small btn-danger" onclick="deleteAdminRecord('dai_vt', ${idDai})">🗑️ Xóa</button>` : ''}
+          ${checkAdminPermission('XOA', idDai, null, true) ? `<button class="btn-small del" style="background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;" onclick="deleteAdminRecord('dai_vt', ${idDai})">🗑️ Xóa</button>` : ''}
         </td>
       </tr>
     `;
@@ -173,14 +184,16 @@ function renderMasterDaiTable() {
   tbody.innerHTML = html || '<tr><td colspan="3" style="text-align:center;">Chưa có dữ liệu Đài</td></tr>';
 }
 
-/** BẢNG TRẠM VIỄN THÔNG */
+/**
+ * 3.3 BẢNG TRẠM VIỄN THÔNG (Ưu tiên lấy Tên Đài từ View v_tram_vt_full)
+ */
 function renderMasterTramTable() {
   var tbody = document.getElementById('masterTramTableBody');
   if (!tbody) return;
 
   var state = AppStore.getState();
-  var list = state.rawTramList || state.tramList || [];
-  var daiList = state.rawDaiList || state.daiList || [];
+  var list = state.rawTramList || state.tramList || (typeof rawTramList !== 'undefined' ? rawTramList : []);
+  var daiList = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
   
   var listDaiMap = Object.fromEntries(daiList.map(d => [getSafeStrId(d, ['id_dai', 'id']), d.ten_dai || d.ten]));
 
@@ -192,6 +205,7 @@ function renderMasterTramTable() {
   var html = list.map(item => {
     var idTram = getSafeStrId(item, ['id_tram', 'id']);
     var idDai = getSafeStrId(item, ['id_dai', 'dai_id']);
+    
     var tenDai = item.ten_dai || listDaiMap[idDai] || 'Chưa gán';
 
     return `
@@ -201,7 +215,7 @@ function renderMasterTramTable() {
         <td>🏢 ${tenDai}</td>
         <td style="white-space: nowrap;">
           ${checkAdminPermission('SUA', idDai, idTram, true) ? `<button class="btn-small btn-success" onclick="moFormThemTram(${idTram})">✏️ Sửa</button>` : ''}
-          ${checkAdminPermission('XOA', idDai, idTram, true) ? `<button class="btn-small btn-danger" onclick="deleteAdminRecord('tram_vt', ${idTram})">🗑️ Xóa</button>` : ''}
+          ${checkAdminPermission('XOA', idDai, idTram, true) ? `<button class="btn-small del" style="background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;" onclick="deleteAdminRecord('tram_vt', ${idTram})">🗑️ Xóa</button>` : ''}
         </td>
       </tr>
     `;
@@ -210,13 +224,15 @@ function renderMasterTramTable() {
   tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;">Chưa có dữ liệu Trạm</td></tr>';
 }
 
-/** BẢNG TUYẾN CÁP */
+/**
+ * 3.4 BẢNG TUYẾN CÁP
+ */
 function renderMasterTuyenTable() {
   var tbody = document.getElementById('masterTuyenTableBody');
   if (!tbody) return;
 
   var state = AppStore.getState();
-  var list = state.rawTuyenList || state.tuyenList || [];
+  var list = state.rawTuyenList || state.tuyenList || (typeof rawTuyenList !== 'undefined' ? rawTuyenList : []);
 
   var html = list.map(item => {
     var idTuyen = getSafeStrId(item, ['id_tuyen_cap', 'id_tuyen', 'id']);
@@ -227,7 +243,7 @@ function renderMasterTuyenTable() {
         <td><b>${item.ten_tuyen || item.ten || 'Tuyến cáp'}</b></td>
         <td style="white-space: nowrap;">
           ${checkAdminPermission('SUA', null, null, true) ? `<button class="btn-small btn-success" onclick="moFormThemTuyen(${idTuyen})">✏️ Sửa</button>` : ''}
-          ${checkAdminPermission('XOA', null, null, true) ? `<button class="btn-small btn-danger" onclick="deleteAdminRecord('tuyen_cap', ${idTuyen})">🗑️ Xóa</button>` : ''}
+          ${checkAdminPermission('XOA', null, null, true) ? `<button class="btn-small del" style="background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;" onclick="deleteAdminRecord('tuyen_cap', ${idTuyen})">🗑️ Xóa</button>` : ''}
         </td>
       </tr>
     `;
@@ -236,13 +252,15 @@ function renderMasterTuyenTable() {
   tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;">Chưa có dữ liệu Tuyến cáp</td></tr>';
 }
 
-/** BẢNG ĐOẠN CÁP */
+/**
+ * 3.5 BẢNG ĐOẠN CÁP (Tối ưu hóa mạnh mẽ nhờ View v_doan_cap_full)
+ */
 function renderMasterDoanTable() {
   var tbody = document.getElementById('masterDoanTableBody');
   if (!tbody) return;
 
   var state = AppStore.getState();
-  var list = state.rawDoanList || state.doanCapList || [];
+  var list = state.rawDoanList || state.doanCapList || (typeof rawDoanCapList !== 'undefined' ? rawDoanCapList : []);
 
   var user = getCurrentUser();
   if (user.role === 'admin_tram' || user.role === 'tram_admin') {
@@ -266,7 +284,7 @@ function renderMasterDoanTable() {
         <td>🏠 ${tenTram}</td>
         <td style="white-space: nowrap;">
           ${checkAdminPermission('SUA', null, idTram, true) ? `<button class="btn-small btn-success" onclick="moFormThemDoan(${idDoan})">✏️ Sửa</button>` : ''}
-          ${checkAdminPermission('XOA', null, idTram, true) ? `<button class="btn-small btn-danger" onclick="deleteAdminRecord('doan_cap', ${idDoan})">🗑️ Xóa</button>` : ''}
+          ${checkAdminPermission('XOA', null, idTram, true) ? `<button class="btn-small del" style="background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;" onclick="deleteAdminRecord('doan_cap', ${idDoan})">🗑️ Xóa</button>` : ''}
         </td>
       </tr>
     `;
@@ -275,11 +293,13 @@ function renderMasterDoanTable() {
   tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;">Chưa có dữ liệu Đoạn cáp</td></tr>';
 }
 
-/** CHUẨN BỊ FORM THÊM/SỬA TÀI KHOẢN */
+/**
+ * 4. HÀM CHUẨN BỊ FORM (SỬA/THÊM TÀI KHOẢN)
+ */
 function chuanBiFormThemThanhVien(usernameToEdit) {
   var state = AppStore.getState();
-  var daiList = state.rawDaiList || state.daiList || [];
-  var tramList = state.rawTramList || state.tramList || [];
+  var daiList = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
+  var tramList = state.rawTramList || state.tramList || (typeof rawTramList !== 'undefined' ? rawTramList : []);
 
   var selectDai = document.getElementById('newMemberDai');
   var selectTram = document.getElementById('newMemberTram');
@@ -294,7 +314,7 @@ function chuanBiFormThemThanhVien(usernameToEdit) {
   }
 
   var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginEmail');
-  var users = state.rawUserList || [];
+  var users = state.rawUserList || (typeof rawUserList !== 'undefined' ? rawUserList : []);
 
   if (usernameToEdit) {
     var userObj = users.find(u => (u.username || u.email || u.user_name || u.name) === usernameToEdit);
@@ -316,16 +336,17 @@ function chuanBiFormThemThanhVien(usernameToEdit) {
     document.getElementById('newMemberCanEdit').checked = false;
   }
 
-  // TỐI ƯU UX: Chỉ hiển thị form con lên đè form quản trị
-  var modalForm = document.getElementById('addMemberModal');
-  if (modalForm) modalForm.style.display = 'flex';
+  // TỐI ƯU: Chỉ hiển thị modal con, không gọi closeModals() để mất Bảng quản trị
+  document.getElementById('addMemberModal').style.display = 'flex';
 }
 
-/** LƯU TÀI KHOẢN (Chỉ đóng form con) */
+/**
+ * 5. LƯU TÀI KHOẢN 
+ */
 async function saveAccountAction() {
   if (!checkAdminPermission('SUA', null, null, false)) return;
 
-  var accountInput = document.getElementById('newMemberAccount');
+  var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginEmail');
   var username = accountInput ? accountInput.value.trim() : '';
   var password = document.getElementById('newMemberPass').value.trim();
   var role = document.getElementById('newMemberRole').value;
@@ -333,11 +354,18 @@ async function saveAccountAction() {
   var idDai = document.getElementById('newMemberDai').value || null;
   var idTram = document.getElementById('newMemberTram').value || null;
 
-  if (!username) { alert("⚠️ Vui lòng nhập tên tài khoản / email!"); return; }
+  if (!username) {
+    alert("⚠️ Vui lòng nhập tên tài khoản / email!");
+    return;
+  }
 
   var payload = {
-    email: username, username: username, role: role, can_edit_map: canEdit,
-    id_dai: idDai ? Number(idDai) : null, id_tram: idTram ? Number(idTram) : null
+    email: username,
+    username: username,
+    role: role,
+    can_edit_map: canEdit,
+    id_dai: idDai ? Number(idDai) : null,
+    id_tram: idTram ? Number(idTram) : null
   };
   if (password) payload.password = password;
 
@@ -345,17 +373,21 @@ async function saveAccountAction() {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       var { error } = await supabaseClient.from('tai_khoan').upsert([payload]);
       if (error) throw error;
-      if(typeof showToast === 'function') showToast("Đã lưu thông tin tài khoản thành công!", "success");
+      alert("✅ Đã lưu thông tin tài khoản thành công!");
     } else {
-      if(typeof idbThemHangDoiSync === 'function') await idbThemHangDoiSync({ actionType: 'SAVE_USER', payload: payload });
+      await idbThemHangDoiSync({ actionType: 'SAVE_USER', payload: payload });
+      alert("🔄 Đã lưu vào hàng đợi đồng bộ Offline!");
     }
 
-    // TỐI ƯU UX: Ẩn form con, giữ form Admin
-    var modalForm = document.getElementById('addMemberModal');
-    if (modalForm) modalForm.style.display = 'none';
-
+    // TỐI ƯU: Chỉ ẩn form con
+    document.getElementById('addMemberModal').style.display = 'none';
+    
+    // Tải lại dữ liệu và Render lại bảng
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
-  } catch (err) { alert("❌ Lỗi khi lưu tài khoản: " + err.message); }
+    renderAllAdminTables();
+  } catch (err) {
+    alert("❌ Lỗi khi lưu tài khoản: " + err.message);
+  }
 }
 
 function moFormThemDai(id) { moGenericAuxForm('dai_vt', id); }
@@ -363,7 +395,9 @@ function moFormThemTram(id) { moGenericAuxForm('tram_vt', id); }
 function moFormThemTuyen(id) { moGenericAuxForm('tuyen_cap', id); }
 function moFormThemDoan(id) { moGenericAuxForm('doan_cap', id); }
 
-/** CHUẨN BỊ FORM THÊM/SỬA DANH MỤC */
+/**
+ * 6. CHUẨN BỊ FORM THÊM/SỬA DANH MỤC
+ */
 function moGenericAuxForm(tableType, recordId) {
   var state = AppStore.getState();
   var daiList = state.rawDaiList || state.daiList || [];
@@ -379,15 +413,18 @@ function moGenericAuxForm(tableType, recordId) {
   if (tableType === 'dai_vt') {
     var rec = daiList.find(d => String(getSafeStrId(d, ['id_dai', 'id'])) === String(recordId)) || {};
     document.getElementById('auxModalTitle').innerText = recordId ? "✏️ Sửa Đài VT" : "➕ Thêm Đài VT";
-    html = `<div class="form-group"><label>Tên Đài VT:</label><input type="text" id="auxTen" class="form-control" value="${rec.ten_dai || rec.ten || ''}"></div>`;
+    html = `<div class="form-group"><label>Tên Đài VT:</label><input type="text" id="auxTen" value="${rec.ten_dai || rec.ten || ''}" style="width:100%; padding:8px; box-sizing:border-box;"></div>`;
   } 
   else if (tableType === 'tram_vt') {
     var rec = tramList.find(t => String(getSafeStrId(t, ['id_tram', 'id'])) === String(recordId)) || {};
     document.getElementById('auxModalTitle').innerText = recordId ? "✏️ Sửa Trạm VT" : "➕ Thêm Trạm VT";
     html = `
-      <div class="form-group"><label>Tên Trạm VT:</label><input type="text" id="auxTen" class="form-control" value="${rec.ten_tram || rec.ten || ''}"></div>
-      <div class="form-group"><label>Đài Quản Lý:</label><select id="auxDaiId" class="form-control">
-        ${daiList.map(d => { var dId = getSafeStrId(d, ['id_dai', 'id']); return `<option value="${dId}" ${String(dId) === String(rec.id_dai \vert{}\vert{} rec.dai_id) ? 'selected' : ''}>${d.ten_dai || d.ten}</option>`; }).join('')}
+      <div class="form-group"><label>Tên Trạm VT:</label><input type="text" id="auxTen" value="${rec.ten_tram || rec.ten || ''}" style="width:100%; padding:8px; box-sizing:border-box;"></div>
+      <div class="form-group" style="margin-top:10px;"><label>Đài Quản Lý:</label><select id="auxDaiId" style="width:100%; padding:8px; box-sizing:border-box;">
+        ${daiList.map(d => {
+          var dId = getSafeStrId(d, ['id_dai', 'id']);
+          return `<option value="${dId}" ${String(dId) === String(rec.id_dai \vert{}\vert{} rec.dai_id) ? 'selected' : ''}>${d.ten_dai || d.ten}</option>`;
+        }).join('')}
       </select></div>
     `;
   }
@@ -395,8 +432,8 @@ function moGenericAuxForm(tableType, recordId) {
     var rec = tuyenList.find(t => String(getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id'])) === String(recordId)) || {};
     document.getElementById('auxModalTitle').innerText = recordId ? "✏️ Sửa Tuyến Cáp" : "➕ Thêm Tuyến Cáp";
     html = `
-      <div class="form-group"><label>Mã Tuyến:</label><input type="text" id="auxMa" class="form-control" value="${rec.ma_tuyencap || rec.ma_tuyen || ''}"></div>
-      <div class="form-group"><label>Tên Tuyến Cáp:</label><input type="text" id="auxTen" class="form-control" value="${rec.ten_tuyen || rec.ten || ''}"></div>
+      <div class="form-group"><label>Mã Tuyến:</label><input type="text" id="auxMa" value="${rec.ma_tuyencap || rec.ma_tuyen || ''}" style="width:100%; padding:8px; box-sizing:border-box;"></div>
+      <div class="form-group" style="margin-top:10px;"><label>Tên Tuyến Cáp:</label><input type="text" id="auxTen" value="${rec.ten_tuyen || rec.ten || ''}" style="width:100%; padding:8px; box-sizing:border-box;"></div>
     `;
   }
   else if (tableType === 'doan_cap') {
@@ -404,22 +441,31 @@ function moGenericAuxForm(tableType, recordId) {
     var rec = doanList.find(d => String(getSafeStrId(d, ['id_doan_cap', 'id_doan', 'id'])) === String(recordId)) || {};
     document.getElementById('auxModalTitle').innerText = recordId ? "✏️ Sửa Đoạn Cáp" : "➕ Thêm Đoạn Cáp";
     html = `
-      <div class="form-group"><label>Mã Đoạn:</label><input type="text" id="auxMa" class="form-control" value="${rec.ma_doancap || rec.ma_doan || ''}"></div>
-      <div class="form-group"><label>Thuộc Tuyến Cáp:</label><select id="auxTuyenId" class="form-control">
-        ${tuyenList.map(t => { var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']); return `<option value="${tId}" ${String(tId) === String(rec.id_tuyen \vert{}\vert{} rec.tuyen_cap_id) ? 'selected' : ''}>${t.ten_tuyen || t.ten}</option>`; }).join('')}
+      <div class="form-group"><label>Mã Đoạn:</label><input type="text" id="auxMa" value="${rec.ma_doancap || rec.ma_doan || ''}" style="width:100%; padding:8px; box-sizing:border-box;"></div>
+      <div class="form-group" style="margin-top:10px;"><label>Thuộc Tuyến Cáp:</label><select id="auxTuyenId" style="width:100%; padding:8px; box-sizing:border-box;">
+        ${tuyenList.map(t => {
+          var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
+          return `<option value="${tId}" ${String(tId) === String(rec.id_tuyen \vert{}\vert{} rec.tuyen_cap_id) ? 'selected' : ''}>${t.ten_tuyen || t.ten}</option>`;
+        }).join('')}
       </select></div>
-      <div class="form-group"><label>Trạm Quản Lý:</label><select id="auxTramId" class="form-control">
-        ${tramList.map(t => { var trId = getSafeStrId(t, ['id_tram', 'id']); return `<option value="${trId}" ${String(trId) === String(rec.id_tram) ? 'selected' : ''}>${t.ten_tram || t.ten}</option>`; }).join('')}
+      <div class="form-group" style="margin-top:10px;"><label>Trạm Quản Lý:</label><select id="auxTramId" style="width:100%; padding:8px; box-sizing:border-box;">
+        ${tramList.map(t => {
+          var trId = getSafeStrId(t, ['id_tram', 'id']);
+          return `<option value="${trId}" ${String(trId) === String(rec.id_tram) ? 'selected' : ''}>${t.ten_tram || t.ten}</option>`;
+        }).join('')}
       </select></div>
     `;
   }
 
   fieldsContainer.innerHTML = html;
-  var modalForm = document.getElementById('genericAuxModal');
-  if (modalForm) modalForm.style.display = 'flex';
+  
+  // TỐI ƯU: Chỉ hiện form con
+  document.getElementById('genericAuxModal').style.display = 'flex';
 }
 
-/** LƯU DANH MỤC (Chỉ đóng form con, không đóng form Admin) */
+/**
+ * 7. LƯU DANH MỤC
+ */
 async function saveAuxRecord() {
   var tableType = document.getElementById('auxTableType').value;
   var recordId = document.getElementById('auxRecordId').value;
@@ -439,7 +485,7 @@ async function saveAuxRecord() {
   } else if (tableType === 'doan_cap') {
     payload.ma_doancap = document.getElementById('auxMa').value.trim();
     payload.id_tuyen = Number(document.getElementById('auxTuyenId').value);
-    payload.id_tram = Number(document.getElementById('auxTramId').value); 
+    payload.id_tram = Number(document.getElementById('auxTramId').value);
     if (recordId) payload.id_doan_cap = Number(recordId);
   }
 
@@ -447,20 +493,25 @@ async function saveAuxRecord() {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       var { error } = await supabaseClient.from(tableType).upsert([payload]);
       if (error) throw error;
-      if (typeof showToast === 'function') showToast("Lưu danh mục thành công!", "success");
+      alert("✅ Lưu danh mục thành công!");
     } else {
-      if (typeof idbThemHangDoiSync === 'function') await idbThemHangDoiSync({ actionType: 'SAVE_AUX', payload: { table: tableType, data: payload } });
+      await idbThemHangDoiSync({ actionType: 'SAVE_AUX', payload: { table: tableType, data: payload } });
+      alert("🔄 Đã lưu vào hàng đợi Offline!");
     }
 
-    // TỐI ƯU UX: Ẩn form phụ, giữ nguyên form Quản trị
-    var modalForm = document.getElementById('genericAuxModal');
-    if (modalForm) modalForm.style.display = 'none';
+    // TỐI ƯU: Ẩn form phụ, giữ form chính
+    document.getElementById('genericAuxModal').style.display = 'none';
 
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
-  } catch (err) { alert("❌ Lỗi khi lưu: " + err.message); }
+    renderAllAdminTables();
+  } catch (err) {
+    alert("❌ Lỗi khi lưu: " + err.message);
+  }
 }
 
-/** XÓA BẢN GHI (Xóa xong tự làm mới bảng, không đóng Admin) */
+/**
+ * 8. XÓA BẢN GHI
+ */
 async function deleteAdminRecord(tableName, idItem) {
   if (!checkAdminPermission('XOA', null, null, false)) return;
 
@@ -486,17 +537,25 @@ async function deleteAdminRecord(tableName, idItem) {
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       var keyField = (tableName === 'tai_khoan') ? 'email' : (tableName === 'doan_cap' ? 'id_doan_cap' : (tableName === 'tuyen_cap' ? 'id_tuyen_cap' : 'id_' + tableName.replace('_vt', '')));
+      
       var { error } = await supabaseClient.from(tableName).delete().eq(keyField, idItem);
       if (error) throw error;
+      alert("✅ Đã xóa bản ghi thành công!");
     } else {
-      if (typeof idbThemHangDoiSync === 'function') await idbThemHangDoiSync({ actionType: 'DELETE_RECORD', payload: { table: tableName, id: idItem } });
+      await idbThemHangDoiSync({ actionType: 'DELETE_RECORD', payload: { table: tableName, id: idItem } });
+      alert("🔄 Đã lưu lệnh xóa vào hàng đợi Offline!");
     }
 
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
-  } catch (err) { alert("❌ Lỗi khi xóa: " + err.message); }
+    renderAllAdminTables();
+  } catch (err) {
+    alert("❌ Lỗi khi xóa: " + err.message);
+  }
 }
 
-/** QUẢN LÝ ĐIỂM HẠ TẦNG TRỰC TIẾP TRÊN BẢN ĐỒ */
+/**
+ * 9. QUẢN LÝ ĐIỂM HẠ TẦNG TRỰC TIẾP TRÊN BẢN ĐỒ
+ */
 function openCrudModalForPoint(actionType, pointData) {
   var modal = document.getElementById('crudModal');
   if (!modal) return;
@@ -518,7 +577,9 @@ function openCrudModalForPoint(actionType, pointData) {
     `;
   }
 
-  document.getElementById('crudTitle').innerText = actionType === 'ADD' ? '➕ Thêm Điểm Mới' : '✏️ Cập Nhật Điểm';
+  document.getElementById('crudTitle').innerText = actionType === 'ADD' ? '➕ Thêm Điểm Hạ Tầng' : '✏️ Cập Nhật Điểm Hạ Tầng';
+  
+  // TỐI ƯU: Mở modal trực tiếp thay vì gọi openModal làm ẩn đi các modal khác
   modal.style.display = 'flex';
 }
 
@@ -533,28 +594,46 @@ async function executeCrudAction() {
   var lat = parseFloat(document.getElementById('crudObjectLat').value);
   var lng = parseFloat(document.getElementById('crudObjectLng').value);
 
-  if (!name) { alert("⚠️ Vui lòng nhập tên điểm hạ tầng!"); return; }
+  if (!name) {
+    alert("⚠️ Vui lòng nhập tên điểm hạ tầng!");
+    return;
+  }
 
-  var payload = { ten_diem: name, ly_trinh: lyTrinh, id_loaidiem: idLoai, lat: lat, long: lng };
-  if (actionType === 'EDIT' && objectId) payload.id_diem = Number(objectId);
+  var payload = {
+    ten_diem: name,
+    ly_trinh: lyTrinh,
+    id_loaidiem: idLoai,
+    lat: lat,
+    long: lng
+  };
+
+  if (actionType === 'EDIT' && objectId) {
+    payload.id_diem = Number(objectId);
+  }
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       var { error } = await supabaseClient.from('diem_ha_tang').upsert([payload]);
       if (error) throw error;
+      alert("✅ Đã lưu điểm hạ tầng GIS thành công!");
     } else {
-      if (typeof idbThemHangDoiSync === 'function') await idbThemHangDoiSync({ actionType: 'SAVE_GIS_POINT', payload: payload });
+      await idbThemHangDoiSync({ actionType: 'SAVE_GIS_POINT', payload: payload });
+      alert("🔄 Đã lưu điểm hạ tầng vào hàng đợi Offline!");
     }
 
-    var modal = document.getElementById('crudModal');
-    if (modal) modal.style.display = 'none';
+    // Đóng form cập nhật điểm
+    document.getElementById('crudModal').style.display = 'none';
 
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
     if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
-  } catch (err) { alert("❌ Lỗi khi lưu điểm hạ tầng: " + err.message); }
+  } catch (err) {
+    alert("❌ Lỗi khi lưu điểm hạ tầng: " + err.message);
+  }
 }
 
-/** HỘP THOẠI XÁC NHẬN TÙY CHỈNH (CUSTOM CONFIRM) */
+/**
+ * 10. HỘP THOẠI XÁC NHẬN TÙY CHỈNH (CUSTOM CONFIRM)
+ */
 function showCustomConfirm(message, title) {
   return new Promise(function(resolve) {
     confirmPromiseResolver = resolve;
@@ -577,7 +656,3 @@ function resolveConfirm(result) {
     confirmPromiseResolver = null;
   }
 }
-
-/** CÁC HÀM ĐÓNG FORM CON LẺ (Dùng cho nút Hủy) */
-function closeGenericAuxModal() { var m = document.getElementById('genericAuxModal'); if (m) m.style.display = 'none'; }
-function closeAddMemberModal() { var m = document.getElementById('addMemberModal'); if (m) m.style.display = 'none'; }
