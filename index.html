@@ -20,39 +20,38 @@
       --text-main: #1e293b;
     }
 
-    /* 1. SẮP XẾP CỤM NÚT BẢN ĐỒ THEO TRỤC DỌC KHÔNG BỊ CHE KHUẤT */
+    /* 1. SẮP XẾP CỤM NÚT BẢN ĐỒ THEO TRỤC DỌC TRÁNH CHE KHUẤT (DÙNG !IMPORTANT ĐỂ GHI ĐÈ STYLE GỐC) */
     #togglePanelBtn {
-      position: absolute; top: 15px; right: 15px; z-index: 1500;
-      background: var(--primary-blue); color: white; border-radius: 8px;
-      width: 40px; height: 40px; font-size: 18px; font-weight: bold;
-      border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3); transition: 0.2s;
+      position: absolute !important; top: 15px !important; right: 15px !important; z-index: 1500 !important;
+      background: var(--primary-blue) !important; color: white !important; border-radius: 8px !important;
+      width: 40px !important; height: 40px !important; font-size: 18px !important; font-weight: bold !important;
+      border: none !important; cursor: pointer !important; display: flex !important; align-items: center !important; justify-content: center !important;
+      box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3) !important;
     }
-    #togglePanelBtn:hover { background: #0b5ed7; transform: scale(1.05); }
 
     #gps-btn {
       position: absolute !important; top: 62px !important; right: 15px !important; left: auto !important; bottom: auto !important;
-      z-index: 1400; width: 40px; height: 40px; border-radius: 8px; background: white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; cursor: pointer;
+      z-index: 1400 !important; width: 40px !important; height: 40px !important; border-radius: 8px !important; background: white !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important; display: flex !important; align-items: center !important; justify-content: center !important; cursor: pointer !important;
     }
     
     #measure-btn {
       position: absolute !important; top: 109px !important; right: 15px !important; left: auto !important; bottom: auto !important;
-      z-index: 1400; width: 40px; height: 40px; border-radius: 8px; background: white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; cursor: pointer;
+      z-index: 1400 !important; width: 40px !important; height: 40px !important; border-radius: 8px !important; background: white !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important; display: flex !important; align-items: center !important; justify-content: center !important; cursor: pointer !important;
     }
 
     /* 2. FORM ĐIỀU KHIỂN GỌN GÀNG, KHÔNG DÙNG SCROLL */
     #control-panel {
-      position: fixed; top: 15px; left: 15px; width: 330px;
+      position: fixed; top: 15px; left: 15px; width: 320px;
       background: white; border-radius: 12px;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
       padding: 10px; z-index: 1000;
-      max-height: calc(100vh - 30px); overflow-y: hidden; /* Tuyệt đối không dùng scroll */
-      display: none; /* Mặc định ẩn, hiện lên khi đăng nhập */
+      max-height: calc(100vh - 30px); overflow-y: hidden;
+      display: none;
       border: 1px solid var(--border-color);
     }
-    .panel-header { font-size: 13px; font-weight: bold; color: var(--primary-blue); margin-bottom: 6px; cursor: pointer; text-align: center; }
+    .panel-header { font-size: 12px; font-weight: bold; color: var(--primary-blue); margin-bottom: 6px; cursor: pointer; text-align: center; }
 
     @media (max-width: 767px) {
       #control-panel { width: calc(100vw - 30px); left: 15px; top: 15px; }
@@ -111,7 +110,7 @@
     <div id="loading-overlay-text">Đang đồng bộ dữ liệu...</div>
   </div>
 
-  <!-- NÚT ☰ BẬT/TẮT TOÀN BỘ FORM ĐIỀU KHIỂN (KHÔNG ĐỂ LẠI BAR) -->
+  <!-- NÚT ☰ BẬT/TẮT TOÀN BỘ FORM ĐIỀU KHIỂN -->
   <button id="togglePanelBtn" onclick="toggleGISPanel()" title="Ẩn/Hiện Bảng điều khiển">☰</button>
 
   <!-- BẢN ĐỒ VÀ BẢNG ĐIỀU KHIỂN CHÍNH -->
@@ -123,7 +122,7 @@
     <div id="control-panel">
       <div class="panel-header" onclick="toggleGISPanel()"><span>🗺️ ĐIỀU KHIỂN & OTDR (Nhấn để ẩn)</span></div>
       
-      <!-- THÔNG TIN TÀI KHOẢN VÀ NÚT ĐỔI MẬT KHẨU DẠNG BIỂU TƯỢNG 🔑 -->
+      <!-- THÔNG TIN TÀI KHOẢN VÀ NÚT ĐỔI MẬT KHẨU BIỂU TƯỢNG 🔑 -->
       <div style="display: flex; align-items: center; justify-content: space-between; background: #f1f5f9; padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--border-color);">
         <div id="userInfoDisplay" style="font-size: 11px; font-weight: bold; color: var(--text-main); margin: 0; overflow: hidden; text-overflow: ellipsis;"></div>
         <button class="btn-small btn-success" onclick="openChangePasswordModal()" title="Đổi mật khẩu tài khoản" style="padding: 2px 6px; font-size: 13px; line-height: 1;">🔑</button>
@@ -143,14 +142,19 @@
       <div class="form-group"><label>4. Chọn Đoạn Cáp:</label><select id="selectDoanCap" onchange="onDoanCapChange()"></select></div>
       
       <div class="form-group"><label>5. Nguồn điểm đo:</label><select id="comboDiemA" onchange="onDiemAChange()"></select></div>
-      <div class="checkbox-group" style="margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-        <input type="checkbox" id="chkNghichHuong" onchange="onDiemAChange()" style="margin:0;">
-        <label style="margin:0; cursor:pointer; font-size: 11px;" for="chkNghichHuong">Đo ngược hướng</label>
+      
+      <!-- HÀNG 1: CỰ LY ĐO OTDR (KM) -->
+      <div class="form-group"><label>6. Cự ly đo OTDR (km):</label><input type="number" id="txtKcOtdr" value="3.5" step="0.1"></div>
+      
+      <!-- HÀNG 2: ĐO NGƯỢC HƯỚNG VÀ HỆ SỐ CHÙNG CÁP -->
+      <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+        <div class="checkbox-group" style="flex: 1.2; display: flex; align-items: center; gap: 4px;">
+          <input type="checkbox" id="chkNghichHuong" onchange="onDiemAChange()" style="margin:0; width: auto;">
+          <label style="margin:0; cursor:pointer; font-size: 11px;" for="chkNghichHuong">Đo ngược hướng</label>
+        </div>
+        <div class="form-group" style="flex: 1; margin:0;"><label style="margin-bottom:2px;">Hệ số chùng:</label><input type="number" id="txtDoChung" value="1.075" step="0.001"></div>
       </div>
-      <div style="display: flex; gap: 6px;">
-        <div class="form-group" style="flex:1;"><label>6. Hệ số chùng:</label><input type="number" id="txtDoChung" value="1.075" step="0.001"></div>
-        <div class="form-group" style="flex:1;"><label>7. Cự ly (km):</label><input type="number" id="txtKcOtdr" value="3.5" step="0.1"></div>
-      </div>
+
       <div class="form-group"><button class="btn-action" style="padding: 6px;" onclick="timViTriDut()">🔍 PHÂN TÍCH VỊ TRÍ SỰ CỐ</button></div>
       
       <div class="form-group" style="border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 4px; background: #f8fafc; padding: 6px; border-radius: 6px;">
