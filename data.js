@@ -5,6 +5,9 @@
 var autoClearMarkerTimer = null; 
 var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], rawLoaiDiemList = [], rawUserList = [];
 
+// SỬA LỖI: Thêm cờ kiểm soát luồng khởi tạo để chống load bản đồ nhiều lần
+var isSyncingMaster = false; 
+
 /**
  * 1. HÀM TIỆN ÍCH TRUY VẤN VÀ CHUẨN HÓA KHÓA ID AN TOÀN
  */
@@ -32,6 +35,7 @@ function getSafeStrId(item, keys) {
  * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
+  isSyncingMaster = true; // KHÓA CỔNG: Ngăn chặn nạp điểm bản đồ trong lúc đang dựng Combobox
   let localMaster = null;
 
   try {
@@ -104,8 +108,14 @@ async function taiDuLieuSupabase(forceRefresh = false) {
   } catch (err) {
     console.warn("Đang sử dụng dữ liệu danh mục Offline:", err.message);
   } finally {
+    isSyncingMaster = false; // MỞ CỔNG: Quá trình dựng danh mục đã hoàn tất
     hideLoading();
     if (typeof map !== 'undefined' && map) map.invalidateSize();
+    
+    // MỆNH LỆNH NẠP ĐIỂM DUY NHẤT 1 LẦN:
+    var selectTuyen = document.getElementById('selectTuyen');
+    var initTuyenVal = selectTuyen ? (String(selectTuyen.value).trim() || 'ALL') : 'ALL';
+    await taiDiemTheoTuyen(initTuyenVal);
   }
 }
 
@@ -113,6 +123,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
  * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH (SỬ DỤNG VIEW)
  */
 async function taiDiemTheoVungXem() {
+  if (isSyncingMaster) return; // CHẶN LẠI: Không nạp vùng xem nếu đang đồng bộ khởi tạo
   if (typeof map === 'undefined' || !map) return;
   var selectTuyen = document.getElementById('selectTuyen');
   if (selectTuyen && selectTuyen.value !== 'ALL') return;
@@ -164,7 +175,6 @@ async function taiDiemTheoVungXem() {
     }
   } finally {
     AppStore.setState({ dataPoints: globalDataPoints });
-    // SỬA LỖI: Gọi lệnh vẽ bản đồ sau khi đã nạp xong điểm
     if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
   }
 }
@@ -191,7 +201,6 @@ async function taiDiemTheoTuyen(idTuyen) {
         globalDataPoints = [];
         AppStore.setState({ dataPoints: [] });
         showToast("Tuyến cáp này chưa có điểm hạ tầng!", "info");
-        // Gọi lệnh vẽ để xóa sạch tuyến cũ (nếu có) trên bản đồ
         if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
         return;
       }
@@ -232,7 +241,6 @@ async function taiDiemTheoTuyen(idTuyen) {
     AppStore.setState({ dataPoints: globalDataPoints });
     capNhatComboDiemA();
     hideLoading();
-    // SỬA LỖI: Gọi lệnh vẽ bản đồ sau khi dữ liệu tuyến đã nạp thành công
     if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
   }
 }
@@ -426,7 +434,10 @@ async function onTuyenChange() {
   var doanVal = selectDoanCapEl ? String(selectDoanCapEl.value).trim() : 'ALL';
   AppStore.setState({ selectedDoanCap: doanVal });
 
-  await taiDiemTheoTuyen(tuyenVal);
+  // CHẶN LẠI: Nếu hệ thống đang khởi tạo (Syncing), không tải điểm bản đồ ở bước này
+  if (!isSyncingMaster) {
+    await taiDiemTheoTuyen(tuyenVal);
+  }
 }
 
 function onDoanCapChange() { 
