@@ -1,9 +1,8 @@
 // ==========================================================================
-// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP & PHÂN QUYỀN (SỬ DỤNG TRƯỜNG ACCOUNT)
+// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP & PHÂN QUYỀN (CHỈ DÙNG TRƯỜNG ACCOUNT)
 // ==========================================================================
 
 async function handleCustomLogin() {
-  // Lấy giá trị từ ô input tài khoản (hỗ trợ cả id loginAccount và loginEmail)
   var accountInput = document.getElementById('loginAccount') || document.getElementById('loginEmail');
   var passInput = document.getElementById('loginPass');
 
@@ -21,7 +20,7 @@ async function handleCustomLogin() {
       return;
     }
 
-    // Truy vấn bảng tai_khoan dựa trên trường account
+    // Truy vấn bảng tai_khoan sử dụng duy nhất cột account
     var { data, error } = await supabaseClient
       .from('tai_khoan')
       .select('*')
@@ -35,15 +34,14 @@ async function handleCustomLogin() {
       return;
     }
 
-    // Kiểm tra mật khẩu
     if (String(data.password || '') !== String(passVal)) {
       alert("❌ Mật khẩu không chính xác!");
       return;
     }
 
-    // Lưu thông tin người dùng vào LocalStorage và Store hệ thống
+    // Lưu duy nhất trường account trong phiên làm việc
     var currentUser = {
-      account: data.account,
+      account: data.account || accountVal,
       role: data.role || 'nhan_vien',
       id_dai: data.id_dai || null,
       id_tram: data.id_tram || null,
@@ -56,20 +54,17 @@ async function handleCustomLogin() {
       AppStore.setState({ currentUser: currentUser });
     }
 
-    // Ẩn modal đăng nhập và hiển thị bảng điều khiển
     var loginModal = document.getElementById('loginModal');
     if (loginModal) loginModal.style.display = 'none';
 
     var controlPanel = document.getElementById('control-panel');
     if (controlPanel) controlPanel.style.display = 'block';
 
-    // Hiển thị thông tin tên tài khoản lên thanh điều khiển nếu có ô hiển thị
     var userInfoDisplay = document.getElementById('userInfoDisplay');
     if (userInfoDisplay) {
       userInfoDisplay.innerText = "👤 " + currentUser.account + " (" + currentUser.role + ")";
     }
 
-    // Hiển thị nút quản trị nếu có quyền admin
     var adminBtn = document.getElementById('adminMobileBtn');
     if (adminBtn) {
       if (currentUser.role === 'admin_sys' || currentUser.role === 'admin_dai' || currentUser.role === 'admin_tram') {
@@ -81,7 +76,6 @@ async function handleCustomLogin() {
 
     alert("✅ Đăng nhập thành công!");
 
-    // Tải dữ liệu bản đồ và danh mục
     if (typeof taiDuLieuSupabase === 'function') {
       taiDuLieuSupabase(true);
     }
@@ -91,7 +85,6 @@ async function handleCustomLogin() {
   }
 }
 
-// Hàm ẩn/hiện mật khẩu trên giao diện đăng nhập
 function togglePasswordVisibility() {
   var passInput = document.getElementById('loginPass');
   if (passInput) {
@@ -103,7 +96,6 @@ function togglePasswordVisibility() {
   }
 }
 
-// Hàm đăng xuất hệ thống
 function handleLogout() {
   localStorage.removeItem('tnn_user');
   location.reload();
