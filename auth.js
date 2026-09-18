@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP & PHÂN QUYỀN (CHỈ DÙNG TRƯỜNG ACCOUNT)
+// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP & PHÂN QUYỀN (TƯƠNG THÍCH BẢN ĐỒ)
 // ==========================================================================
 
 async function handleCustomLogin() {
@@ -20,7 +20,7 @@ async function handleCustomLogin() {
       return;
     }
 
-    // Truy vấn bảng tai_khoan sử dụng duy nhất cột account
+    // Truy vấn bảng tai_khoan sử dụng duy nhất trường account
     var { data, error } = await supabaseClient
       .from('tai_khoan')
       .select('*')
@@ -39,9 +39,10 @@ async function handleCustomLogin() {
       return;
     }
 
-    // Lưu duy nhất trường account trong phiên làm việc
+    // Đối tượng phiên làm việc: dùng account chính, đồng thời giữ username tương thích cho map.js
     var currentUser = {
       account: data.account || accountVal,
+      username: data.account || accountVal, 
       role: data.role || 'nhan_vien',
       id_dai: data.id_dai || null,
       id_tram: data.id_tram || null,
@@ -76,6 +77,7 @@ async function handleCustomLogin() {
 
     alert("✅ Đăng nhập thành công!");
 
+    // Kích hoạt nạp dữ liệu và hiển thị bản đồ GIS
     if (typeof taiDuLieuSupabase === 'function') {
       taiDuLieuSupabase(true);
     }
