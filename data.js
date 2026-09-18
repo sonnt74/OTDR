@@ -1,13 +1,20 @@
 // ==========================================================================
-// TỆP DATA.JS - QUẢN LÝ LUỒNG DỮ LIỆU (CHỈ VẼ BẢN ĐỒ KHI ĐỔI ĐOẠN CÁP)
+// TỆP DATA.JS - QUẢN LÝ LUỒNG DỮ LIỆU (TÍCH HỢP VIEW SUPABASE & OFFLINE)
 // ==========================================================================
 
 var autoClearMarkerTimer = null; 
+var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], rawLoaiDiemList = [], rawUserList = [];
 
-function fetchAllRowsSafe(tableName) {
+// SỬA LỖI: Thêm cờ kiểm soát luồng khởi tạo để chống load bản đồ nhiều lần
+var isSyncingMaster = false; 
+
+/**
+ * 1. HÀM TIỆN ÍCH TRUY VẤN VÀ CHUẨN HÓA KHÓA ID AN TOÀN
+ */
+async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
   while (keep) {
-    let { data, error } = supabaseClient.from(tableName).select('*').range(from, from + size - 1);
+    let { data, error } = await supabaseClient.from(tableName).select('*').range(from, from + size - 1);
     if (error) throw error;
     if (data && data.length > 0) { allData = allData.concat(data); if (data.length < size) keep = false; else from += size; } else keep = false;
   }
@@ -25,9 +32,10 @@ function getSafeStrId(item, keys) {
 }
 
 /**
- * TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER
+ * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
+  isSyncingMaster = true; // KHÓA CỔNG: Ngăn chặn nạp điểm bản đồ trong lúc đang dựng Combobox
   let localMaster = null;
 
   try {
@@ -65,7 +73,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
         supabaseClient.from('dai_vt').select('*'),
         supabaseClient.from('tram_vt').select('*'),
         supabaseClient.from('tuyen_cap').select('*'),
-        supabaseClient.from('doan_cap').select('*'),
+        supabaseClient.from('v_doan_cap_full').select('*'), 
         supabaseClient.from('loai_diem').select('*'),
         supabaseClient.from('tai_khoan').select('*')
       ]);
@@ -98,17 +106,24 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       if (forceRefresh) showToast("Đã đồng bộ danh mục mới nhất!", "success");
     }
   } catch (err) {
-    console.warn("Đang sử dụng danh mục Offline:", err.message);
+    console.warn("Đang sử dụng dữ liệu danh mục Offline:", err.message);
   } finally {
+    isSyncingMaster = false; // MỞ CỔNG: Quá trình dựng danh mục đã hoàn tất
     hideLoading();
     if (typeof map !== 'undefined' && map) map.invalidateSize();
+    
+    // MỆNH LỆNH NẠP ĐIỂM DUY NHẤT 1 LẦN:
+    var selectTuyen = document.getElementById('selectTuyen');
+    var initTuyenVal = selectTuyen ? (String(selectTuyen.value).trim() || 'ALL') : 'ALL';
+    await taiDiemTheoTuyen(initTuyenVal);
   }
 }
 
 /**
- * TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH
+ * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH (SỬ DỤNG VIEW)
  */
 async function taiDiemTheoVungXem() {
+  if (isSyncingMaster) return; // CHẶN LẠI: Không nạp vùng xem nếu đang đồng bộ khởi tạo
   if (typeof map === 'undefined' || !map) return;
   var selectTuyen = document.getElementById('selectTuyen');
   if (selectTuyen && selectTuyen.value !== 'ALL') return;
@@ -120,10 +135,10 @@ async function taiDiemTheoVungXem() {
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       const { data: pts, error: errPts } = await supabaseClient
-        .from('diem_ha_tang')
+        .from('v_diem_ha_tang_full')
         .select('*')
         .gte('lat', minLat).lte('lat', maxLat)
-        .gte('long', minLng).lte('long', maxLng);
+        .gte('lng', minLng).lte('lng', maxLng);
 
       if (errPts) throw errPts;
       if (!pts || pts.length === 0) {
@@ -131,34 +146,22 @@ async function taiDiemTheoVungXem() {
         return;
       }
 
-      var diemIds = pts.map(p => getSafeStrId(p, ['id_diem', 'id'])).filter(id => id && id !== 'undefined');
-      const { data: dcd } = await supabaseClient.from('doan_cap_diem').select('*').in('diem_id', diemIds);
-
-      var loaiMap = {}, dcdMap = {};
-      rawLoaiDiemList.forEach(l => loaiMap[getSafeStrId(l, ['id_loaidiem', 'id'])] = l.ten_loaidiem);
-      (dcd || []).forEach(item => dcdMap[getSafeStrId(item, ['id_diem', 'diem_id'])] = item);
-
-      globalDataPoints = pts.map(pt => {
-        var ptId = getSafeStrId(pt, ['id_diem', 'id']);
-        var link = dcdMap[ptId];
-        var idLoai = pt.id_loaidiem || 1;
-        var loaiName = loaiMap[String(idLoai)] || 'Điểm';
-        var isMx = (Number(idLoai) === 4 || loaiName.toLowerCase().includes('mx') || loaiName.toLowerCase().includes('măng xông'));
-
+      globalDataPoints = (pts || []).map(pt => {
+        var isMx = (Number(pt.id_loaidiem) === 4 || (pt.loai && (pt.loai.toLowerCase().includes('mx') || pt.loai.toLowerCase().includes('măng xông'))));
         return {
-          id: ptId,
-          ten: pt.ten_diem || pt.ten,
+          id: String(pt.id),
+          ten: pt.ten || '',
           lat: parseFloat(pt.lat),
-          lng: parseFloat(pt.long || pt.lng),
+          lng: parseFloat(pt.lng),
           ghiChu: pt.ghi_chu || '',
-          idTuyen: pt.id_tuyen || 'ALL',
-          idDoanCap: link ? getSafeStrId(link, ['id_doan_cap', 'doan_cap_id']) : 'ALL',
-          idTram: getSafeStrId(pt, ['id_tram', 'tram_id']),
-          idLoaiDiem: idLoai,
-          loai: loaiName,
+          idTuyen: String(pt.id_tuyen),
+          idDoanCap: String(pt.id_doan_cap),
+          idTram: String(pt.id_tram),
+          idLoaiDiem: pt.id_loaidiem || 1,
+          loai: pt.loai || 'Điểm',
           lyTrinh: pt.ly_trinh || '',
           duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-          stt: isMx ? 9999 : (link ? link.thu_tu : 1)
+          stt: isMx ? 9999 : (pt.stt || 1)
         };
       });
 
@@ -172,11 +175,12 @@ async function taiDiemTheoVungXem() {
     }
   } finally {
     AppStore.setState({ dataPoints: globalDataPoints });
+    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
   }
 }
 
 /**
- * TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP
+ * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP (SỬ DỤNG VIEW)
  */
 async function taiDiemTheoTuyen(idTuyen) {
   if (!idTuyen || idTuyen === 'ALL' || idTuyen === 'undefined') {
@@ -187,59 +191,36 @@ async function taiDiemTheoTuyen(idTuyen) {
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      const { data: doanList, error: errDoan } = await supabaseClient.from('doan_cap').select('*').eq('id_tuyen', idTuyen);
-      if (errDoan) throw errDoan;
+      const { data: pts, error: errPts } = await supabaseClient
+        .from('v_diem_ha_tang_full')
+        .select('*')
+        .eq('id_tuyen', idTuyen);
 
-      var doanIds = (doanList || []).map(d => getSafeStrId(d, ['id_doan_cap', 'id'])).filter(id => id && id !== 'undefined');
-      if (doanIds.length === 0) {
-        globalDataPoints = [];
-        AppStore.setState({ dataPoints: [] });
-        showToast("Tuyến cáp này chưa có đoạn cáp!", "info");
-        return;
-      }
-
-      const { data: dcdList, error: errDcd } = await supabaseClient.from('doan_cap_diem').select('*').in('id_doan_cap', doanIds);
-      if (errDcd) throw errDcd;
-
-      var diemIds = (dcdList || []).map(item => getSafeStrId(item, ['id_diem', 'diem_id'])).filter(id => id && id !== 'undefined');
-      if (diemIds.length === 0) {
-        globalDataPoints = [];
-        AppStore.setState({ dataPoints: [] });
-        showToast("Chưa có điểm hạ tầng trong tuyến này!", "info");
-        return;
-      }
-
-      const { data: pts, error: errPts } = await supabaseClient.from('diem_ha_tang').select('*').in('id_diem', diemIds);
       if (errPts) throw errPts;
-
-      var loaiMap = {}, dcdMap = {};
-      rawLoaiDiemList.forEach(l => loaiMap[getSafeStrId(l, ['id_loaidiem', 'id'])] = l.ten_loaidiem);
-      (dcdList || []).forEach(item => {
-        var ptId = getSafeStrId(item, ['id_diem', 'diem_id']);
-        if (ptId) dcdMap[ptId] = item;
-      });
+      if (!pts || pts.length === 0) {
+        globalDataPoints = [];
+        AppStore.setState({ dataPoints: [] });
+        showToast("Tuyến cáp này chưa có điểm hạ tầng!", "info");
+        if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+        return;
+      }
 
       globalDataPoints = (pts || []).map(pt => {
-        var ptId = getSafeStrId(pt, ['id_diem', 'id']);
-        var link = dcdMap[ptId];
-        var idLoai = pt.id_loaidiem || 1;
-        var loaiName = loaiMap[String(idLoai)] || 'Điểm';
-        var isMx = (Number(idLoai) === 4 || loaiName.toLowerCase().includes('mx') || loaiName.toLowerCase().includes('măng xông'));
-
+        var isMx = (Number(pt.id_loaidiem) === 4 || (pt.loai && (pt.loai.toLowerCase().includes('mx') || pt.loai.toLowerCase().includes('măng xông'))));
         return {
-          id: ptId,
-          ten: pt.ten_diem || pt.ten,
+          id: String(pt.id),
+          ten: pt.ten || '',
           lat: parseFloat(pt.lat),
-          lng: parseFloat(pt.long || pt.lng),
+          lng: parseFloat(pt.lng),
           ghiChu: pt.ghi_chu || '',
-          idTuyen: idTuyen,
-          idDoanCap: link ? getSafeStrId(link, ['id_doan_cap', 'doan_cap_id']) : 'ALL',
-          idTram: getSafeStrId(pt, ['id_tram', 'tram_id']),
-          idLoaiDiem: idLoai,
-          loai: loaiName,
+          idTuyen: String(pt.id_tuyen),
+          idDoanCap: String(pt.id_doan_cap),
+          idTram: String(pt.id_tram),
+          idLoaiDiem: pt.id_loaidiem || 1,
+          loai: pt.loai || 'Điểm',
           lyTrinh: pt.ly_trinh || '',
           duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-          stt: isMx ? 9999 : (link ? link.thu_tu : 1)
+          stt: isMx ? 9999 : (pt.stt || 1)
         };
       });
 
@@ -249,6 +230,7 @@ async function taiDiemTheoTuyen(idTuyen) {
       throw new Error("Offline Mode");
     }
   } catch (err) {
+    console.warn("Lỗi kết nối mạng, chuyển sang lấy từ IndexedDB:", err.message);
     if (typeof idbDocDiemTheoTuyen === 'function') {
       globalDataPoints = await idbDocDiemTheoTuyen(idTuyen);
       if (globalDataPoints.length > 0) {
@@ -259,9 +241,13 @@ async function taiDiemTheoTuyen(idTuyen) {
     AppStore.setState({ dataPoints: globalDataPoints });
     capNhatComboDiemA();
     hideLoading();
+    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
   }
 }
 
+/**
+ * 5. PHÂN QUYỀN GIAO DIỆN THEO VAI TRÒ CURRENTUSER
+ */
 function xuLyPhanQuyenDoanTuyenUser() {
   var selectDai = document.getElementById('selectDai');
   var groupDai = selectDai ? selectDai.closest('.form-group') : null;
@@ -367,9 +353,6 @@ function onTramChange() {
   updateTuyenOptions();
 }
 
-/**
- * CẬP NHẬT DANH SÁCH TUYẾN THEO TRẠM (ĐÃ SỬA LỖI LỌC KHI CHỌN MỘT TRẠM CỤ THỂ)
- */
 function updateTuyenOptions() {
   var selectTuyen = document.getElementById('selectTuyen');
   var selectTram = document.getElementById('selectTram');
@@ -386,20 +369,16 @@ function updateTuyenOptions() {
   if (tramVal === 'ALL') {
     filteredTuyenList = tuyenList;
   } else {
-    // 1. Tìm danh sách ID Tuyến từ bảng Đoạn Cáp thuộc Trạm được chọn
-    var matchedTuyenIdsFromDoan = doanCapList
+    var matchedTuyenIds = doanCapList
       .filter(d => {
-        var tramIdInDoan = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']);
-        return tramIdInDoan && String(tramIdInDoan) === tramVal;
+        var dTramId = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']);
+        return dTramId === tramVal;
       })
       .map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']));
-
-    // 2. Lọc tuyến thuộc danh sách trên hoặc có thuộc tính trạm trực tiếp trong Tuyến Cáp
+    
     filteredTuyenList = tuyenList.filter(t => {
-      var tuyenId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
-      var tramIdInTuyen = getSafeStrId(t, ['id_tram', 'tram_id', 'id_tram_vt']);
-      
-      return matchedTuyenIdsFromDoan.includes(tuyenId) || (tramIdInTuyen && String(tramIdInTuyen) === tramVal);
+      var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
+      return matchedTuyenIds.includes(tId);
     });
   }
 
@@ -419,9 +398,12 @@ function updateTuyenOptions() {
 
 async function onTuyenChange() {
   var selectTuyen = document.getElementById('selectTuyen');
-  var tuyenVal = selectTuyen ? String(selectTuyen.value).trim() : 'ALL';
-  var selectDoanCap = document.getElementById('selectDoanCap');
+  var selectTram = document.getElementById('selectTram'); 
   
+  var tuyenVal = selectTuyen ? String(selectTuyen.value).trim() : 'ALL';
+  var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
+  
+  var selectDoanCap = document.getElementById('selectDoanCap');
   AppStore.setState({ selectedTuyen: tuyenVal });
 
   var state = AppStore.getState();
@@ -430,7 +412,12 @@ async function onTuyenChange() {
   if (selectDoanCap) {
     selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
     if (tuyenVal !== 'ALL') {
-      var matchedDoan = doanCapList.filter(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']) === tuyenVal);
+      var matchedDoan = doanCapList.filter(d => {
+        var isTuyenMatch = getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']) === tuyenVal;
+        var isTramMatch = (tramVal === 'ALL') ? true : (getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']) === tramVal);
+        return isTuyenMatch && isTramMatch;
+      });
+
       matchedDoan.forEach(d => {
         var dId = getSafeStrId(d, ['id_doan_cap', 'id']);
         var dName = d.ma_doancap || d.ten_doancap;
@@ -447,18 +434,17 @@ async function onTuyenChange() {
   var doanVal = selectDoanCapEl ? String(selectDoanCapEl.value).trim() : 'ALL';
   AppStore.setState({ selectedDoanCap: doanVal });
 
-  await taiDiemTheoTuyen(tuyenVal);
+  // CHẶN LẠI: Nếu hệ thống đang khởi tạo (Syncing), không tải điểm bản đồ ở bước này
+  if (!isSyncingMaster) {
+    await taiDiemTheoTuyen(tuyenVal);
+  }
 }
 
-/**
- * SỰ KIỆN DUY NHẤT KÍCH HOẠT VẼ LAI BẢN ĐỒ
- */
 function onDoanCapChange() { 
   var selectDoanCap = document.getElementById('selectDoanCap');
   var doanVal = selectDoanCap ? String(selectDoanCap.value).trim() : 'ALL';
   AppStore.setState({ selectedDoanCap: doanVal });
   
-  // Chỉ vẽ bản đồ khi thay đổi combo Đoạn cáp
   if (typeof veLaiTuyenAB === 'function') {
     veLaiTuyenAB(); 
   }
@@ -479,8 +465,14 @@ function capNhatComboDiemA() {
   });
 }
 
+/**
+ * 6. XỬ LÝ PHÂN TÍCH SỰ CỐ OTDR VÀ TÌM LÝ TRÌNH
+ */
 function datLichTuXoaMarkerTimKiem() {
-  if (autoClearMarkerTimer) clearTimeout(autoClearMarkerTimer);
+  if (autoClearMarkerTimer) {
+    clearTimeout(autoClearMarkerTimer);
+  }
+
   autoClearMarkerTimer = setTimeout(function() {
     if (typeof foundMarkerLayer !== 'undefined' && foundMarkerLayer && map) {
       map.removeLayer(foundMarkerLayer);
@@ -593,7 +585,7 @@ function timViTriDut() {
     </div>`;
 
   var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>` +
-                  `Cự ly đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
+                  `Cự đoạn đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
                   `📍 Lý trình QL: <b>${interpolatedLyTrinhText}</b><br>` +
                   `🔀 MX trước: <b>${prevMXFullInfo}</b><br>` +
                   `🔀 MX sau: <b>${nextMXFullInfo}</b><br>` +
@@ -711,4 +703,11 @@ function xoaTatCaDoiTuongMap() {
   }
 
   showToast("🧹 Đã xóa sạch tất cả đối tượng trên bản đồ!", "info");
+}
+
+function toggleGISPanel() {
+  var panel = document.getElementById('control-panel');
+  if (panel) {
+    panel.classList.toggle('collapsed');
+  }
 }

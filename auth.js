@@ -27,6 +27,40 @@ window.onload = function() {
   }
 };
 
+/**
+ * HÀM HIỂN THỊ THÔNG TIN NGƯỜI DÙNG LÊN GIAO DIỆN (ĐÃ LÀM GỌN THEO YÊU CẦU)
+ */
+function hienThiThongTinNguoiDung() {
+  var displayEl = document.getElementById('userInfoDisplay');
+  if (!displayEl) return; 
+
+  if (!currentUser || !currentUser.isLoggedIn) {
+    displayEl.innerHTML = '';
+    return;
+  }
+
+  // Dịch mã quyền hệ thống sang Tiếng Việt
+  var roleName = "Nhân viên";
+  if (currentUser.role === 'sys_admin' || currentUser.role === 'admin_sys') {
+    roleName = "Quản trị hệ thống";
+  } else if (currentUser.role === 'dai_admin' || currentUser.role === 'admin_dai') {
+    roleName = "Quản trị Đài";
+  } else if (currentUser.role === 'tram_admin' || currentUser.role === 'admin_tram') {
+    roleName = "Quản lý Trạm";
+  }
+
+  var tenTaiKhoan = currentUser.email || currentUser.username || "Tài khoản";
+
+  // Thiết kế giao diện cực kỳ tinh gọn, không có biểu tượng
+  var html = `
+    <div style="font-size: 12px; font-weight: bold; color: #333; padding: 5px 0;">
+      Account: ${tenTaiKhoan} (${roleName})
+    </div>
+  `;
+  
+  displayEl.innerHTML = html;
+}
+
 function capNhatGiaoDienSauDangNhap() {
   var loginModal = document.getElementById('loginModal');
   if (loginModal) loginModal.style.display = 'none';
@@ -47,6 +81,9 @@ function capNhatGiaoDienSauDangNhap() {
     var isAuthorized = currentUser && (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin' || currentUser.role === 'admin_sys');
     adminMob.style.display = isAuthorized ? 'block' : 'none';
   }
+
+  // GỌI HÀM HIỂN THỊ THÔNG TIN NGAY SAU KHI CẬP NHẬT GIAO DIỆN
+  hienThiThongTinNguoiDung();
 }
 
 function togglePasswordVisibility() {
