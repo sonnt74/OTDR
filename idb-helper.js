@@ -30,7 +30,7 @@ function openGISDatabase() {
 
       // Kho 3: Lưu phiên đăng nhập & Tài khoản phục vụ Offline Mode
       if (!db.objectStoreNames.contains('auth_store')) {
-        db.createObjectStore('auth_store', { keyPath: 'email' });
+        db.createObjectStore('auth_store', { keyPath: 'account' });
       }
 
       // Kho 4: Hàng đợi lưu thay đổi khi mất mạng (Auto sync khi Online)
