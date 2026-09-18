@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - ĐIỀU KHIỂN GIAO DIỆN QUẢN TRỊ & MẬT KHẨU
+// TỆP ADMIN.JS - ĐIỀU KHIỂN GIAO DIỆN QUẢN TRỊ & KHÔI PHỤC DỮ LIỆU BẢNG
 // ==========================================================================
 
 var confirmPromiseResolver = null;
@@ -9,6 +9,10 @@ function openModal(modalId, tabId) {
   var targetModal = document.getElementById(modalId);
   if (targetModal) targetModal.style.display = 'flex';
 
+  // Khi mở bất kỳ modal nào (đặc biệt là Quản trị), ẩn bảng điều khiển đi
+  var panel = document.getElementById('control-panel');
+  if (panel) panel.style.display = 'none';
+
   if (modalId === 'adminMasterModal') {
     renderAllAdminTables();
     if (tabId) switchAdminTab(tabId);
@@ -17,6 +21,13 @@ function openModal(modalId, tabId) {
 
 function closeModals() {
   document.querySelectorAll('.app-modal').forEach(m => m.style.display = 'none');
+  
+  // Khi đóng các modal, nếu đã đăng nhập thì hiển thị lại bảng điều khiển
+  var user = getCurrentUser();
+  var panel = document.getElementById('control-panel');
+  if (panel && user && user.username && user.username !== 'guest') {
+    panel.style.display = 'block';
+  }
 }
 
 function switchAdminTab(tabPaneId) {
@@ -35,13 +46,24 @@ function switchAdminTab(tabPaneId) {
 }
 
 function getCurrentUser() {
-  var state = AppStore.getState();
+  var state = (typeof AppStore !== 'undefined' && AppStore.getState) ? AppStore.getState() : {};
   return state.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null) || JSON.parse(localStorage.getItem('tnn_user')) || {
     username: 'guest',
     role: 'nhan_vien',
     id_dai: null,
     id_tram: null
   };
+}
+
+// Hàm lấy dữ liệu dự phòng thông minh (Quét qua AppStore và Biến toàn cục tránh trống bảng)
+function getSafeDataList(keyNames) {
+  var state = (typeof AppStore !== 'undefined' && AppStore.getState) ? AppStore.getState() : {};
+  for (var i = 0; i < keyNames.length; i++) {
+    var k = keyNames[i];
+    if (state[k] && state[k].length > 0) return state[k];
+    if (window[k] && window[k].length > 0) return window[k];
+  }
+  return [];
 }
 
 function checkAdminPermission(action, idDaiTarget, idTramTarget, silent = true) {
@@ -92,28 +114,19 @@ function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
 
-  var state = AppStore.getState();
-  var users = state.rawUserList || (typeof rawUserList !== 'undefined' ? rawUserList : []);
-
+  var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
   if (!users || users.length === 0) {
     var curr = getCurrentUser();
     if (curr && (curr.username || curr.email)) users = [curr];
   }
 
-  var daiList = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
-  var tramList = state.rawTramList || state.tramList || (typeof rawTramList !== 'undefined' ? rawTramList : []);
+  var daiList = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
+  var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
 
   var listDaiMap = {};
-  daiList.forEach(d => {
-    var idDai = getSafeStrId(d, ['id_dai', 'id']);
-    if (idDai) listDaiMap[idDai] = d.ten_dai || d.ten;
-  });
-
+  daiList.forEach(d => { var id = getSafeStrId(d, ['id_dai', 'id']); if (id) listDaiMap[id] = d.ten_dai || d.ten; });
   var listTramMap = {};
-  tramList.forEach(t => {
-    var idTram = getSafeStrId(t, ['id_tram', 'id', 'id_tram_vt']);
-    if (idTram) listTramMap[idTram] = t.ten_tram || t.ten;
-  });
+  tramList.forEach(t => { var id = getSafeStrId(t, ['id_tram', 'id', 'id_tram_vt']); if (id) listTramMap[id] = t.ten_tram || t.ten; });
 
   var user = getCurrentUser();
   if (user.role === 'admin_dai' || user.role === 'dai_admin') {
@@ -135,7 +148,7 @@ function renderMasterAccountTable() {
     return `
       <tr>
         <td><b>${accountName}</b></td>
-        <td><span style="background:#0ea5e9; color:#fff; padding:3px 8px; border-radius:4px; font-weight:600; font-size:11px;">${roleName}</span></td>
+        <td><span style="background:#0ea5e9; color:#fff; padding:2px 6px; border-radius:4px; font-weight:600; font-size:11px;">${roleName}</span></td>
         <td>${tenDai}</td>
         <td>${tenTram}</td>
         <td>${canEdit ? '✅ Có' : '❌ Không'}</td>
@@ -147,7 +160,7 @@ function renderMasterAccountTable() {
     `;
   }).join('');
 
-  tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center; padding:20px; color:#64748b;">Chưa có dữ liệu tài khoản</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu tài khoản</td></tr>';
 }
 
 /** 3.2 BẢNG ĐÀI VIỄN THÔNG */
@@ -155,12 +168,11 @@ function renderMasterDaiTable() {
   var tbody = document.getElementById('masterDaiTableBody');
   if (!tbody) return;
 
-  var state = AppStore.getState();
-  var list = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
+  var list = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
   var user = getCurrentUser();
 
   if (user.role === 'admin_dai' || user.role === 'dai_admin') {
-    list = list.filter(d => String(d.id_dai || d.id) === String(user.id_dai || user.idDai));
+    list = list.filter(d => String(getSafeStrId(d, ['id_dai', 'id'])) === String(user.id_dai || user.idDai));
   }
 
   var html = list.map(item => {
@@ -177,7 +189,7 @@ function renderMasterDaiTable() {
     `;
   }).join('');
 
-  tbody.innerHTML = html || '<tr><td colspan="3" style="text-align:center; padding:20px; color:#64748b;">Chưa có dữ liệu Đài</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="3" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Đài</td></tr>';
 }
 
 /** 3.3 BẢNG TRẠM VIỄN THÔNG */
@@ -185,10 +197,8 @@ function renderMasterTramTable() {
   var tbody = document.getElementById('masterTramTableBody');
   if (!tbody) return;
 
-  var state = AppStore.getState();
-  var list = state.rawTramList || state.tramList || (typeof rawTramList !== 'undefined' ? rawTramList : []);
-  var daiList = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
-  
+  var list = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
+  var daiList = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
   var listDaiMap = Object.fromEntries(daiList.map(d => [getSafeStrId(d, ['id_dai', 'id']), d.ten_dai || d.ten]));
 
   var user = getCurrentUser();
@@ -214,7 +224,7 @@ function renderMasterTramTable() {
     `;
   }).join('');
 
-  tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">Chưa có dữ liệu Trạm</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Trạm</td></tr>';
 }
 
 /** 3.4 BẢNG TUYẾN CÁP */
@@ -222,8 +232,7 @@ function renderMasterTuyenTable() {
   var tbody = document.getElementById('masterTuyenTableBody');
   if (!tbody) return;
 
-  var state = AppStore.getState();
-  var list = state.rawTuyenList || state.tuyenList || (typeof rawTuyenList !== 'undefined' ? rawTuyenList : []);
+  var list = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
 
   var html = list.map(item => {
     var idTuyen = getSafeStrId(item, ['id_tuyen_cap', 'id_tuyen', 'id']);
@@ -240,7 +249,7 @@ function renderMasterTuyenTable() {
     `;
   }).join('');
 
-  tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">Chưa có dữ liệu Tuyến cáp</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Tuyến cáp</td></tr>';
 }
 
 /** 3.5 BẢNG ĐOẠN CÁP */
@@ -248,8 +257,7 @@ function renderMasterDoanTable() {
   var tbody = document.getElementById('masterDoanTableBody');
   if (!tbody) return;
 
-  var state = AppStore.getState();
-  var list = state.rawDoanList || state.doanCapList || (typeof rawDoanCapList !== 'undefined' ? rawDoanCapList : []);
+  var list = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap']);
 
   var user = getCurrentUser();
   if (user.role === 'admin_tram' || user.role === 'tram_admin') {
@@ -279,14 +287,13 @@ function renderMasterDoanTable() {
     `;
   }).join('');
 
-  tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center; padding:20px; color:#64748b;">Chưa có dữ liệu Đoạn cáp</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Đoạn cáp</td></tr>';
 }
 
 /** 4. HÀM CHUẨN BỊ FORM TÀI KHOẢN */
 function chuanBiFormThemThanhVien(usernameToEdit) {
-  var state = AppStore.getState();
-  var daiList = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
-  var tramList = state.rawTramList || state.tramList || (typeof rawTramList !== 'undefined' ? rawTramList : []);
+  var daiList = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
+  var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
 
   var selectDai = document.getElementById('newMemberDai');
   var selectTram = document.getElementById('newMemberTram');
@@ -301,7 +308,7 @@ function chuanBiFormThemThanhVien(usernameToEdit) {
   }
 
   var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginEmail');
-  var users = state.rawUserList || (typeof rawUserList !== 'undefined' ? rawUserList : []);
+  var users = getSafeDataList(['rawUserList', 'userList', 'users']);
 
   if (usernameToEdit) {
     var userObj = users.find(u => (u.username || u.email || u.user_name || u.name) === usernameToEdit);
@@ -369,10 +376,9 @@ function moFormThemDoan(id) { moGenericAuxForm('doan_cap', id); }
 
 /** 6. CHUẨN BỊ FORM DANH MỤC */
 function moGenericAuxForm(tableType, recordId) {
-  var state = AppStore.getState();
-  var daiList = state.rawDaiList || state.daiList || [];
-  var tramList = state.rawTramList || state.tramList || [];
-  var tuyenList = state.rawTuyenList || state.tuyenList || [];
+  var daiList = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
+  var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
+  var tuyenList = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
 
   document.getElementById('auxTableType').value = tableType;
   document.getElementById('auxRecordId').value = recordId || '';
@@ -404,7 +410,7 @@ function moGenericAuxForm(tableType, recordId) {
     `;
   }
   else if (tableType === 'doan_cap') {
-    var doanList = state.rawDoanList || state.doanCapList || [];
+    var doanList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap']);
     var rec = doanList.find(d => String(getSafeStrId(d, ['id_doan_cap', 'id_doan', 'id'])) === String(recordId)) || {};
     document.getElementById('auxModalTitle').innerText = recordId ? "✏️ Sửa Đoạn Cáp" : "➕ Thêm Đoạn Cáp";
     html = `
@@ -466,9 +472,8 @@ async function saveAuxRecord() {
 async function deleteAdminRecord(tableName, idItem) {
   if (!checkAdminPermission('XOA', null, null, false)) return;
 
-  var state = AppStore.getState();
-  var tramList = state.rawTramList || state.tramList || [];
-  var doanList = state.rawDoanList || state.doanCapList || [];
+  var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
+  var doanList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap']);
 
   if (tableName === 'dai_vt') {
     var countTram = tramList.filter(t => String(getSafeStrId(t, ['id_dai', 'dai_id'])) === String(idItem)).length;
@@ -559,7 +564,7 @@ async function executeCrudAction() {
   } catch (err) { alert("❌ Lỗi khi lưu điểm hạ tầng: " + err.message); }
 }
 
-/** 10. TÍNH NĂNG ĐỔI MẬT KHẨU NGAY TRÊN GIAO DIỆN */
+/** 10. TÍNH NĂNG ĐỔI MẬT KHẨU */
 function openChangePasswordModal() {
   document.getElementById('txtCurrentPass').value = '';
   document.getElementById('txtNewPass').value = '';
@@ -590,14 +595,12 @@ async function executeChangePassword() {
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      // Cập nhật mật khẩu trực tiếp vào bảng tai_khoan
       var { error } = await supabaseClient
         .from('tai_khoan')
         .update({ password: newPass })
         .eq('email', username);
 
       if (error) {
-        // Thử cập nhật theo cột username nếu không tìm thấy theo email
         var { error: err2 } = await supabaseClient
           .from('tai_khoan')
           .update({ password: newPass })
