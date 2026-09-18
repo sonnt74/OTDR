@@ -2,7 +2,7 @@
 // TỆP ADMIN.JS - ĐIỀU KHIỂN QUẢN TRỊ, ĐỔI MẬT KHẨU & TẢI DỮ LIỆU AN TOÀN
 // ==========================================================================
 
-var confirmPromiseResolver = null;
+var confirmPromiseResolver = null; 
 
 async function openModal(modalId, tabId) {
   closeModals();
