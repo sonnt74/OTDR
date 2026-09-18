@@ -367,7 +367,7 @@ async function saveAccountAction() {
       if (error) throw error;
       alert("✅ Đã lưu thông tin tài khoản thành công!");
     } else {
-      await idbThemHangDoiSync({ actionType: 'SAVE_USER', payload: payload });
+      await idbThemVaoHangDoiSync('SAVE_USER', payload);
       alert("🔄 Đã lưu vào hàng đợi đồng bộ Offline!");
     }
 
@@ -466,7 +466,7 @@ async function saveAuxRecord() {
       if (error) throw error;
       alert("✅ Lưu danh mục thành công!");
     } else {
-      await idbThemHangDoiSync({ actionType: 'SAVE_AUX', payload: { table: tableType, data: payload } });
+      await idbThemVaoHangDoiSync('SAVE_AUX', { table: tableType, data: payload });
       alert("🔄 Đã lưu vào hàng đợi Offline!");
     }
 
@@ -505,7 +505,7 @@ async function deleteAdminRecord(tableName, idItem) {
       if (error) throw error;
       alert("✅ Đã xóa bản ghi thành công!");
     } else {
-      await idbThemHangDoiSync({ actionType: 'DELETE_RECORD', payload: { table: tableName, id: idItem } });
+      await idbThemVaoHangDoiSync('DELETE_RECORD', { table: tableName, id: idItem });
       alert("🔄 Đã lưu lệnh xóa vào hàng đợi Offline!");
     }
 
@@ -562,7 +562,7 @@ async function executeCrudAction() {
       if (error) throw error;
       alert("✅ Đã lưu điểm hạ tầng GIS thành công!");
     } else {
-      await idbThemHangDoiSync({ actionType: 'SAVE_GIS_POINT', payload: payload });
+      await idbThemVaoHangDoiSync('SAVE_GIS_POINT', payload);
       alert("🔄 Đã lưu điểm hạ tầng vào hàng đợi Offline!");
     }
 
@@ -603,14 +603,12 @@ async function executeChangePassword() {
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      // Thử cập nhật theo cột email trước
       var res = await supabaseClient
         .from('tai_khoan')
         .update({ password: newPass })
         .eq('email', username);
 
       if (res.error) {
-        // Nếu lỗi, thử cập nhật theo cột username
         var res2 = await supabaseClient
           .from('tai_khoan')
           .update({ password: newPass })
