@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ, ĐỔI MẬT KHẨU & TẢI DỮ LIỆU AN TOÀN (DÙNG ACCOUNT)
+// TỆP ADMIN.JS - QUẢN TRỊ, ĐỔI MẬT KHẨU (DÙNG TRƯỜNG ACCOUNT)
 // ==========================================================================
 
 async function openModal(modalId, tabId) {
@@ -101,7 +101,7 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
-/** VIEW HIỂN THỊ BẢNG TÀI KHOẢN (DÙNG ACCOUNT) */
+/** VIEW HIỂN THỊ BẢNG TÀI KHOẢN (SỬ DỤNG TRƯỜNG ACCOUNT) */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
@@ -181,9 +181,9 @@ function renderMasterDoanTable() {
   `).join('') || '<tr><td colspan="5" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Đoạn cáp</td></tr>';
 }
 
-/** LƯU TÀI KHOẢN DÙNG TRƯỜNG ACCOUNT */
+/** LƯU TÀI KHOẢN (DÙNG TRƯỜNG ACCOUNT) */
 async function saveAccountAction() {
-  var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginEmail');
+  var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginAccount');
   var accVal = accountInput ? accountInput.value.trim() : '';
   var password = document.getElementById('newMemberPass').value.trim();
   var role = document.getElementById('newMemberRole').value;
@@ -195,7 +195,6 @@ async function saveAccountAction() {
 
   var payload = {
     account: accVal,
-    username: accVal,
     role: role,
     can_edit_map: canEdit,
     id_dai: idDai ? Number(idDai) : null,
@@ -218,7 +217,7 @@ async function saveAccountAction() {
   } catch (err) { alert("❌ Lỗi khi lưu tài khoản: " + err.message); }
 }
 
-/** ĐỔI MẬT KHẨU DÙNG TRƯỜNG ACCOUNT */
+/** ĐỔI MẬT KHẨU (DÙNG TRƯỜNG ACCOUNT) */
 function openChangePasswordModal() {
   var modal = document.getElementById('changePasswordModal');
   if (modal) {
@@ -263,7 +262,7 @@ async function executeChangePassword() {
 }
 
 function chuanBiFormThemThanhVien(accToEdit) {
-  var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginEmail');
+  var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginAccount');
   if (accToEdit && accountInput) {
     accountInput.value = accToEdit;
   } else if (accountInput) {
