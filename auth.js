@@ -28,18 +28,18 @@ window.onload = function() {
 };
 
 /**
- * HÀM MỚI: Hiển thị thông tin người dùng lên giao diện
+ * HÀM HIỂN THỊ THÔNG TIN NGƯỜI DÙNG LÊN GIAO DIỆN (ĐÃ LÀM GỌN THEO YÊU CẦU)
  */
 function hienThiThongTinNguoiDung() {
   var displayEl = document.getElementById('userInfoDisplay');
-  if (!displayEl) return; // Nếu không tìm thấy thẻ HTML, bỏ qua để không báo lỗi
+  if (!displayEl) return; 
 
   if (!currentUser || !currentUser.isLoggedIn) {
     displayEl.innerHTML = '';
     return;
   }
 
-  // Dịch mã quyền hệ thống sang Tiếng Việt dễ hiểu
+  // Dịch mã quyền hệ thống sang Tiếng Việt
   var roleName = "Nhân viên";
   if (currentUser.role === 'sys_admin' || currentUser.role === 'admin_sys') {
     roleName = "Quản trị hệ thống";
@@ -51,11 +51,10 @@ function hienThiThongTinNguoiDung() {
 
   var tenTaiKhoan = currentUser.email || currentUser.username || "Tài khoản";
 
-  // Thiết kế giao diện thẻ thông tin (HTML)
+  // Thiết kế giao diện cực kỳ tinh gọn, không có biểu tượng
   var html = `
-    <div style="background: rgba(13, 110, 253, 0.1); border: 1px solid #0d6efd; padding: 10px; border-radius: 8px; color: #0d6efd; font-size: 14px;">
-      <div style="font-weight: bold; margin-bottom: 4px;">👤 ${tenTaiKhoan}</div>
-      <div style="font-size: 12px; color: #495057;">🏷️ ${roleName}</div>
+    <div style="font-size: 14px; font-weight: bold; color: #333; padding: 5px 0;">
+      Account: ${tenTaiKhoan} (${roleName})
     </div>
   `;
   
