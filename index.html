@@ -20,28 +20,7 @@
       --text-main: #1e293b;
     }
 
-    /* 1. SẮP XẾP CỤM NÚT BẢN ĐỒ THEO TRỤC DỌC TRÁNH CHE KHUẤT (DÙNG !IMPORTANT ĐỂ GHI ĐÈ STYLE GỐC) */
-    #togglePanelBtn {
-      position: absolute !important; top: 15px !important; right: 15px !important; z-index: 1500 !important;
-      background: var(--primary-blue) !important; color: white !important; border-radius: 8px !important;
-      width: 40px !important; height: 40px !important; font-size: 18px !important; font-weight: bold !important;
-      border: none !important; cursor: pointer !important; display: flex !important; align-items: center !important; justify-content: center !important;
-      box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3) !important;
-    }
-
-    #gps-btn {
-      position: absolute !important; top: 62px !important; right: 15px !important; left: auto !important; bottom: auto !important;
-      z-index: 1400 !important; width: 40px !important; height: 40px !important; border-radius: 8px !important; background: white !important;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important; display: flex !important; align-items: center !important; justify-content: center !important; cursor: pointer !important;
-    }
-    
-    #measure-btn {
-      position: absolute !important; top: 109px !important; right: 15px !important; left: auto !important; bottom: auto !important;
-      z-index: 1400 !important; width: 40px !important; height: 40px !important; border-radius: 8px !important; background: white !important;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important; display: flex !important; align-items: center !important; justify-content: center !important; cursor: pointer !important;
-    }
-
-    /* 2. FORM ĐIỀU KHIỂN GỌN GÀNG, KHÔNG DÙNG SCROLL */
+    /* 1. FORM ĐIỀU KHIỂN GỌN GÀNG, KHÔNG DÙNG SCROLL */
     #control-panel {
       position: fixed; top: 15px; left: 15px; width: 320px;
       background: white; border-radius: 12px;
@@ -63,7 +42,7 @@
       width: 100%; padding: 5px 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px; background: #f8fafc; color: var(--text-main); box-sizing: border-box;
     }
 
-    /* 3. GIAO DIỆN QUẢN TRỊ CHUYÊN NGHIỆP (MODAL ADMIN) */
+    /* 2. GIAO DIỆN QUẢN TRỊ CHUYÊN NGHIỆP (MODAL ADMIN) */
     .app-modal {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(15, 23, 42, 0.6); z-index: 2000; align-items: center; justify-content: center;
