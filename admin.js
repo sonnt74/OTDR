@@ -4,7 +4,7 @@
 
 var confirmPromiseResolver = null;
 
-function openModal(modalId, tabId) {
+async function openModal(modalId, tabId) {
   closeModals();
   var targetModal = document.getElementById(modalId);
   if (targetModal) targetModal.style.display = 'flex';
@@ -14,16 +14,29 @@ function openModal(modalId, tabId) {
   if (panel) panel.style.display = 'none';
 
   if (modalId === 'adminMasterModal') {
-    // Tự động kích hoạt tải lại dữ liệu từ Supabase nếu bảng đang trống
-    var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
-    if ((!users || users.length === 0) && typeof taiDuLieuSupabase === 'function') {
-      taiDuLieuSupabase(false).then(() => {
-        renderAllAdminTables();
-      });
-    } else {
-      renderAllAdminTables();
+    // Chủ động nạp dữ liệu trực tiếp từ Supabase để các bảng luôn có số liệu hiển thị đầy đủ
+    try {
+      if (navigator.onLine && typeof supabaseClient !== 'undefined') {
+        var [uRes, dRes, tRes, tuRes, doRes] = await Promise.all([
+          supabaseClient.from('tai_khoan').select('*'),
+          supabaseClient.from('dai_vt').select('*'),
+          supabaseClient.from('tram_vt').select('*'),
+          supabaseClient.from('tuyen_cap').select('*'),
+          supabaseClient.from('v_doan_cap_full').select('*')
+        ]);
+        if (uRes.data) window.rawUserList = uRes.data;
+        if (dRes.data) window.rawDaiList = dRes.data;
+        if (tRes.data) window.rawTramList = tRes.data;
+        if (tuRes.data) window.rawTuyenList = tuRes.data;
+        if (doRes.data) window.rawDoanCapList = doRes.data;
+      }
+    } catch (e) {
+      console.warn("Dùng dữ liệu cache cho quản trị:", e);
     }
+
+    renderAllAdminTables();
     if (tabId) switchAdminTab(tabId);
+    else switchAdminTab('tab-accounts');
   }
 }
 
@@ -40,7 +53,8 @@ function closeModals() {
 
 function switchAdminTab(tabPaneId) {
   document.querySelectorAll('.admin-tabs .tab-btn').forEach(btn => {
-    if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(tabPaneId)) {
+    var onclickAttr = btn.getAttribute('onclick') || '';
+    if (onclickAttr.indexOf(tabPaneId) !== -1) {
       btn.classList.add('active');
     } else {
       btn.classList.remove('active');
@@ -48,8 +62,11 @@ function switchAdminTab(tabPaneId) {
   });
 
   document.querySelectorAll('.tab-pane').forEach(pane => {
-    if (pane.id === tabPaneId) pane.classList.add('active');
-    else pane.classList.remove('active');
+    if (pane.id === tabPaneId) {
+      pane.classList.add('active');
+    } else {
+      pane.classList.remove('active');
+    }
   });
 }
 
@@ -71,6 +88,24 @@ function getSafeDataList(keyNames) {
     if (state[k] && state[k].length > 0) return state[k];
     if (window[k] && window[k].length > 0) return window[k];
   }
+  // Dự phòng quét trực tiếp biến toàn cục
+  if (keyNames.includes('rawUserList') && window.rawUserList && window.rawUserList.length > 0) return window.rawUserList;
+  if (keyNames.includes('userList') && window.rawUserList && window.rawUserList.length > 0) return window.rawUserList;
+  if (keyNames.includes('users') && window.rawUserList && window.rawUserList.length > 0) return window.rawUserList;
+  if (keyNames.includes('taiKhoanList') && window.rawUserList && window.rawUserList.length > 0) return window.rawUserList;
+  
+  if (keyNames.includes('rawDaiList') && window.rawDaiList && window.rawDaiList.length > 0) return window.rawDaiList;
+  if (keyNames.includes('daiList') && window.rawDaiList && window.rawDaiList.length > 0) return window.rawDaiList;
+  
+  if (keyNames.includes('rawTramList') && window.rawTramList && window.rawTramList.length > 0) return window.rawTramList;
+  if (keyNames.includes('tramList') && window.rawTramList && window.rawTramList.length > 0) return window.rawTramList;
+  
+  if (keyNames.includes('rawTuyenList') && window.rawTuyenList && window.rawTuyenList.length > 0) return window.rawTuyenList;
+  if (keyNames.includes('tuyenList') && window.rawTuyenList && window.rawTuyenList.length > 0) return window.rawTuyenList;
+  
+  if (keyNames.includes('rawDoanList') && window.rawDoanCapList && window.rawDoanCapList.length > 0) return window.rawDoanCapList;
+  if (keyNames.includes('doanCapList') && window.rawDoanCapList && window.rawDoanCapList.length > 0) return window.rawDoanCapList;
+  
   return [];
 }
 
