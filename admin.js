@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ, ĐỔI MẬT KHẨU & TẢI DỮ LIỆU AN TOÀN
+// TỆP ADMIN.JS - QUẢN TRỊ, ĐỔI MẬT KHẨU & TẢI DỮ LIỆU AN TOÀN (DÙNG ACCOUNT)
 // ==========================================================================
 
 async function openModal(modalId, tabId) {
@@ -47,7 +47,7 @@ function closeModals() {
   
   var user = getCurrentUser();
   var panel = document.getElementById('control-panel');
-  if (panel && user && user.username && user.username !== 'guest') {
+  if (panel && user && (user.account || user.username) && (user.account || user.username) !== 'guest') {
     panel.style.display = 'block';
   }
 }
@@ -74,7 +74,7 @@ function switchAdminTab(tabPaneId, btnEl) {
 function getCurrentUser() {
   var state = (typeof AppStore !== 'undefined' && AppStore.getState) ? AppStore.getState() : {};
   return state.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null) || JSON.parse(localStorage.getItem('tnn_user')) || {
-    username: 'guest', role: 'nhan_vien', id_dai: null, id_tram: null
+    account: 'guest', username: 'guest', role: 'nhan_vien', id_dai: null, id_tram: null
   };
 }
 
@@ -101,23 +101,27 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
+/** VIEW HIỂN THỊ BẢNG TÀI KHOẢN (DÙNG ACCOUNT) */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
-  var html = users.map(u => `
-    <tr>
-      <td><b>${u.username || u.email || 'Tài khoản'}</b></td>
-      <td><span style="background:#0ea5e9; color:#fff; padding:2px 6px; border-radius:4px; font-size:11px;">${u.role || 'nhan_vien'}</span></td>
-      <td>${u.id_dai || 'Tất cả'}</td>
-      <td>${u.id_tram || 'Tất cả'}</td>
-      <td>${u.can_edit_map ? '✅ Có' : '❌ Không'}</td>
-      <td>
-        <button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien('${u.username || u.email}')">✏️ Sửa</button>
-        <button class="btn-small" style="background:#ef4444; color:white;" onclick="deleteAdminRecord('tai_khoan', '${u.username || u.email}')">🗑️ Xóa</button>
-      </td>
-    </tr>
-  `).join('');
+  var html = users.map(u => {
+    var accName = u.account || u.username || u.user_name || 'Tài khoản';
+    return `
+      <tr>
+        <td><b>${accName}</b></td>
+        <td><span style="background:#0ea5e9; color:#fff; padding:2px 6px; border-radius:4px; font-size:11px;">${u.role || 'nhan_vien'}</span></td>
+        <td>${u.id_dai || 'Tất cả'}</td>
+        <td>${u.id_tram || 'Tất cả'}</td>
+        <td>${u.can_edit_map ? '✅ Có' : '❌ Không'}</td>
+        <td>
+          <button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien('${accName}')">✏️ Sửa</button>
+          <button class="btn-small" style="background:#ef4444; color:white;" onclick="deleteAdminRecord('tai_khoan', '${accName}')">🗑️ Xóa</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
   tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu tài khoản</td></tr>';
 }
 
@@ -177,7 +181,44 @@ function renderMasterDoanTable() {
   `).join('') || '<tr><td colspan="5" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Đoạn cáp</td></tr>';
 }
 
-// Mở Form Đổi Mật Khẩu
+/** LƯU TÀI KHOẢN DÙNG TRƯỜNG ACCOUNT */
+async function saveAccountAction() {
+  var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginEmail');
+  var accVal = accountInput ? accountInput.value.trim() : '';
+  var password = document.getElementById('newMemberPass').value.trim();
+  var role = document.getElementById('newMemberRole').value;
+  var canEdit = document.getElementById('newMemberCanEdit').checked;
+  var idDai = document.getElementById('newMemberDai').value || null;
+  var idTram = document.getElementById('newMemberTram').value || null;
+
+  if (!accVal) { alert("⚠️ Vui lòng nhập tên tài khoản!"); return; }
+
+  var payload = {
+    account: accVal,
+    username: accVal,
+    role: role,
+    can_edit_map: canEdit,
+    id_dai: idDai ? Number(idDai) : null,
+    id_tram: idTram ? Number(idTram) : null
+  };
+  if (password) payload.password = password;
+
+  try {
+    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
+      var { error } = await supabaseClient.from('tai_khoan').upsert([payload]);
+      if (error) throw error;
+      alert("✅ Đã lưu thông tin tài khoản thành công!");
+    } else {
+      alert("⚠️ Cần kết nối mạng trực tuyến để lưu tài khoản!");
+    }
+
+    document.getElementById('addMemberModal').style.display = 'none';
+    if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
+    renderAllAdminTables();
+  } catch (err) { alert("❌ Lỗi khi lưu tài khoản: " + err.message); }
+}
+
+/** ĐỔI MẬT KHẨU DÙNG TRƯỜNG ACCOUNT */
 function openChangePasswordModal() {
   var modal = document.getElementById('changePasswordModal');
   if (modal) {
@@ -203,16 +244,14 @@ async function executeChangePassword() {
   }
 
   var user = getCurrentUser();
-  var username = user.username || user.email;
-  if (!username) { alert("⚠️ Không tìm thấy thông tin tài khoản!"); return; }
+  var accName = user.account || user.username;
+  if (!accName) { alert("⚠️ Không tìm thấy thông tin tài khoản!"); return; }
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      var res = await supabaseClient.from('tai_khoan').update({ password: newPass }).eq('email', username);
-      if (res.error) {
-        var res2 = await supabaseClient.from('tai_khoan').update({ password: newPass }).eq('username', username);
-        if (res2.error) throw res2.error;
-      }
+      var res = await supabaseClient.from('tai_khoan').update({ password: newPass }).eq('account', accName);
+      if (res.error) throw res.error;
+
       alert("✅ Đổi mật khẩu thành công!");
       document.getElementById('changePasswordModal').style.display = 'none';
     } else {
@@ -223,11 +262,23 @@ async function executeChangePassword() {
   }
 }
 
-function chuanBiFormThemThanhVien() { document.getElementById('addMemberModal').style.display = 'flex'; }
-function saveAccountAction() {}
+function chuanBiFormThemThanhVien(accToEdit) {
+  var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginEmail');
+  if (accToEdit && accountInput) {
+    accountInput.value = accToEdit;
+  } else if (accountInput) {
+    accountInput.value = '';
+  }
+  document.getElementById('addMemberModal').style.display = 'flex';
+}
+
 function moFormThemDai() { document.getElementById('genericAuxModal').style.display = 'flex'; }
 function moFormThemTram() { document.getElementById('genericAuxModal').style.display = 'flex'; }
 function moFormThemTuyen() { document.getElementById('genericAuxModal').style.display = 'flex'; }
 function moFormThemDoan() { document.getElementById('genericAuxModal').style.display = 'flex'; }
 function saveAuxRecord() {}
-function deleteAdminRecord() {}
+function deleteAdminRecord(tableName, idItem) {
+  if (tableName === 'tai_khoan') {
+    console.log("Xóa tài khoản có account:", idItem);
+  }
+}
