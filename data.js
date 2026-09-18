@@ -505,7 +505,6 @@ function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo,
 }
 
 function timViTriDut() {
-  anBangDieuKhien();
   var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value), kcOtdrMeters = kcOtdrKm * 1000; 
   if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { showToast("Nhập cự ly đo hợp lệ!", "error"); return; }
   
@@ -595,11 +594,11 @@ function timViTriDut() {
   
   faultMarker.bindPopup(popupHtml).openPopup();
   datLichTuXoaMarkerTimKiem();
-  
+  anBangDieuKhien();
 }
 
 function timLyTrinhBanDo() {
-  anBangDieuKhien();
+  
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var parsedTarget = parseLyTrinhWithSuffix(txt);
   var targetMeters = parsedTarget ? parsedTarget.meters : null;
@@ -686,6 +685,7 @@ function timLyTrinhBanDo() {
                      
   foundMarkerLayer.bindPopup(popupContent).openPopup();
   datLichTuXoaMarkerTimKiem();
+  anBangDieuKhien();
 }
 
 function xoaTatCaDoiTuongMap() {
