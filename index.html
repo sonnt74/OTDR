@@ -20,29 +20,51 @@
       --text-main: #1e293b;
     }
 
-    /* 1. NÚT ☰ VÀ ĐIỀU KHIỂN BẢN ĐỒ BÊN PHẢI */
+    /* 1. SẮP XẾP CỤM NÚT BẢN ĐỒ THEO TRỤC DỌC KHÔNG BỊ CHE KHUẤT */
     #togglePanelBtn {
       position: absolute; top: 15px; right: 15px; z-index: 1500;
       background: var(--primary-blue); color: white; border-radius: 8px;
-      width: 42px; height: 42px; font-size: 20px; font-weight: bold;
+      width: 40px; height: 40px; font-size: 18px; font-weight: bold;
       border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
       box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3); transition: 0.2s;
     }
     #togglePanelBtn:hover { background: #0b5ed7; transform: scale(1.05); }
 
-    /* Định vị lại các nút GPS và Đo đạc nằm dưới nút ☰ */
     #gps-btn {
-      position: absolute !important; top: 67px !important; right: 15px !important; left: auto !important; bottom: auto !important;
-      z-index: 1400; width: 42px; height: 42px; border-radius: 8px; background: white;
+      position: absolute !important; top: 62px !important; right: 15px !important; left: auto !important; bottom: auto !important;
+      z-index: 1400; width: 40px; height: 40px; border-radius: 8px; background: white;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; cursor: pointer;
     }
+    
     #measure-btn {
-      position: absolute !important; top: 119px !important; right: 15px !important; left: auto !important; bottom: auto !important;
-      z-index: 1400; width: 42px; height: 42px; border-radius: 8px; background: white;
+      position: absolute !important; top: 109px !important; right: 15px !important; left: auto !important; bottom: auto !important;
+      z-index: 1400; width: 40px; height: 40px; border-radius: 8px; background: white;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; cursor: pointer;
     }
 
-    /* 2. GIAO DIỆN QUẢN TRỊ CHUYÊN NGHIỆP (MODAL ADMIN) */
+    /* 2. FORM ĐIỀU KHIỂN GỌN GÀNG, KHÔNG DÙNG SCROLL */
+    #control-panel {
+      position: fixed; top: 15px; left: 15px; width: 330px;
+      background: white; border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      padding: 10px; z-index: 1000;
+      max-height: calc(100vh - 30px); overflow-y: hidden; /* Tuyệt đối không dùng scroll */
+      display: none; /* Mặc định ẩn, hiện lên khi đăng nhập */
+      border: 1px solid var(--border-color);
+    }
+    .panel-header { font-size: 13px; font-weight: bold; color: var(--primary-blue); margin-bottom: 6px; cursor: pointer; text-align: center; }
+
+    @media (max-width: 767px) {
+      #control-panel { width: calc(100vw - 30px); left: 15px; top: 15px; }
+    }
+
+    .form-group { margin-bottom: 6px; }
+    .form-group label { display: block; font-weight: 600; font-size: 11px; color: #475569; margin-bottom: 2px; }
+    .form-group input, .form-group select {
+      width: 100%; padding: 5px 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px; background: #f8fafc; color: var(--text-main); box-sizing: border-box;
+    }
+
+    /* 3. GIAO DIỆN QUẢN TRỊ CHUYÊN NGHIỆP (MODAL ADMIN) */
     .app-modal {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(15, 23, 42, 0.6); z-index: 2000; align-items: center; justify-content: center;
@@ -51,48 +73,35 @@
     .modal-content {
       background: #ffffff; width: 92%; max-width: 950px; max-height: 88vh;
       border-radius: 16px; display: flex; flex-direction: column; overflow: hidden;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-      border: 1px solid var(--border-color);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); border: 1px solid var(--border-color);
     }
     .modal-header {
-      padding: 16px 20px; background: #f8fafc; border-bottom: 1px solid var(--border-color);
-      display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 16px; color: var(--text-main);
+      padding: 14px 20px; background: #f8fafc; border-bottom: 1px solid var(--border-color);
+      display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 15px; color: var(--text-main);
     }
-    .modal-body { padding: 20px; overflow-y: auto; background: #ffffff; }
+    .modal-body { padding: 16px; overflow-y: auto; background: #ffffff; }
 
-    /* Tabs quản trị hiện đại */
-    .admin-tabs {
-      display: flex; gap: 8px; background: #f1f5f9; padding: 6px; border-radius: 10px; margin-bottom: 16px; overflow-x: auto;
-    }
+    .admin-tabs { display: flex; gap: 6px; background: #f1f5f9; padding: 4px; border-radius: 8px; margin-bottom: 12px; overflow-x: auto; }
     .tab-btn {
-      background: transparent; border: none; padding: 8px 16px; font-weight: 600; font-size: 13px;
+      background: transparent; border: none; padding: 6px 12px; font-weight: 600; font-size: 12px;
       color: #64748b; border-radius: 6px; cursor: pointer; transition: 0.2s; white-space: nowrap;
     }
     .tab-btn.active { background: #ffffff; color: var(--primary-blue); box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
 
-    /* Bảng dữ liệu chuẩn Enterprise */
     .table-responsive { width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid var(--border-color); }
-    .table-data { width: 100%; min-width: 650px; border-collapse: collapse; text-align: left; font-size: 13px; }
-    .table-data th { background: #f8fafc; color: #475569; padding: 12px 16px; font-weight: 600; border-bottom: 2px solid var(--border-color); }
-    .table-data td { padding: 12px 16px; border-bottom: 1px solid var(--border-color); color: var(--text-main); }
+    .table-data { width: 100%; min-width: 650px; border-collapse: collapse; text-align: left; font-size: 12px; }
+    .table-data th { background: #f8fafc; color: #475569; padding: 10px 14px; font-weight: 600; border-bottom: 2px solid var(--border-color); }
+    .table-data td { padding: 10px 14px; border-bottom: 1px solid var(--border-color); color: var(--text-main); }
     .table-data tr:hover { background-color: var(--light-blue); }
-
-    /* Form nhóm và nút bấm chuyên nghiệp */
-    .form-group { margin-bottom: 14px; }
-    .form-group label { display: block; font-weight: 600; font-size: 12px; color: #475569; margin-bottom: 6px; }
-    .form-group input, .form-group select {
-      width: 100%; padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; background: #f8fafc; color: var(--text-main); box-sizing: border-box;
-    }
-    .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary-blue); background: #ffffff; box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15); }
     
     .btn-action {
-      background: var(--primary-blue); color: white; border: none; padding: 10px 16px; border-radius: 8px;
-      font-weight: 600; font-size: 13px; cursor: pointer; width: 100%; transition: 0.2s;
+      background: var(--primary-blue); color: white; border: none; padding: 7px 12px; border-radius: 6px;
+      font-weight: 600; font-size: 12px; cursor: pointer; width: 100%; transition: 0.2s;
     }
     .btn-action:hover { background: #0b5ed7; }
     .btn-success { background: #198754; }
     .btn-success:hover { background: #157347; }
-    .btn-small { padding: 5px 10px; font-size: 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
+    .btn-small { padding: 4px 8px; font-size: 11px; border-radius: 4px; border: none; cursor: pointer; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -102,8 +111,8 @@
     <div id="loading-overlay-text">Đang đồng bộ dữ liệu...</div>
   </div>
 
-  <!-- NÚT GỌI BẢNG ĐIỀU KHIỂN ☰ -->
-  <button id="togglePanelBtn" onclick="toggleGISPanel()" title="Mở/Đóng Bảng điều khiển">☰</button>
+  <!-- NÚT ☰ BẬT/TẮT TOÀN BỘ FORM ĐIỀU KHIỂN (KHÔNG ĐỂ LẠI BAR) -->
+  <button id="togglePanelBtn" onclick="toggleGISPanel()" title="Ẩn/Hiện Bảng điều khiển">☰</button>
 
   <!-- BẢN ĐỒ VÀ BẢNG ĐIỀU KHIỂN CHÍNH -->
   <div id="workspace">
@@ -112,20 +121,20 @@
     <div id="measure-btn" class="map-tool-btn" onclick="toggleMeasureTool()" title="Đo khoảng cách thủ công">📏</div>
 
     <div id="control-panel">
-      <div class="panel-header" onclick="toggleGISPanel()"><span>🗺️ ĐIỀU KHIỂN & PHÂN TÍCH OTDR</span></div>
+      <div class="panel-header" onclick="toggleGISPanel()"><span>🗺️ ĐIỀU KHIỂN & OTDR (Nhấn để ẩn)</span></div>
       
-      <!-- KHU VỰC THÔNG TIN TÀI KHOẢN VÀ NÚT ĐỔI MẬT KHẨU -->
-      <div style="display: flex; align-items: center; justify-content: space-between; background: #f1f5f9; padding: 10px; border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--border-color);">
-        <div id="userInfoDisplay" style="font-size: 12px; font-weight: bold; color: var(--text-main); margin: 0;"></div>
-        <button class="btn-small btn-success" onclick="openChangePasswordModal()" style="display: flex; align-items: center; gap: 4px;">🔑 Đổi MK</button>
+      <!-- THÔNG TIN TÀI KHOẢN VÀ NÚT ĐỔI MẬT KHẨU DẠNG BIỂU TƯỢNG 🔑 -->
+      <div style="display: flex; align-items: center; justify-content: space-between; background: #f1f5f9; padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--border-color);">
+        <div id="userInfoDisplay" style="font-size: 11px; font-weight: bold; color: var(--text-main); margin: 0; overflow: hidden; text-overflow: ellipsis;"></div>
+        <button class="btn-small btn-success" onclick="openChangePasswordModal()" title="Đổi mật khẩu tài khoản" style="padding: 2px 6px; font-size: 13px; line-height: 1;">🔑</button>
       </div>
 
       <!-- Thanh công cụ nhanh -->
-      <div style="display: flex; gap: 6px; margin-bottom: 12px;">
-        <button class="btn-action" style="flex: 1; background: #64748b; padding: 7px 0; margin: 0; font-size: 11px;" onclick="handleLogout()">🚪 Thoát</button>
-        <button class="btn-action" style="flex: 1; background: #0ea5e9; padding: 7px 0; margin: 0; font-size: 11px;" onclick="taiDuLieuSupabase(true)">🔄 Làm mới</button>
-        <button class="btn-action" style="flex: 1; background: #ef4444; padding: 7px 0; margin: 0; font-size: 11px;" onclick="xoaTatCaDoiTuongMap()">🗑️ Xóa Maps</button>
-        <button id="adminMobileBtn" class="btn-action btn-success" style="flex: 1; padding: 7px 0; margin: 0; font-size: 11px; display: none;" onclick="openModal('adminMasterModal', 'tab-accounts')">⚙️ Quản trị</button>
+      <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+        <button class="btn-action" style="flex: 1; background: #64748b; padding: 5px 0; font-size: 10px;" onclick="handleLogout()">🚪 Thoát</button>
+        <button class="btn-action" style="flex: 1; background: #0ea5e9; padding: 5px 0; font-size: 10px;" onclick="taiDuLieuSupabase(true)">🔄 Làm mới</button>
+        <button class="btn-action" style="flex: 1; background: #ef4444; padding: 5px 0; font-size: 10px;" onclick="xoaTatCaDoiTuongMap()">🗑️ Xóa Maps</button>
+        <button id="adminMobileBtn" class="btn-action btn-success" style="flex: 1; padding: 5px 0; font-size: 10px; display: none;" onclick="openModal('adminMasterModal', 'tab-accounts')">⚙️ Quản trị</button>
       </div>
       
       <div class="form-group"><label>1. Chọn Đài VT:</label><select id="selectDai" onchange="onDaiChange()"></select></div>
@@ -134,19 +143,21 @@
       <div class="form-group"><label>4. Chọn Đoạn Cáp:</label><select id="selectDoanCap" onchange="onDoanCapChange()"></select></div>
       
       <div class="form-group"><label>5. Nguồn điểm đo:</label><select id="comboDiemA" onchange="onDiemAChange()"></select></div>
-      <div class="checkbox-group" style="margin-bottom: 12px;">
-        <input type="checkbox" id="chkNghichHuong" onchange="onDiemAChange()">
-        <label style="margin:0;cursor:pointer; font-size: 12px;" for="chkNghichHuong">Đo ngược hướng</label>
+      <div class="checkbox-group" style="margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+        <input type="checkbox" id="chkNghichHuong" onchange="onDiemAChange()" style="margin:0;">
+        <label style="margin:0; cursor:pointer; font-size: 11px;" for="chkNghichHuong">Đo ngược hướng</label>
       </div>
-      <div class="form-group"><label>6. Hệ số chùng cáp:</label><input type="number" id="txtDoChung" value="1.075" step="0.001"></div>
-      <div class="form-group"><label>7. Cự ly đo OTDR (km):</label><input type="number" id="txtKcOtdr" value="3.5" step="0.1"></div>
-      <div class="form-group"><button class="btn-action" onclick="timViTriDut()">🔍 PHÂN TÍCH VỊ TRÍ SỰ CỐ</button></div>
+      <div style="display: flex; gap: 6px;">
+        <div class="form-group" style="flex:1;"><label>6. Hệ số chùng:</label><input type="number" id="txtDoChung" value="1.075" step="0.001"></div>
+        <div class="form-group" style="flex:1;"><label>7. Cự ly (km):</label><input type="number" id="txtKcOtdr" value="3.5" step="0.1"></div>
+      </div>
+      <div class="form-group"><button class="btn-action" style="padding: 6px;" onclick="timViTriDut()">🔍 PHÂN TÍCH VỊ TRÍ SỰ CỐ</button></div>
       
-      <div class="form-group" style="border-top: 1px dashed var(--border-color); padding-top: 10px; margin-top: 10px; background: #f8fafc; padding: 8px; border-radius: 8px;">
+      <div class="form-group" style="border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 4px; background: #f8fafc; padding: 6px; border-radius: 6px;">
         <label style="color: var(--primary-blue);">8. Tìm nhanh Lý trình (QL):</label>
-        <div style="display: flex; gap: 6px; margin-top: 6px;">
+        <div style="display: flex; gap: 4px; margin-top: 4px;">
           <input type="text" id="txtTimLyTrinh" placeholder="VD: 54+100" style="margin:0;">
-          <button class="btn-action btn-success" style="width: auto; padding: 0 14px; margin:0;" onclick="timLyTrinhBanDo()">🔍</button>
+          <button class="btn-action btn-success" style="width: auto; padding: 2px 10px; margin:0;" onclick="timLyTrinhBanDo()">🔍</button>
         </div>
       </div>
     </div>
@@ -194,8 +205,8 @@
         </div>
 
         <div id="tab-accounts" class="tab-pane active">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <b style="font-size:14px; color:var(--text-main);">Danh sách Tài khoản:</b>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <b style="font-size:13px; color:var(--text-main);">Danh sách Tài khoản:</b>
             <button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien()">+ Thêm tài khoản</button>
           </div>
           <div class="table-responsive">
@@ -207,22 +218,22 @@
         </div>
         
         <div id="tab-dai" class="tab-pane">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;"><b style="font-size:14px; color:var(--text-main);">Đài Viễn Thông:</b><button class="btn-small btn-success" onclick="moFormThemDai()">+ Thêm đài</button></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><b style="font-size:13px; color:var(--text-main);">Đài Viễn Thông:</b><button class="btn-small btn-success" onclick="moFormThemDai()">+ Thêm đài</button></div>
           <div class="table-responsive"><table class="table-data"><thead><tr><th>ID</th><th>Tên Đài</th><th>Thao tác</th></tr></thead><tbody id="masterDaiTableBody"></tbody></table></div>
         </div>
         
         <div id="tab-tram" class="tab-pane">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;"><b style="font-size:14px; color:var(--text-main);">Trạm Viễn Thông:</b><button class="btn-small btn-success" onclick="moFormThemTram()">+ Thêm trạm</button></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><b style="font-size:13px; color:var(--text-main);">Trạm Viễn Thông:</b><button class="btn-small btn-success" onclick="moFormThemTram()">+ Thêm trạm</button></div>
           <div class="table-responsive"><table class="table-data"><thead><tr><th>ID</th><th>Tên Trạm</th><th>Đài quản lý</th><th>Thao tác</th></tr></thead><tbody id="masterTramTableBody"></tbody></table></div>
         </div>
         
         <div id="tab-tuyen" class="tab-pane">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;"><b style="font-size:14px; color:var(--text-main);">Tuyến Cáp Quang:</b><button class="btn-small btn-success" onclick="moFormThemTuyen()">+ Thêm tuyến</button></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><b style="font-size:13px; color:var(--text-main);">Tuyến Cáp Quang:</b><button class="btn-small btn-success" onclick="moFormThemTuyen()">+ Thêm tuyến</button></div>
           <div class="table-responsive"><table class="table-data"><thead><tr><th>ID</th><th>Mã tuyến</th><th>Tên tuyến</th><th>Thao tác</th></tr></thead><tbody id="masterTuyenTableBody"></tbody></table></div>
         </div>
         
         <div id="tab-doan" class="tab-pane">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;"><b style="font-size:14px; color:var(--text-main);">Đoạn Tuyến Cáp:</b><button class="btn-small btn-success" onclick="moFormThemDoan()">+ Thêm đoạn</button></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><b style="font-size:13px; color:var(--text-main);">Đoạn Tuyến Cáp:</b><button class="btn-small btn-success" onclick="moFormThemDoan()">+ Thêm đoạn</button></div>
           <div class="table-responsive"><table class="table-data"><thead><tr><th>ID</th><th>Mã đoạn</th><th>Thuộc Tuyến</th><th>Trạm quản lý</th><th>Thao tác</th></tr></thead><tbody id="masterDoanTableBody"></tbody></table></div>
         </div>
       </div>
@@ -262,13 +273,13 @@
             <option value="admin_sys">Admin Hệ thống</option>
           </select>
         </div>
-        <div class="checkbox-group" style="margin: 12px 0;">
+        <div class="checkbox-group" style="margin: 10px 0;">
           <input type="checkbox" id="newMemberCanEdit">
-          <label for="newMemberCanEdit" style="cursor:pointer; color:var(--primary-blue); font-weight:600; font-size:12px;">Cho phép chỉnh sửa Bản đồ (Map)</label>
+          <label for="newMemberCanEdit" style="cursor:pointer; color:var(--primary-blue); font-weight:600; font-size:11px;">Cho phép chỉnh sửa Bản đồ (Map)</label>
         </div>
         <div class="form-group"><label>Đài (id_dai):</label><select id="newMemberDai"></select></div>
         <div class="form-group"><label>Trạm (id_tram):</label><select id="newMemberTram"></select></div>
-        <button class="btn-action btn-success" style="margin-top:6px;" onclick="saveAccountAction()">LƯU TÀI KHOẢN</button>
+        <button class="btn-action btn-success" style="margin-top:4px;" onclick="saveAccountAction()">LƯU TÀI KHOẢN</button>
       </div>
     </div>
   </div>
@@ -281,7 +292,7 @@
         <input type="hidden" id="auxTableType">
         <input type="hidden" id="auxRecordId">
         <div id="auxFormFields"></div>
-        <button class="btn-action btn-success" style="margin-top:12px;" onclick="saveAuxRecord()">LƯU DỮ LIỆU</button>
+        <button class="btn-action btn-success" style="margin-top:10px;" onclick="saveAuxRecord()">LƯU DỮ LIỆU</button>
       </div>
     </div>
   </div>
@@ -298,7 +309,7 @@
         <div class="form-group"><label>Loại đối tượng:</label><select id="crudObjectLoai"></select></div>
         <div class="form-group"><label>Vĩ độ (Lat):</label><input type="text" id="crudObjectLat" disabled></div>
         <div class="form-group"><label>Kinh độ (Lng):</label><input type="text" id="crudObjectLng" disabled></div>
-        <button class="btn-action btn-success" id="btnConfirmCrud" style="margin-top:10px;" onclick="executeCrudAction()">XÁC NHẬN</button>
+        <button class="btn-action btn-success" id="btnConfirmCrud" style="margin-top:8px;" onclick="executeCrudAction()">XÁC NHẬN</button>
       </div>
     </div>
   </div>
@@ -319,7 +330,7 @@
     </div>
   </div>
 
-  <!-- TẢI CÁC SCRIPT HỆ THỐNG -->
+  <!-- SCRIPT HỆ THỐNG -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
   <script src="config.js"></script>
@@ -330,5 +341,18 @@
   <script src="map.js"></script>
   <script src="admin.js"></script>
   
+  <script>
+    // Hàm ẩn/hiện form điều khiển hoàn toàn không để lại bar
+    function toggleGISPanel() {
+      var panel = document.getElementById('control-panel');
+      if (panel) {
+        if (panel.style.display === 'none' || panel.style.display === '') {
+          panel.style.display = 'block';
+        } else {
+          panel.style.display = 'none';
+        }
+      }
+    }
+  </script>
 </body>
 </html>
