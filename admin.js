@@ -9,12 +9,11 @@ async function openModal(modalId, tabId) {
   var targetModal = document.getElementById(modalId);
   if (targetModal) targetModal.style.display = 'flex';
 
-  // Tự động ẩn bảng điều khiển khi mở quản trị
   var panel = document.getElementById('control-panel');
   if (panel) panel.style.display = 'none';
 
   if (modalId === 'adminMasterModal') {
-    // Ép buộc tải dữ liệu trực tiếp từ Supabase để các bảng quản trị luôn có dữ liệu hiển thị
+    // Tải trực tiếp dữ liệu vào biến toàn cục để bảng không bị trống số liệu
     try {
       if (navigator.onLine && typeof supabaseClient !== 'undefined') {
         var [uRes, dRes, tRes, tuRes, doRes] = await Promise.all([
@@ -35,15 +34,19 @@ async function openModal(modalId, tabId) {
     }
 
     renderAllAdminTables();
-    if (tabId) switchAdminTab(tabId);
-    else switchAdminTab('tab-accounts');
+    if (tabId) {
+      var btn = document.querySelector(`.admin-tabs .tab-btn[onclick*="${tabId}"]`);
+      switchAdminTab(tabId, btn);
+    } else {
+      var firstBtn = document.querySelector('.admin-tabs .tab-btn');
+      switchAdminTab('tab-accounts', firstBtn);
+    }
   }
 }
 
 function closeModals() {
   document.querySelectorAll('.app-modal').forEach(m => m.style.display = 'none');
   
-  // Hiển thị lại bảng điều khiển khi đóng modal nếu đã đăng nhập
   var user = getCurrentUser();
   var panel = document.getElementById('control-panel');
   if (panel && user && user.username && user.username !== 'guest') {
@@ -59,10 +62,8 @@ function switchAdminTab(tabPaneId, btnEl) {
   if (btnEl) {
     btnEl.classList.add('active');
   } else {
-    document.querySelectorAll('.admin-tabs .tab-btn').forEach(btn => {
-      var attr = btn.getAttribute('onclick') || '';
-      if (attr.indexOf(tabPaneId) !== -1) btn.classList.add('active');
-    });
+    var targetBtn = document.querySelector(`.admin-tabs .tab-btn[onclick*="${tabPaneId}"]`);
+    if (targetBtn) targetBtn.classList.add('active');
   }
 
   document.querySelectorAll('.tab-pane').forEach(pane => {
@@ -84,7 +85,6 @@ function getCurrentUser() {
   };
 }
 
-// Hàm lấy dữ liệu dự phòng thông minh quét qua AppStore và Biến toàn cục tránh trống bảng
 function getSafeDataList(keyNames) {
   var state = (typeof AppStore !== 'undefined' && AppStore.getState) ? AppStore.getState() : {};
   for (var i = 0; i < keyNames.length; i++) {
@@ -615,9 +615,12 @@ async function executeCrudAction() {
 function openChangePasswordModal() {
   var modal = document.getElementById('changePasswordModal');
   if (modal) {
-    document.getElementById('txtCurrentPass').value = '';
-    document.getElementById('txtNewPass').value = '';
-    document.getElementById('txtConfirmPass').value = '';
+    var cPass = document.getElementById('txtCurrentPass');
+    var nPass = document.getElementById('txtNewPass');
+    var cpPass = document.getElementById('txtConfirmPass');
+    if (cPass) cPass.value = '';
+    if (nPass) nPass.value = '';
+    if (cpPass) cpPass.value = '';
     modal.style.display = 'flex';
   }
 }
