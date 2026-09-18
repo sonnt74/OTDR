@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ, ĐỔI MẬT KHẨU (DÙNG TRƯỜNG ACCOUNT)
+// TỆP ADMIN.JS - QUẢN TRỊ, ĐỔI MẬT KHẨU (DÙNG VIEW v_tai_khoan_full)
 // ==========================================================================
 
 async function openModal(modalId, tabId) {
@@ -14,7 +14,7 @@ async function openModal(modalId, tabId) {
     try {
       if (navigator.onLine && typeof supabaseClient !== 'undefined') {
         var [uRes, dRes, tRes, tuRes, doRes] = await Promise.all([
-          supabaseClient.from('tai_khoan').select('*'),
+          supabaseClient.from('v_tai_khoan_full').select('*'),
           supabaseClient.from('dai_vt').select('*'),
           supabaseClient.from('tram_vt').select('*'),
           supabaseClient.from('tuyen_cap').select('*'),
@@ -101,19 +101,22 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
-/** VIEW HIỂN THỊ BẢNG TÀI KHOẢN (SỬ DỤNG TRƯỜNG ACCOUNT) */
+/** VIEW HIỂN THỊ BẢNG TÀI KHOẢN (SỬ DỤNG VIEW v_tai_khoan_full) */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
   var html = users.map(u => {
-    var accName = u.account || u.username || u.user_name || 'Tài khoản';
+    var accName = u.account || u.username || 'Tài khoản';
+    var tenDai = u.ten_dai || (u.id_dai ? `Đài ID: ${u.id_dai}` : 'Tất cả');
+    var tenTram = u.ten_tram || (u.id_tram ? `Trạm ID: ${u.id_tram}` : 'Tất cả');
+
     return `
       <tr>
         <td><b>${accName}</b></td>
         <td><span style="background:#0ea5e9; color:#fff; padding:2px 6px; border-radius:4px; font-size:11px;">${u.role || 'nhan_vien'}</span></td>
-        <td>${u.id_dai || 'Tất cả'}</td>
-        <td>${u.id_tram || 'Tất cả'}</td>
+        <td>🏢 ${tenDai}</td>
+        <td>📡 ${tenTram}</td>
         <td>${u.can_edit_map ? '✅ Có' : '❌ Không'}</td>
         <td>
           <button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien('${accName}')">✏️ Sửa</button>
