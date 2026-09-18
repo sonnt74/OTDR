@@ -53,7 +53,7 @@ function hienThiThongTinNguoiDung() {
 
   // Thiết kế giao diện cực kỳ tinh gọn, không có biểu tượng
   var html = `
-    <div style="font-size: 14px; font-weight: bold; color: #333; padding: 5px 0;">
+    <div style="font-size: 12px; font-weight: bold; color: #333; padding: 5px 0;">
       Account: ${tenTaiKhoan} (${roleName})
     </div>
   `;
