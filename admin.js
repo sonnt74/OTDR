@@ -1,11 +1,11 @@
 // ==========================================================================
-// TỆP ADMIN.JS - ĐIỀU KHIỂN GIAO DIỆN QUẢN TRỊ (TÍCH HỢP VIEW SUPABASE)
+// TỆP ADMIN.JS - ĐIỀU KHIỂN GIAO DIỆN QUẢN TRỊ & MẬT KHẨU
 // ==========================================================================
 
 var confirmPromiseResolver = null;
 
 function openModal(modalId, tabId) {
-  closeModals(); // Hàm này đóng tất cả, chỉ dùng khi mở từ menu chính
+  closeModals();
   var targetModal = document.getElementById(modalId);
   if (targetModal) targetModal.style.display = 'flex';
 
@@ -87,9 +87,7 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
-/**
- * 3.1 BẢNG TÀI KHOẢN (Ưu tiên lấy Tên Đài/Trạm từ View v_tai_khoan_full)
- */
+/** 3.1 BẢNG TÀI KHOẢN */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
@@ -137,24 +135,22 @@ function renderMasterAccountTable() {
     return `
       <tr>
         <td><b>${accountName}</b></td>
-        <td><span class="badge" style="background:#0d6efd; color:#fff; padding:2px 6px; border-radius:3px;">${roleName}</span></td>
+        <td><span style="background:#0ea5e9; color:#fff; padding:3px 8px; border-radius:4px; font-weight:600; font-size:11px;">${roleName}</span></td>
         <td>${tenDai}</td>
         <td>${tenTram}</td>
         <td>${canEdit ? '✅ Có' : '❌ Không'}</td>
         <td style="white-space: nowrap;">
           <button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien('${accountName}')">✏️ Sửa</button>
-          <button class="btn-small del" style="background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;" onclick="deleteAdminRecord('tai_khoan', '${accountName}')">🗑️ Xóa</button>
+          <button class="btn-small" style="background:#ef4444; color:white; margin-left:4px;" onclick="deleteAdminRecord('tai_khoan', '${accountName}')">🗑️ Xóa</button>
         </td>
       </tr>
     `;
   }).join('');
 
-  tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center;">Chưa có dữ liệu tài khoản</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center; padding:20px; color:#64748b;">Chưa có dữ liệu tài khoản</td></tr>';
 }
 
-/**
- * 3.2 BẢNG ĐÀI VIỄN THÔNG
- */
+/** 3.2 BẢNG ĐÀI VIỄN THÔNG */
 function renderMasterDaiTable() {
   var tbody = document.getElementById('masterDaiTableBody');
   if (!tbody) return;
@@ -175,18 +171,16 @@ function renderMasterDaiTable() {
         <td><b>${item.ten_dai || item.ten || 'Đài VT'}</b></td>
         <td style="white-space: nowrap;">
           ${checkAdminPermission('SUA', idDai, null, true) ? `<button class="btn-small btn-success" onclick="moFormThemDai(${idDai})">✏️ Sửa</button>` : ''}
-          ${checkAdminPermission('XOA', idDai, null, true) ? `<button class="btn-small del" style="background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;" onclick="deleteAdminRecord('dai_vt', ${idDai})">🗑️ Xóa</button>` : ''}
+          ${checkAdminPermission('XOA', idDai, null, true) ? `<button class="btn-small" style="background:#ef4444; color:white; margin-left:4px;" onclick="deleteAdminRecord('dai_vt', ${idDai})">🗑️ Xóa</button>` : ''}
         </td>
       </tr>
     `;
   }).join('');
 
-  tbody.innerHTML = html || '<tr><td colspan="3" style="text-align:center;">Chưa có dữ liệu Đài</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="3" style="text-align:center; padding:20px; color:#64748b;">Chưa có dữ liệu Đài</td></tr>';
 }
 
-/**
- * 3.3 BẢNG TRẠM VIỄN THÔNG (Ưu tiên lấy Tên Đài từ View v_tram_vt_full)
- */
+/** 3.3 BẢNG TRẠM VIỄN THÔNG */
 function renderMasterTramTable() {
   var tbody = document.getElementById('masterTramTableBody');
   if (!tbody) return;
@@ -205,7 +199,6 @@ function renderMasterTramTable() {
   var html = list.map(item => {
     var idTram = getSafeStrId(item, ['id_tram', 'id']);
     var idDai = getSafeStrId(item, ['id_dai', 'dai_id']);
-    
     var tenDai = item.ten_dai || listDaiMap[idDai] || 'Chưa gán';
 
     return `
@@ -215,18 +208,16 @@ function renderMasterTramTable() {
         <td>🏢 ${tenDai}</td>
         <td style="white-space: nowrap;">
           ${checkAdminPermission('SUA', idDai, idTram, true) ? `<button class="btn-small btn-success" onclick="moFormThemTram(${idTram})">✏️ Sửa</button>` : ''}
-          ${checkAdminPermission('XOA', idDai, idTram, true) ? `<button class="btn-small del" style="background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;" onclick="deleteAdminRecord('tram_vt', ${idTram})">🗑️ Xóa</button>` : ''}
+          ${checkAdminPermission('XOA', idDai, idTram, true) ? `<button class="btn-small" style="background:#ef4444; color:white; margin-left:4px;" onclick="deleteAdminRecord('tram_vt', ${idTram})">🗑️ Xóa</button>` : ''}
         </td>
       </tr>
     `;
   }).join('');
 
-  tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;">Chưa có dữ liệu Trạm</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">Chưa có dữ liệu Trạm</td></tr>';
 }
 
-/**
- * 3.4 BẢNG TUYẾN CÁP
- */
+/** 3.4 BẢNG TUYẾN CÁP */
 function renderMasterTuyenTable() {
   var tbody = document.getElementById('masterTuyenTableBody');
   if (!tbody) return;
@@ -243,18 +234,16 @@ function renderMasterTuyenTable() {
         <td><b>${item.ten_tuyen || item.ten || 'Tuyến cáp'}</b></td>
         <td style="white-space: nowrap;">
           ${checkAdminPermission('SUA', null, null, true) ? `<button class="btn-small btn-success" onclick="moFormThemTuyen(${idTuyen})">✏️ Sửa</button>` : ''}
-          ${checkAdminPermission('XOA', null, null, true) ? `<button class="btn-small del" style="background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;" onclick="deleteAdminRecord('tuyen_cap', ${idTuyen})">🗑️ Xóa</button>` : ''}
+          ${checkAdminPermission('XOA', null, null, true) ? `<button class="btn-small" style="background:#ef4444; color:white; margin-left:4px;" onclick="deleteAdminRecord('tuyen_cap', ${idTuyen})">🗑️ Xóa</button>` : ''}
         </td>
       </tr>
     `;
   }).join('');
 
-  tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;">Chưa có dữ liệu Tuyến cáp</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">Chưa có dữ liệu Tuyến cáp</td></tr>';
 }
 
-/**
- * 3.5 BẢNG ĐOẠN CÁP (Tối ưu hóa mạnh mẽ nhờ View v_doan_cap_full)
- */
+/** 3.5 BẢNG ĐOẠN CÁP */
 function renderMasterDoanTable() {
   var tbody = document.getElementById('masterDoanTableBody');
   if (!tbody) return;
@@ -284,18 +273,16 @@ function renderMasterDoanTable() {
         <td>🏠 ${tenTram}</td>
         <td style="white-space: nowrap;">
           ${checkAdminPermission('SUA', null, idTram, true) ? `<button class="btn-small btn-success" onclick="moFormThemDoan(${idDoan})">✏️ Sửa</button>` : ''}
-          ${checkAdminPermission('XOA', null, idTram, true) ? `<button class="btn-small del" style="background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;" onclick="deleteAdminRecord('doan_cap', ${idDoan})">🗑️ Xóa</button>` : ''}
+          ${checkAdminPermission('XOA', null, idTram, true) ? `<button class="btn-small" style="background:#ef4444; color:white; margin-left:4px;" onclick="deleteAdminRecord('doan_cap', ${idDoan})">🗑️ Xóa</button>` : ''}
         </td>
       </tr>
     `;
   }).join('');
 
-  tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;">Chưa có dữ liệu Đoạn cáp</td></tr>';
+  tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center; padding:20px; color:#64748b;">Chưa có dữ liệu Đoạn cáp</td></tr>';
 }
 
-/**
- * 4. HÀM CHUẨN BỊ FORM (SỬA/THÊM TÀI KHOẢN)
- */
+/** 4. HÀM CHUẨN BỊ FORM TÀI KHOẢN */
 function chuanBiFormThemThanhVien(usernameToEdit) {
   var state = AppStore.getState();
   var daiList = state.rawDaiList || state.daiList || (typeof rawDaiList !== 'undefined' ? rawDaiList : []);
@@ -336,13 +323,10 @@ function chuanBiFormThemThanhVien(usernameToEdit) {
     document.getElementById('newMemberCanEdit').checked = false;
   }
 
-  // TỐI ƯU: Chỉ hiển thị modal con, không gọi closeModals() để mất Bảng quản trị
   document.getElementById('addMemberModal').style.display = 'flex';
 }
 
-/**
- * 5. LƯU TÀI KHOẢN 
- */
+/** 5. LƯU TÀI KHOẢN */
 async function saveAccountAction() {
   if (!checkAdminPermission('SUA', null, null, false)) return;
 
@@ -354,18 +338,11 @@ async function saveAccountAction() {
   var idDai = document.getElementById('newMemberDai').value || null;
   var idTram = document.getElementById('newMemberTram').value || null;
 
-  if (!username) {
-    alert("⚠️ Vui lòng nhập tên tài khoản / email!");
-    return;
-  }
+  if (!username) { alert("⚠️ Vui lòng nhập tên tài khoản / email!"); return; }
 
   var payload = {
-    email: username,
-    username: username,
-    role: role,
-    can_edit_map: canEdit,
-    id_dai: idDai ? Number(idDai) : null,
-    id_tram: idTram ? Number(idTram) : null
+    email: username, username: username, role: role, can_edit_map: canEdit,
+    id_dai: idDai ? Number(idDai) : null, id_tram: idTram ? Number(idTram) : null
   };
   if (password) payload.password = password;
 
@@ -379,15 +356,10 @@ async function saveAccountAction() {
       alert("🔄 Đã lưu vào hàng đợi đồng bộ Offline!");
     }
 
-    // TỐI ƯU: Chỉ ẩn form con
     document.getElementById('addMemberModal').style.display = 'none';
-    
-    // Tải lại dữ liệu và Render lại bảng
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
     renderAllAdminTables();
-  } catch (err) {
-    alert("❌ Lỗi khi lưu tài khoản: " + err.message);
-  }
+  } catch (err) { alert("❌ Lỗi khi lưu tài khoản: " + err.message); }
 }
 
 function moFormThemDai(id) { moGenericAuxForm('dai_vt', id); }
@@ -395,9 +367,7 @@ function moFormThemTram(id) { moGenericAuxForm('tram_vt', id); }
 function moFormThemTuyen(id) { moGenericAuxForm('tuyen_cap', id); }
 function moFormThemDoan(id) { moGenericAuxForm('doan_cap', id); }
 
-/**
- * 6. CHUẨN BỊ FORM THÊM/SỬA DANH MỤC
- */
+/** 6. CHUẨN BỊ FORM DANH MỤC */
 function moGenericAuxForm(tableType, recordId) {
   var state = AppStore.getState();
   var daiList = state.rawDaiList || state.daiList || [];
@@ -413,18 +383,15 @@ function moGenericAuxForm(tableType, recordId) {
   if (tableType === 'dai_vt') {
     var rec = daiList.find(d => String(getSafeStrId(d, ['id_dai', 'id'])) === String(recordId)) || {};
     document.getElementById('auxModalTitle').innerText = recordId ? "✏️ Sửa Đài VT" : "➕ Thêm Đài VT";
-    html = `<div class="form-group"><label>Tên Đài VT:</label><input type="text" id="auxTen" value="${rec.ten_dai || rec.ten || ''}" style="width:100%; padding:8px; box-sizing:border-box;"></div>`;
+    html = `<div class="form-group"><label>Tên Đài VT:</label><input type="text" id="auxTen" value="${rec.ten_dai || rec.ten || ''}"></div>`;
   } 
   else if (tableType === 'tram_vt') {
     var rec = tramList.find(t => String(getSafeStrId(t, ['id_tram', 'id'])) === String(recordId)) || {};
     document.getElementById('auxModalTitle').innerText = recordId ? "✏️ Sửa Trạm VT" : "➕ Thêm Trạm VT";
     html = `
-      <div class="form-group"><label>Tên Trạm VT:</label><input type="text" id="auxTen" value="${rec.ten_tram || rec.ten || ''}" style="width:100%; padding:8px; box-sizing:border-box;"></div>
-      <div class="form-group" style="margin-top:10px;"><label>Đài Quản Lý:</label><select id="auxDaiId" style="width:100%; padding:8px; box-sizing:border-box;">
-        ${daiList.map(d => {
-          var dId = getSafeStrId(d, ['id_dai', 'id']);
-          return `<option value="${dId}" ${String(dId) === String(rec.id_dai \vert{}\vert{} rec.dai_id) ? 'selected' : ''}>${d.ten_dai || d.ten}</option>`;
-        }).join('')}
+      <div class="form-group"><label>Tên Trạm VT:</label><input type="text" id="auxTen" value="${rec.ten_tram || rec.ten || ''}"></div>
+      <div class="form-group"><label>Đài Quản Lý:</label><select id="auxDaiId">
+        ${daiList.map(d => { var dId = getSafeStrId(d, ['id_dai', 'id']); return `<option value="${dId}" ${String(dId) === String(rec.id_dai \vert{}\vert{} rec.dai_id) ? 'selected' : ''}>${d.ten_dai || d.ten}</option>`; }).join('')}
       </select></div>
     `;
   }
@@ -432,8 +399,8 @@ function moGenericAuxForm(tableType, recordId) {
     var rec = tuyenList.find(t => String(getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id'])) === String(recordId)) || {};
     document.getElementById('auxModalTitle').innerText = recordId ? "✏️ Sửa Tuyến Cáp" : "➕ Thêm Tuyến Cáp";
     html = `
-      <div class="form-group"><label>Mã Tuyến:</label><input type="text" id="auxMa" value="${rec.ma_tuyencap || rec.ma_tuyen || ''}" style="width:100%; padding:8px; box-sizing:border-box;"></div>
-      <div class="form-group" style="margin-top:10px;"><label>Tên Tuyến Cáp:</label><input type="text" id="auxTen" value="${rec.ten_tuyen || rec.ten || ''}" style="width:100%; padding:8px; box-sizing:border-box;"></div>
+      <div class="form-group"><label>Mã Tuyến:</label><input type="text" id="auxMa" value="${rec.ma_tuyencap || rec.ma_tuyen || ''}"></div>
+      <div class="form-group"><label>Tên Tuyến Cáp:</label><input type="text" id="auxTen" value="${rec.ten_tuyen || rec.ten || ''}"></div>
     `;
   }
   else if (tableType === 'doan_cap') {
@@ -441,31 +408,21 @@ function moGenericAuxForm(tableType, recordId) {
     var rec = doanList.find(d => String(getSafeStrId(d, ['id_doan_cap', 'id_doan', 'id'])) === String(recordId)) || {};
     document.getElementById('auxModalTitle').innerText = recordId ? "✏️ Sửa Đoạn Cáp" : "➕ Thêm Đoạn Cáp";
     html = `
-      <div class="form-group"><label>Mã Đoạn:</label><input type="text" id="auxMa" value="${rec.ma_doancap || rec.ma_doan || ''}" style="width:100%; padding:8px; box-sizing:border-box;"></div>
-      <div class="form-group" style="margin-top:10px;"><label>Thuộc Tuyến Cáp:</label><select id="auxTuyenId" style="width:100%; padding:8px; box-sizing:border-box;">
-        ${tuyenList.map(t => {
-          var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
-          return `<option value="${tId}" ${String(tId) === String(rec.id_tuyen \vert{}\vert{} rec.tuyen_cap_id) ? 'selected' : ''}>${t.ten_tuyen || t.ten}</option>`;
-        }).join('')}
+      <div class="form-group"><label>Mã Đoạn:</label><input type="text" id="auxMa" value="${rec.ma_doancap || rec.ma_doan || ''}"></div>
+      <div class="form-group"><label>Thuộc Tuyến Cáp:</label><select id="auxTuyenId">
+        ${tuyenList.map(t => { var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']); return `<option value="${tId}" ${String(tId) === String(rec.id_tuyen \vert{}\vert{} rec.tuyen_cap_id) ? 'selected' : ''}>${t.ten_tuyen || t.ten}</option>`; }).join('')}
       </select></div>
-      <div class="form-group" style="margin-top:10px;"><label>Trạm Quản Lý:</label><select id="auxTramId" style="width:100%; padding:8px; box-sizing:border-box;">
-        ${tramList.map(t => {
-          var trId = getSafeStrId(t, ['id_tram', 'id']);
-          return `<option value="${trId}" ${String(trId) === String(rec.id_tram) ? 'selected' : ''}>${t.ten_tram || t.ten}</option>`;
-        }).join('')}
+      <div class="form-group"><label>Trạm Quản Lý:</label><select id="auxTramId">
+        ${tramList.map(t => { var trId = getSafeStrId(t, ['id_tram', 'id']); return `<option value="${trId}" ${String(trId) === String(rec.id_tram) ? 'selected' : ''}>${t.ten_tram || t.ten}</option>`; }).join('')}
       </select></div>
     `;
   }
 
   fieldsContainer.innerHTML = html;
-  
-  // TỐI ƯU: Chỉ hiện form con
   document.getElementById('genericAuxModal').style.display = 'flex';
 }
 
-/**
- * 7. LƯU DANH MỤC
- */
+/** 7. LƯU DANH MỤC */
 async function saveAuxRecord() {
   var tableType = document.getElementById('auxTableType').value;
   var recordId = document.getElementById('auxRecordId').value;
@@ -499,19 +456,13 @@ async function saveAuxRecord() {
       alert("🔄 Đã lưu vào hàng đợi Offline!");
     }
 
-    // TỐI ƯU: Ẩn form phụ, giữ form chính
     document.getElementById('genericAuxModal').style.display = 'none';
-
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
     renderAllAdminTables();
-  } catch (err) {
-    alert("❌ Lỗi khi lưu: " + err.message);
-  }
+  } catch (err) { alert("❌ Lỗi khi lưu: " + err.message); }
 }
 
-/**
- * 8. XÓA BẢN GHI
- */
+/** 8. XÓA BẢN GHI */
 async function deleteAdminRecord(tableName, idItem) {
   if (!checkAdminPermission('XOA', null, null, false)) return;
 
@@ -537,7 +488,6 @@ async function deleteAdminRecord(tableName, idItem) {
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       var keyField = (tableName === 'tai_khoan') ? 'email' : (tableName === 'doan_cap' ? 'id_doan_cap' : (tableName === 'tuyen_cap' ? 'id_tuyen_cap' : 'id_' + tableName.replace('_vt', '')));
-      
       var { error } = await supabaseClient.from(tableName).delete().eq(keyField, idItem);
       if (error) throw error;
       alert("✅ Đã xóa bản ghi thành công!");
@@ -548,14 +498,10 @@ async function deleteAdminRecord(tableName, idItem) {
 
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
     renderAllAdminTables();
-  } catch (err) {
-    alert("❌ Lỗi khi xóa: " + err.message);
-  }
+  } catch (err) { alert("❌ Lỗi khi xóa: " + err.message); }
 }
 
-/**
- * 9. QUẢN LÝ ĐIỂM HẠ TẦNG TRỰC TIẾP TRÊN BẢN ĐỒ
- */
+/** 9. QUẢN LÝ ĐIỂM HẠ TẦNG TRỰC TIẾP TRÊN BẢN ĐỒ */
 function openCrudModalForPoint(actionType, pointData) {
   var modal = document.getElementById('crudModal');
   if (!modal) return;
@@ -578,8 +524,6 @@ function openCrudModalForPoint(actionType, pointData) {
   }
 
   document.getElementById('crudTitle').innerText = actionType === 'ADD' ? '➕ Thêm Điểm Hạ Tầng' : '✏️ Cập Nhật Điểm Hạ Tầng';
-  
-  // TỐI ƯU: Mở modal trực tiếp thay vì gọi openModal làm ẩn đi các modal khác
   modal.style.display = 'flex';
 }
 
@@ -594,22 +538,10 @@ async function executeCrudAction() {
   var lat = parseFloat(document.getElementById('crudObjectLat').value);
   var lng = parseFloat(document.getElementById('crudObjectLng').value);
 
-  if (!name) {
-    alert("⚠️ Vui lòng nhập tên điểm hạ tầng!");
-    return;
-  }
+  if (!name) { alert("⚠️ Vui lòng nhập tên điểm hạ tầng!"); return; }
 
-  var payload = {
-    ten_diem: name,
-    ly_trinh: lyTrinh,
-    id_loaidiem: idLoai,
-    lat: lat,
-    long: lng
-  };
-
-  if (actionType === 'EDIT' && objectId) {
-    payload.id_diem = Number(objectId);
-  }
+  var payload = { ten_diem: name, ly_trinh: lyTrinh, id_loaidiem: idLoai, lat: lat, long: lng };
+  if (actionType === 'EDIT' && objectId) payload.id_diem = Number(objectId);
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
@@ -621,19 +553,69 @@ async function executeCrudAction() {
       alert("🔄 Đã lưu điểm hạ tầng vào hàng đợi Offline!");
     }
 
-    // Đóng form cập nhật điểm
     document.getElementById('crudModal').style.display = 'none';
-
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
     if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+  } catch (err) { alert("❌ Lỗi khi lưu điểm hạ tầng: " + err.message); }
+}
+
+/** 10. TÍNH NĂNG ĐỔI MẬT KHẨU NGAY TRÊN GIAO DIỆN */
+function openChangePasswordModal() {
+  document.getElementById('txtCurrentPass').value = '';
+  document.getElementById('txtNewPass').value = '';
+  document.getElementById('txtConfirmPass').value = '';
+  document.getElementById('changePasswordModal').style.display = 'flex';
+}
+
+async function executeChangePassword() {
+  var currentPass = document.getElementById('txtCurrentPass').value.trim();
+  var newPass = document.getElementById('txtNewPass').value.trim();
+  var confirmPass = document.getElementById('txtConfirmPass').value.trim();
+
+  if (!currentPass || !newPass || !confirmPass) {
+    alert("⚠️ Vui lòng nhập đầy đủ thông tin mật khẩu!");
+    return;
+  }
+  if (newPass !== confirmPass) {
+    alert("❌ Mật khẩu mới và xác nhận mật khẩu không khớp!");
+    return;
+  }
+
+  var user = getCurrentUser();
+  var username = user.username || user.email;
+  if (!username) {
+    alert("⚠️ Không tìm thấy thông tin tài khoản hiện tại!");
+    return;
+  }
+
+  try {
+    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
+      // Cập nhật mật khẩu trực tiếp vào bảng tai_khoan
+      var { error } = await supabaseClient
+        .from('tai_khoan')
+        .update({ password: newPass })
+        .eq('email', username);
+
+      if (error) {
+        // Thử cập nhật theo cột username nếu không tìm thấy theo email
+        var { error: err2 } = await supabaseClient
+          .from('tai_khoan')
+          .update({ password: newPass })
+          .eq('username', username);
+        if (err2) throw err2;
+      }
+
+      alert("✅ Đổi mật khẩu thành công!");
+      document.getElementById('changePasswordModal').style.display = 'none';
+    } else {
+      alert("⚠️ Chức năng đổi mật khẩu yêu cầu kết nối mạng trực tuyến!");
+    }
   } catch (err) {
-    alert("❌ Lỗi khi lưu điểm hạ tầng: " + err.message);
+    alert("❌ Lỗi khi đổi mật khẩu: " + err.message);
   }
 }
 
-/**
- * 10. HỘP THOẠI XÁC NHẬN TÙY CHỈNH (CUSTOM CONFIRM)
- */
+/** 11. HỘP THOẠI XÁC NHẬN */
 function showCustomConfirm(message, title) {
   return new Promise(function(resolve) {
     confirmPromiseResolver = resolve;
