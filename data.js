@@ -505,6 +505,7 @@ function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo,
 }
 
 function timViTriDut() {
+  
   var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value), kcOtdrMeters = kcOtdrKm * 1000; 
   if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { showToast("Nhập cự ly đo hợp lệ!", "error"); return; }
   
@@ -583,21 +584,23 @@ function timViTriDut() {
       <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'zalo')" style="background:#0068ff; color:white;">💬 Zalo App</button>
       <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'viber')" style="background:#6f42c1; color:white;">📱 Viber</button>
     </div>`;
-
+  
   var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>` +
                   `Cự đoạn đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
                   `📍 Lý trình QL: <b>${interpolatedLyTrinhText}</b><br>` +
                   `🔀 MX trước: <b>${prevMXFullInfo}</b><br>` +
                   `🔀 MX sau: <b>${nextMXFullInfo}</b><br>` +
-                  `<small style="color:red;">⏱️ Tự động xóa mốc sau 30s</small><br>` +
                   `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='btn-info' style='background:#0d6efd; color:white;'>🗺️ Dẫn đường GMaps</a>` +
                   shareButtonsHtml;
   
   faultMarker.bindPopup(popupHtml).openPopup();
+  var panel = document.getElementById('control-panel');
+  if (panel) panel.style.display = 'none';
   datLichTuXoaMarkerTimKiem();
 }
 
 function timLyTrinhBanDo() {
+ 
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var parsedTarget = parseLyTrinhWithSuffix(txt);
   var targetMeters = parsedTarget ? parsedTarget.meters : null;
@@ -680,11 +683,12 @@ function timLyTrinhBanDo() {
   
   var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
                      `- Vị trí: <b>${bestDescription}</b><br>` +
-                     `- Cự ly cáp tới Trạm TNN: <b>${distStr}</b><br>` +
-                     `<small style="color:red;">⏱️ Điểm này sẽ tự xóa sau 30 giây</small>`;
+                     `- Cự ly cáp tới Trạm TNN: <b>${distStr}</b><br>` ;
                      
   foundMarkerLayer.bindPopup(popupContent).openPopup();
   datLichTuXoaMarkerTimKiem();
+  var panel = document.getElementById('control-panel');
+  if (panel) panel.style.display = 'none';
 }
 
 function xoaTatCaDoiTuongMap() {
