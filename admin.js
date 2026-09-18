@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - ĐIỀU KHIỂN GIAO DIỆN QUẢN TRỊ & KHÔI PHỤC DỮ LIỆU BẢNG
+// TỆP ADMIN.JS - ĐIỀU KHIỂN QUẢN TRỊ, ĐỔI MẬT KHẨU & TẢI DỮ LIỆU AN TOÀN
 // ==========================================================================
 
 var confirmPromiseResolver = null;
@@ -9,12 +9,20 @@ function openModal(modalId, tabId) {
   var targetModal = document.getElementById(modalId);
   if (targetModal) targetModal.style.display = 'flex';
 
-  // Khi mở bất kỳ modal nào (đặc biệt là Quản trị), ẩn bảng điều khiển đi
+  // Tự động ẩn bảng điều khiển khi mở quản trị
   var panel = document.getElementById('control-panel');
   if (panel) panel.style.display = 'none';
 
   if (modalId === 'adminMasterModal') {
-    renderAllAdminTables();
+    // Tự động kích hoạt tải lại dữ liệu từ Supabase nếu bảng đang trống
+    var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
+    if ((!users || users.length === 0) && typeof taiDuLieuSupabase === 'function') {
+      taiDuLieuSupabase(false).then(() => {
+        renderAllAdminTables();
+      });
+    } else {
+      renderAllAdminTables();
+    }
     if (tabId) switchAdminTab(tabId);
   }
 }
@@ -22,7 +30,7 @@ function openModal(modalId, tabId) {
 function closeModals() {
   document.querySelectorAll('.app-modal').forEach(m => m.style.display = 'none');
   
-  // Khi đóng các modal, nếu đã đăng nhập thì hiển thị lại bảng điều khiển
+  // Hiển thị lại bảng điều khiển khi đóng modal nếu đã đăng nhập
   var user = getCurrentUser();
   var panel = document.getElementById('control-panel');
   if (panel && user && user.username && user.username !== 'guest') {
@@ -55,7 +63,7 @@ function getCurrentUser() {
   };
 }
 
-// Hàm lấy dữ liệu dự phòng thông minh (Quét qua AppStore và Biến toàn cục tránh trống bảng)
+// Hàm lấy dữ liệu dự phòng thông minh quét qua AppStore và Biến toàn cục tránh trống bảng
 function getSafeDataList(keyNames) {
   var state = (typeof AppStore !== 'undefined' && AppStore.getState) ? AppStore.getState() : {};
   for (var i = 0; i < keyNames.length; i++) {
@@ -564,7 +572,7 @@ async function executeCrudAction() {
   } catch (err) { alert("❌ Lỗi khi lưu điểm hạ tầng: " + err.message); }
 }
 
-/** 10. TÍNH NĂNG ĐỔI MẬT KHẨU */
+/** 10. TÍNH NĂNG ĐỔI MẬT KHẨU HOẠT ĐỘNG CHÍNH XÁC */
 function openChangePasswordModal() {
   document.getElementById('txtCurrentPass').value = '';
   document.getElementById('txtNewPass').value = '';
@@ -587,7 +595,7 @@ async function executeChangePassword() {
   }
 
   var user = getCurrentUser();
-  var username = user.username || user.email;
+  var username = user.username || user.email || user.user_name;
   if (!username) {
     alert("⚠️ Không tìm thấy thông tin tài khoản hiện tại!");
     return;
@@ -595,17 +603,19 @@ async function executeChangePassword() {
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      var { error } = await supabaseClient
+      // Thử cập nhật theo cột email trước
+      var res = await supabaseClient
         .from('tai_khoan')
         .update({ password: newPass })
         .eq('email', username);
 
-      if (error) {
-        var { error: err2 } = await supabaseClient
+      if (res.error) {
+        // Nếu lỗi, thử cập nhật theo cột username
+        var res2 = await supabaseClient
           .from('tai_khoan')
           .update({ password: newPass })
           .eq('username', username);
-        if (err2) throw err2;
+        if (res2.error) throw res2.error;
       }
 
       alert("✅ Đổi mật khẩu thành công!");
