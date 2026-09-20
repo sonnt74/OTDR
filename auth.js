@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN VÀ QUẢN LÝ PHIÊN
+// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & QUẢN LÝ PHIÊN
 // ==========================================================================
 
 if (document.readyState === 'loading') {
@@ -160,7 +160,6 @@ async function handleCustomLogin() {
     }
 
     if (typeof khoiTaoBanDoLeaflet === 'function') {
-      khoiTaoBanDecLeaflet();
       khoiTaoBanDoLeaflet();
     }
 
@@ -202,36 +201,3 @@ function handleLogout() {
   localStorage.removeItem('tnn_user');
   location.reload();
 }
-```[cite: 3, 6, 7, 8]
-
----
-
-### 2. Cập nhật phần Modal Đăng nhập trong tệp `index.html`
-
-Để nút ẩn/hiện mật khẩu hoạt động hoàn hảo, hãy đảm bảo phần tử nhập mật khẩu trong tệp **`index.html`**[cite: 4] sử dụng đúng định dạng sau:
-
-```html
-<div id="loginModal" class="app-modal" style="display: flex;">
-  <div class="modal-content" style="max-width: 360px;">
-    <div class="modal-header"><span>👤 Đăng nhập Hệ Thống</span></div>
-    <div class="modal-body">
-      <div class="form-group"><label>Tài khoản:</label><input type="text" id="loginAccount" placeholder="Nhập tên tài khoản" autocomplete="off"></div>
-      <div class="form-group">
-        <label>Mật khẩu:</label>
-        <div style="position: relative;">
-          <input type="password" id="loginPass" placeholder="••••••••" style="padding-right: 35px;" autocomplete="off">
-          <span onclick="togglePasswordVisibility()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px;">👁️</span>
-        </div>
-      </div>
-      <div class="checkbox-group" style="margin: 10px 0;">
-        <input type="checkbox" id="chkRememberMe">
-        <label style="margin:0; cursor:pointer; font-size: 12px;" for="chkRememberMe">Nhớ mật khẩu hệ thống</label>
-      </div>
-      <div style="display: flex; gap: 8px; margin-top: 6px;">
-        <button type="button" class="btn-action" style="flex: 2; margin-top:0;" onclick="handleCustomLogin()">ĐĂNG NHẬP</button>
-        <button type="button" class="btn-action" style="flex: 1; background: #64748b; margin-top:0;" onclick="handleLoginExit()">Thoát</button>
-      </div>
-    </div>
-  </div>
-</div>
-```[cite: 4]
