@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB & TRA CỨU TÊN TRỰC QUAN
+// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN QUYỀN & ĐỔ DỮ LIỆU FORM CON
 // ==========================================================================
 
 async function openModal(modalId, tabId) {
@@ -27,7 +27,6 @@ async function openModal(modalId, tabId) {
         window.rawTuyenList = tuRes.data || [];
         window.rawDoanCapList = doRes.data || [];
 
-        // Đồng bộ dữ liệu vào AppStore nếu có
         if (typeof AppStore !== 'undefined' && AppStore.setState) {
           AppStore.setState({
             rawUserList: window.rawUserList,
@@ -90,7 +89,6 @@ function getCurrentUser() {
   };
 }
 
-// Hàm quét dữ liệu an toàn đa tầng (AppStore + Window)
 function getSafeDataList(keyNames) {
   var state = (typeof AppStore !== 'undefined' && AppStore.getState) ? AppStore.getState() : {};
   for (var i = 0; i < keyNames.length; i++) {
@@ -108,7 +106,22 @@ function getSafeDataList(keyNames) {
   return [];
 }
 
-// Các hàm tra cứu tên thông minh từ ID
+// Lọc dữ liệu theo phân cấp phân quyền đăng nhập
+function getFilteredUsers() {
+  var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
+  var user = getCurrentUser();
+  var role = (user.role || '').toLowerCase();
+
+  if (role.includes('sys') || role === 'admin_sys') {
+    return users;
+  } else if (role.includes('dai') || role === 'admin_dai') {
+    return users.filter(u => String(u.id_dai) === String(user.id_dai || user.idDai));
+  } else if (role.includes('tram') || role === 'admin_tram') {
+    return users.filter(u => String(u.id_tram) === String(user.id_tram || user.idTram));
+  }
+  return users;
+}
+
 function getDaiName(idDai) {
   if (idDai === null || idDai === undefined || idDai === '') return 'Tất cả';
   var list = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
@@ -142,7 +155,7 @@ function renderAllAdminTables() {
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
-  var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
+  var users = getFilteredUsers();
   var html = users.map(u => {
     var accName = u.account || 'Tài khoản';
     var tenDai = u.ten_dai || getDaiName(u.id_dai);
@@ -232,9 +245,63 @@ function renderMasterDoanTable() {
   }).join('') || '<tr><td colspan="5" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Đoạn cáp</td></tr>';
 }
 
+/** ĐỔ DỮ LIỆU ĐỘNG VÀO FORM THÊM/SỬA TÀI KHOẢN */
+function chuanBiFormThemThanhVien(accToEdit) {
+  var accountInput = document.getElementById('newMemberAccount');
+  var passInput = document.getElementById('newMemberPass');
+  var roleSelect = document.getElementById('newMemberRole');
+  var canEditCheck = document.getElementById('newMemberCanEdit');
+  var daiSelect = document.getElementById('newMemberDai');
+  var tramSelect = document.getElementById('newMemberTram');
+
+  var daiList = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
+  daiSelect.innerHTML = '<option value="">-- Chọn Đài --</option>';
+  daiList.forEach(d => {
+    var id = d.id_dai || d.id;
+    var name = d.ten_dai || d.ten;
+    daiSelect.innerHTML += `<option value="${id}">${name}</option>`;
+  });
+
+  var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
+  tramSelect.innerHTML = '<option value="">-- Chọn Trạm --</option>';
+  tramList.forEach(t => {
+    var id = t.id_tram || t.id;
+    var name = t.ten_tram || t.ten;
+    tramSelect.innerHTML += `<option value="${id}">${name}</option>`;
+  });
+
+  if (accToEdit && accountInput) {
+    accountInput.value = accToEdit;
+    accountInput.disabled = true;
+    if (passInput) passInput.value = '';
+
+    var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
+    var uObj = users.find(u => u.account === accToEdit);
+    if (uObj) {
+      if (roleSelect) roleSelect.value = uObj.role || 'nhan_vien';
+      if (canEditCheck) canEditCheck.checked = !!uObj.can_edit_map;
+      if (daiSelect) daiSelect.value = uObj.id_dai || '';
+      if (tramSelect) tramSelect.value = uObj.id_tram || '';
+    }
+  } else {
+    if (accountInput) {
+      accountInput.value = '';
+      accountInput.disabled = false;
+    }
+    if (passInput) passInput.value = '';
+    if (roleSelect) roleSelect.value = 'nhan_vien';
+    if (canEditCheck) canEditCheck.checked = false;
+    if (daiSelect) daiSelect.value = '';
+    if (tramSelect) tramSelect.value = '';
+  }
+
+  var modal = document.getElementById('addMemberModal');
+  if (modal) modal.style.display = 'flex';
+}
+
 /** LƯU TÀI KHOẢN */
 async function saveAccountAction() {
-  var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginAccount');
+  var accountInput = document.getElementById('newMemberAccount');
   var accVal = accountInput ? accountInput.value.trim() : '';
   var password = document.getElementById('newMemberPass').value.trim();
   var role = document.getElementById('newMemberRole').value;
@@ -318,16 +385,6 @@ async function executeChangePassword() {
   } catch (err) {
     showToast("❌ Lỗi đổi mật khẩu: " + err.message, "error");
   }
-}
-
-function chuanBiFormThemThanhVien(accToEdit) {
-  var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginAccount');
-  if (accToEdit && accountInput) {
-    accountInput.value = accToEdit;
-  } else if (accountInput) {
-    accountInput.value = '';
-  }
-  document.getElementById('addMemberModal').style.display = 'flex';
 }
 
 function moFormThemDai() { document.getElementById('genericAuxModal').style.display = 'flex'; }
