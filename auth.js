@@ -1,6 +1,69 @@
 // ==========================================================================
-// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP & PHÂN QUYỀN (HOÀN CHỈNH)
+// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & LƯU PHIÊN (HOÀN CHỈNH)
 // ==========================================================================
+
+// Tự động khôi phục phiên đăng nhập khi tải lại trang
+document.addEventListener('DOMContentLoaded', function() {
+  khoiPhucPhiênDangNhap();
+});
+
+function khoiPhucPhiênDangNhap() {
+  var savedUser = localStorage.getItem('tnn_user');
+  if (savedUser) {
+    try {
+      var data = JSON.parse(savedUser);
+      if (data && data.account) {
+        currentUser = {
+          isLoggedIn: true,
+          account: data.account,
+          role: data.role || 'nhan_vien',
+          id_dai: data.id_dai || null,
+          id_tram: data.id_tram || null,
+          idDai: data.id_dai || null,
+          idTram: data.id_tram || null,
+          can_edit_map: !!data.can_edit_map,
+          canEditMap: !!data.can_edit_map
+        };
+
+        if (typeof AppStore !== 'undefined' && AppStore.setState) {
+          AppStore.setState({ currentUser: currentUser });
+        }
+
+        var loginModal = document.getElementById('loginModal');
+        if (loginModal) loginModal.style.display = 'none';
+
+        var controlPanel = document.getElementById('control-panel');
+        if (controlPanel) controlPanel.style.display = 'block';
+
+        var userInfoDisplay = document.getElementById('userInfoDisplay');
+        if (userInfoDisplay) {
+          userInfoDisplay.innerText = "👤 " + currentUser.account + " (" + currentUser.role + ")";
+        }
+
+        var adminBtn = document.getElementById('adminMobileBtn');
+        if (adminBtn) {
+          var roleLower = (currentUser.role || '').toLowerCase();
+          if (roleLower.includes('admin') || roleLower.includes('sys')) {
+            adminBtn.style.display = 'block';
+          } else {
+            adminBtn.style.display = 'none';
+          }
+        }
+
+        if (typeof khoiTaoBanDoLeaflet === 'function') {
+          khoiTaoBanDoLeaflet();
+        }
+
+        if (typeof taiDuLieuSupabase === 'function') {
+          taiDuLieuSupabase(false);
+        }
+      }
+    } catch (e) {
+      console.error("Lỗi khôi phục phiên đăng nhập:", e);
+      localStorage.removeItem('tnn_user');
+    }
+  }
+}
 
 async function handleCustomLogin() {
   var accountInput = document.getElementById('loginAccount');
@@ -39,17 +102,17 @@ async function handleCustomLogin() {
       return;
     }
 
-    // Cập nhật biến toàn cục currentUser (tương thích ngược an toàn với map.js và data.js)[cite: 3, 6, 7, 8]
+    // Cập nhật biến toàn cục currentUser[cite: 7, 8]
     currentUser = {
       isLoggedIn: true,
       account: data.account,
       role: data.role || 'nhan_vien',
       id_dai: data.id_dai || null,
       id_tram: data.id_tram || null,
-      idDai: data.id_dai || null,       // Tương thích cho data.js[cite: 6]
-      idTram: data.id_tram || null,     // Tương thích cho data.js[cite: 6]
+      idDai: data.id_dai || null,       
+      idTram: data.id_tram || null,     
       can_edit_map: !!data.can_edit_map,
-      canEditMap: !!data.can_edit_map   // Tương thích cho map.js[cite: 3]
+      canEditMap: !!data.can_edit_map   
     };
 
     localStorage.setItem('tnn_user', JSON.stringify(currentUser));
@@ -58,20 +121,18 @@ async function handleCustomLogin() {
       AppStore.setState({ currentUser: currentUser });
     }
 
-    // Ẩn modal đăng nhập và hiện bảng điều khiển
     var loginModal = document.getElementById('loginModal');
     if (loginModal) loginModal.style.display = 'none';
 
     var controlPanel = document.getElementById('control-panel');
     if (controlPanel) controlPanel.style.display = 'block';
 
-    // Hiển thị tên tài khoản lên giao diện
     var userInfoDisplay = document.getElementById('userInfoDisplay');
     if (userInfoDisplay) {
       userInfoDisplay.innerText = "👤 " + currentUser.account + " (" + currentUser.role + ")";
     }
 
-    // Hiển thị nút quản trị nếu đúng phân quyền[cite: 4]
+    // Hiển thị nút quản trị linh hoạt theo mọi biến thể quyền[cite: 4]
     var adminBtn = document.getElementById('adminMobileBtn');
     if (adminBtn) {
       var roleLower = (currentUser.role || '').toLowerCase();
@@ -82,7 +143,7 @@ async function handleCustomLogin() {
       }
     }
 
-    alert("✅ Đăng nhập thành công!");
+    // Đã loại bỏ thông báo đăng nhập thành công theo yêu cầu
 
     // Khởi tạo bản đồ Leaflet[cite: 3]
     if (typeof khoiTaoBanDoLeaflet === 'function') {
@@ -99,7 +160,6 @@ async function handleCustomLogin() {
   }
 }
 
-// Hàm ẩn/hiện mật khẩu
 function togglePasswordVisibility() {
   var passInput = document.getElementById('loginPass');
   if (passInput) {
@@ -111,16 +171,7 @@ function togglePasswordVisibility() {
   }
 }
 
-// Hàm đăng xuất
 function handleLogout() {
   localStorage.removeItem('tnn_user');
   location.reload();
 }
-```[cite: 3, 6, 7, 8]
-
----
-
-### 📋 Hướng dẫn triển khai nhanh:
-1. Copy toàn bộ đoạn mã trên dán đè vào tệp **`auth.js`**[cite: 8].
-2. Nhấn **`Ctrl + F5`** (Hard Reload) trên trình duyệt để làm mới bộ nhớ đệm.
-3. Nhập tài khoản (`account`) và mật khẩu để đăng nhập. Hệ thống sẽ xác thực thành công, hiển thị nút quản trị đầy đủ, khởi tạo bản đồ Leaflet và tải tuyến cáp mượt mà!
