@@ -1,14 +1,7 @@
-
-### 📄 2. Tệp `auth.js` hoàn chỉnh (Đảm bảo sự kiện nút bấm hoạt động tức thì)
-
-Hãy dán đoạn mã sau vào tệp **`auth.js`**[cite: 8]:
-
-```javascript
 // ==========================================================================
-// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & GỌI HÀM TOÀN CỤC
+// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN VÀ QUẢN LÝ PHIÊN
 // ==========================================================================
 
-// Kiểm tra phiên đăng nhập ngay khi load tệp
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', function() {
     khoiPhucPhiênDangNhap();
@@ -83,13 +76,21 @@ async function handleCustomLogin() {
   var passVal = passInput ? passInput.value.trim() : '';
 
   if (!accountVal || !passVal) {
-    showToast("⚠️ Vui lòng nhập đầy đủ tài khoản và mật khẩu!", "error");
+    if (typeof showToast === 'function') {
+      showToast("⚠️ Vui lòng nhập đầy đủ tài khoản và mật khẩu!", "error");
+    } else {
+      alert("⚠️ Vui lòng nhập đầy đủ tài khoản và mật khẩu!");
+    }
     return;
   }
 
   try {
     if (typeof supabaseClient === 'undefined') {
-      showToast("❌ Chưa kết nối được với cơ sở dữ liệu Supabase!", "error");
+      if (typeof showToast === 'function') {
+        showToast("❌ Chưa kết nối được với cơ sở dữ liệu Supabase!", "error");
+      } else {
+        alert("❌ Chưa kết nối được với cơ sở dữ liệu Supabase!");
+      }
       return;
     }
 
@@ -102,12 +103,20 @@ async function handleCustomLogin() {
     if (error) throw error;
 
     if (!data) {
-      showToast("❌ Tài khoản không tồn tại trong hệ thống!", "error");
+      if (typeof showToast === 'function') {
+        showToast("❌ Tài khoản không tồn tại trong hệ thống!", "error");
+      } else {
+        alert("❌ Tài khoản không tồn tại trong hệ thống!");
+      }
       return;
     }
 
     if (String(data.password || '') !== String(passVal)) {
-      showToast("❌ Mật khẩu không chính xác!", "error");
+      if (typeof showToast === 'function') {
+        showToast("❌ Mật khẩu không chính xác!", "error");
+      } else {
+        alert("❌ Mật khẩu không chính xác!");
+      }
       return;
     }
 
@@ -151,6 +160,7 @@ async function handleCustomLogin() {
     }
 
     if (typeof khoiTaoBanDoLeaflet === 'function') {
+      khoiTaoBanDecLeaflet();
       khoiTaoBanDoLeaflet();
     }
 
@@ -159,7 +169,11 @@ async function handleCustomLogin() {
     }
 
   } catch (err) {
-    showToast("❌ Lỗi xác thực đăng nhập: " + err.message, "error");
+    if (typeof showToast === 'function') {
+      showToast("❌ Lỗi xác thực đăng nhập: " + err.message, "error");
+    } else {
+      alert("❌ Lỗi xác thực đăng nhập: " + err.message);
+    }
   }
 }
 
@@ -168,7 +182,9 @@ function handleLoginExit() {
   var passInput = document.getElementById('loginPass');
   if (accountInput) accountInput.value = '';
   if (passInput) passInput.value = '';
-  showToast("Đã làm sạch thông tin đăng nhập.", "info");
+  if (typeof showToast === 'function') {
+    showToast("Đã làm sạch thông tin đăng nhập.", "info");
+  }
 }
 
 function togglePasswordVisibility() {
@@ -186,4 +202,36 @@ function handleLogout() {
   localStorage.removeItem('tnn_user');
   location.reload();
 }
-```[cite: 3, 4, 6, 7, 8]
+```[cite: 3, 6, 7, 8]
+
+---
+
+### 2. Cập nhật phần Modal Đăng nhập trong tệp `index.html`
+
+Để nút ẩn/hiện mật khẩu hoạt động hoàn hảo, hãy đảm bảo phần tử nhập mật khẩu trong tệp **`index.html`**[cite: 4] sử dụng đúng định dạng sau:
+
+```html
+<div id="loginModal" class="app-modal" style="display: flex;">
+  <div class="modal-content" style="max-width: 360px;">
+    <div class="modal-header"><span>👤 Đăng nhập Hệ Thống</span></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Tài khoản:</label><input type="text" id="loginAccount" placeholder="Nhập tên tài khoản" autocomplete="off"></div>
+      <div class="form-group">
+        <label>Mật khẩu:</label>
+        <div style="position: relative;">
+          <input type="password" id="loginPass" placeholder="••••••••" style="padding-right: 35px;" autocomplete="off">
+          <span onclick="togglePasswordVisibility()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px;">👁️</span>
+        </div>
+      </div>
+      <div class="checkbox-group" style="margin: 10px 0;">
+        <input type="checkbox" id="chkRememberMe">
+        <label style="margin:0; cursor:pointer; font-size: 12px;" for="chkRememberMe">Nhớ mật khẩu hệ thống</label>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 6px;">
+        <button type="button" class="btn-action" style="flex: 2; margin-top:0;" onclick="handleCustomLogin()">ĐĂNG NHẬP</button>
+        <button type="button" class="btn-action" style="flex: 1; background: #64748b; margin-top:0;" onclick="handleLoginExit()">Thoát</button>
+      </div>
+    </div>
+  </div>
+</div>
+```[cite: 4]
