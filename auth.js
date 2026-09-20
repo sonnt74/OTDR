@@ -1,5 +1,10 @@
+### 📄 2. Tệp `auth.js` (Xử lý đăng nhập, khôi phục phiên, nút Thoát và Toast)
+
+Bạn hãy dán đoạn mã sau vào tệp **`auth.js`**[cite: 8]:
+
+```javascript
 // ==========================================================================
-// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & LƯU PHIÊN (DÙNG TOAST)
+// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & LƯU PHIÊN (HOÀN CHỈNH)
 // ==========================================================================
 
 // Tự động khôi phục phiên đăng nhập khi tải lại trang
@@ -156,6 +161,15 @@ async function handleCustomLogin() {
   } catch (err) {
     showToast("❌ Lỗi xác thực đăng nhập: " + err.message, "error");
   }
+}
+
+// Hàm nút Thoát ở Form đăng nhập
+function handleLoginExit() {
+  var accountInput = document.getElementById('loginAccount');
+  var passInput = document.getElementById('loginPass');
+  if (accountInput) accountInput.value = '';
+  if (passInput) passInput.value = '';
+  showToast("Đã làm sạch thông tin đăng nhập.", "info");
 }
 
 function togglePasswordVisibility() {
