@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN CẤP PHÂN QUYỀN & CRUD ĐẦY ĐỦ
+// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN CẤP PHÂN QUYỀN & CRUD ĐẦY ĐỦ LIÊN KẾT
 // ==========================================================================
 
 async function openModal(modalId, tabId) {
@@ -308,7 +308,7 @@ function renderMasterDoanTable() {
 }
 
 // ==========================================================================
-// FORM THÊM / SỬA / XÓA CHO TỪNG DANH MỤC & TÀI KHOẢN
+// FORM THÊM / SỬA / XÓA CHO TỪNG DANH MỤC & TÀI KHOẢN (ĐÃ TẢI ĐẦY ĐỦ LIÊN KẾT)
 // ==========================================================================
 
 function chuanBiFormThemThanhVien(accToEdit) {
@@ -405,7 +405,7 @@ async function saveAccountAction() {
 }
 
 // ==========================================================================
-// QUẢN LÝ FORM PHỤ (ĐÀI, TRẠM, TUYẾN, ĐOẠN CÁP)
+// QUẢN LÝ FORM PHỤ (ĐÀI, TRẠM, TUYẾN, ĐOẠN CÁP) CÓ ĐỦ DỮ LIỆU LIÊN KẾT
 // ==========================================================================
 
 function moFormThemDai(id) {
@@ -428,7 +428,7 @@ function moFormThemTram(id) {
   document.getElementById('auxRecordId').value = id || '';
   document.getElementById('auxModalTitle').innerText = id ? '✏️ Sửa Trạm Viễn Thông' : '➕ Thêm Trạm Viễn Thông';
   
-  var list = getFilteredTramList();
+  var list = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
   var item = id ? list.find(t => String(t.id_tram || t.id) === String(id)) : {};
   
   var daiList = getFilteredDaiList();
@@ -447,7 +447,7 @@ function moFormThemTuyen(id) {
   document.getElementById('auxRecordId').value = id || '';
   document.getElementById('auxModalTitle').innerText = id ? '✏️ Sửa Tuyến Cáp' : '➕ Thêm Tuyến Cáp';
   
-  var list = getFilteredTuyenList();
+  var list = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
   var item = id ? list.find(t => String(t.id_tuyen_cap || t.id) === String(id)) : {};
   
   var html = `
@@ -463,13 +463,13 @@ function moFormThemDoan(id) {
   document.getElementById('auxRecordId').value = id || '';
   document.getElementById('auxModalTitle').innerText = id ? '✏️ Sửa Đoạn Cáp' : '➕ Thêm Đoạn Cáp';
   
-  var list = getFilteredDoanList();
+  var list = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
   var item = id ? list.find(d => String(d.id_doan_cap || d.id) === String(id)) : {};
   
-  var tuyenList = getFilteredTuyenList();
+  var tuyenList = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
   var tuyenOptions = tuyenList.map(tu => `<option value="${tu.id_tuyen_cap || tu.id}" ${String(tu.id_tuyen_cap || tu.id) === String(item.id_tuyen || item.tuyen_id) ? 'selected' : ''}>${tu.ten_tuyen || tu.ten || tu.ma_tuyencap}</option>`).join('');
 
-  var tramList = getFilteredTramList();
+  var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
   var tramOptions = tramList.map(tr => `<option value="${tr.id_tram || tr.id}" ${String(tr.id_tram || tr.id) === String(item.id_tram || item.tram_id) ? 'selected' : ''}>${tr.ten_tram || tr.ten}</option>`).join('');
 
   var html = `
@@ -509,7 +509,7 @@ async function saveAuxRecord() {
     if (!payload.ma_doancap) { showToast("⚠️ Vui lòng nhập mã đoạn cáp!", "error"); return; }
   }
 
-  if (recordId) {
+  if (recordId && recordId !== '') {
     payload[pkCol] = Number(recordId);
   }
 
