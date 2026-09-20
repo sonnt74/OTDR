@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP & PHÂN QUYỀN (ĐỒNG BỘ GLOBAL & ACCOUNT)
+// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP & PHÂN QUYỀN (KHỞI TẠO BẢN ĐỒ & ACCOUNT)
 // ==========================================================================
 
 async function handleCustomLogin() {
@@ -20,7 +20,7 @@ async function handleCustomLogin() {
       return;
     }
 
-    // Truy vấn bảng tai_khoan sử dụng duy nhất trường account từ cơ sở dữ liệu
+    // Truy vấn bảng tai_khoan sử dụng duy nhất trường account[cite: 8]
     var { data, error } = await supabaseClient
       .from('tai_khoan')
       .select('*')
@@ -39,17 +39,17 @@ async function handleCustomLogin() {
       return;
     }
 
-    // Cập nhật trực tiếp biến toàn cục currentUser để data.js và map.js nhận diện được trạng thái đăng nhập
+    // Cập nhật trạng thái người dùng toàn cục[cite: 7, 8]
     currentUser = {
       isLoggedIn: true,
       account: data.account,
       role: data.role || 'nhan_vien',
       id_dai: data.id_dai || null,
       id_tram: data.id_tram || null,
-      idDai: data.id_dai || null,       // Tương thích ngược an toàn cho data.js
-      idTram: data.id_tram || null,     // Tương thích ngược an toàn cho data.js
+      idDai: data.id_dai || null,
+      idTram: data.id_tram || null,
       can_edit_map: !!data.can_edit_map,
-      canEditMap: !!data.can_edit_map   // Tương thích ngược an toàn cho map.js
+      canEditMap: !!data.can_edit_map
     };
 
     localStorage.setItem('tnn_user', JSON.stringify(currentUser));
@@ -80,7 +80,12 @@ async function handleCustomLogin() {
 
     alert("✅ Đăng nhập thành công!");
 
-    // Kích hoạt nạp dữ liệu và hiển thị bản đồ GIS ngay lập tức
+    // 1. Khởi tạo bản đồ Leaflet ngay sau khi đăng nhập thành công[cite: 3]
+    if (typeof khoiTaoBanDoLeaflet === 'function') {
+      khoiTaoBanDoLeaflet();
+    }
+
+    // 2. Kích hoạt nạp dữ liệu và hiển thị tuyến cáp lên bản đồ[cite: 6]
     if (typeof taiDuLieuSupabase === 'function') {
       taiDuLieuSupabase(true);
     }
