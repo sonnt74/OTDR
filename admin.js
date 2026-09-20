@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ, ĐỔI MẬT KHẨU (HIỂN THỊ TÊN & DÙNG TOAST)
+// TỆP ADMIN.JS - QUẢN TRỊ, ĐỔI MẬT KHẨU (CHUẨN HÓA TRA CỨU TÊN & HIỂN THỊ)
 // ==========================================================================
 
 async function openModal(modalId, tabId) {
@@ -78,41 +78,45 @@ function getCurrentUser() {
   };
 }
 
+// Hàm lấy danh sách an toàn, quét toàn diện các biến toàn cục và AppStore[cite: 2, 6, 9]
 function getSafeDataList(keyNames) {
   var state = (typeof AppStore !== 'undefined' && AppStore.getState) ? AppStore.getState() : {};
   for (var i = 0; i < keyNames.length; i++) {
     var k = keyNames[i];
-    if (state[k] && state[k].length > 0) return state[k];
-    if (window[k] && window[k].length > 0) return window[k];
+    if (state[k] && Array.isArray(state[k]) && state[k].length > 0) return state[k];
+    if (window[k] && Array.isArray(window[k]) && window[k].length > 0) return window[k];
   }
+  // Dự phòng mở rộng cho từng loại danh mục cụ thể
   if (keyNames.includes('rawUserList') && window.rawUserList) return window.rawUserList;
   if (keyNames.includes('rawDaiList') && window.rawDaiList) return window.rawDaiList;
   if (keyNames.includes('rawTramList') && window.rawTramList) return window.rawTramList;
   if (keyNames.includes('rawTuyenList') && window.rawTuyenList) return window.rawTuyenList;
-  if (keyNames.includes('rawDoanList') && window.rawDoanCapList) return window.rawDoanCapList;
+  if (keyNames.includes('rawDoanList') || keyNames.includes('rawDoanCapList') || keyNames.includes('doanCapList')) {
+    return window.rawDoanCapList || window.rawDoanList || state.doanCapList || state.rawDoanList || [];
+  }
   return [];
 }
 
-// Các hàm hỗ trợ tra cứu tên từ ID để hiển thị trực quan thay vì chỉ hiện số ID
+// Các hàm hỗ trợ tra cứu tên từ ID (hỗ trợ so sánh chuỗi linh hoạt)
 function getDaiName(idDai) {
-  if (!idDai) return 'Tất cả';
+  if (idDai === null || idDai === undefined || idDai === '') return 'Tất cả';
   var list = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
-  var found = list.find(d => String(d.id_dai || d.id) === String(idDai));
-  return found ? (found.ten_dai || found.ten) : `Đài ID: ${idDai}`;
+  var found = list.find(d => String(d.id_dai || d.id || d.dai_id) === String(idDai));
+  return found ? (found.ten_dai || found.ten || found.name) : `Đài ID: ${idDai}`;
 }
 
 function getTramName(idTram) {
-  if (!idTram) return 'Tất cả';
+  if (idTram === null || idTram === undefined || idTram === '') return 'Tất cả';
   var list = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
-  var found = list.find(t => String(t.id_tram || t.id) === String(idTram));
-  return found ? (found.ten_tram || found.ten) : `Trạm ID: ${idTram}`;
+  var found = list.find(t => String(t.id_tram || t.id || t.tram_id) === String(idTram));
+  return found ? (found.ten_tram || found.ten || found.name) : `Trạm ID: ${idTram}`;
 }
 
 function getTuyenName(idTuyen) {
-  if (!idTuyen) return 'Tất cả';
+  if (idTuyen === null || idTuyen === undefined || idTuyen === '') return 'Tất cả';
   var list = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
-  var found = list.find(t => String(t.id_tuyen_cap || t.id_tuyen || t.id) === String(idTuyen));
-  return found ? (found.ten_tuyen || found.ten || found.ma_tuyencap) : `Tuyến ID: ${idTuyen}`;
+  var found = list.find(t => String(t.id_tuyen_cap || t.id_tuyen || t.id || t.tuyen_id) === String(idTuyen));
+  return found ? (found.ten_tuyen || found.ten || found.ma_tuyencap || found.ma_tuyen) : `Tuyến ID: ${idTuyen}`;
 }
 
 function renderAllAdminTables() {
@@ -123,7 +127,7 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
-/** 1. BẢNG TÀI KHOẢN */
+/** 1. BẢNG TÀI KHOẢN[cite: 9] */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
@@ -150,7 +154,7 @@ function renderMasterAccountTable() {
   tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu tài khoản</td></tr>';
 }
 
-/** 2. BẢNG ĐÀI VIỄN THÔNG */
+/** 2. BẢNG ĐÀI VIỄN THÔNG[cite: 9] */
 function renderMasterDaiTable() {
   var tbody = document.getElementById('masterDaiTableBody');
   if (!tbody) return;
@@ -164,7 +168,7 @@ function renderMasterDaiTable() {
   `).join('') || '<tr><td colspan="3" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Đài</td></tr>';
 }
 
-/** 3. BẢNG TRẠM VIỄN THÔNG (HIỂN THỊ TÊN ĐÀI THAY VÌ ID) */
+/** 3. BẢNG TRẠM VIỄN THÔNG[cite: 9] */
 function renderMasterTramTable() {
   var tbody = document.getElementById('masterTramTableBody');
   if (!tbody) return;
@@ -182,7 +186,7 @@ function renderMasterTramTable() {
   }).join('') || '<tr><td colspan="4" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Trạm</td></tr>';
 }
 
-/** 4. BẢNG TUYẾN CÁP */
+/** 4. BẢNG TUYẾN CÁP[cite: 9] */
 function renderMasterTuyenTable() {
   var tbody = document.getElementById('masterTuyenTableBody');
   if (!tbody) return;
@@ -197,11 +201,11 @@ function renderMasterTuyenTable() {
   `).join('') || '<tr><td colspan="4" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Tuyến cáp</td></tr>';
 }
 
-/** 5. BẢNG ĐOẠN TUYẾN CÁP (HIỂN THỊ TÊN TUYẾN VÀ TÊN TRẠM THAY VÌ ID) */
+/** 5. BẢNG ĐOẠN TUYẾN CÁP[cite: 9] */
 function renderMasterDoanTable() {
   var tbody = document.getElementById('masterDoanTableBody');
   if (!tbody) return;
-  var list = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap']);
+  var list = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
   tbody.innerHTML = list.map(item => {
     var tenTuyen = item.ten_tuyen || getTuyenName(item.id_tuyen);
     var tenTram = item.ten_tram || getTramName(item.id_tram);
@@ -217,7 +221,7 @@ function renderMasterDoanTable() {
   }).join('') || '<tr><td colspan="5" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Đoạn cáp</td></tr>';
 }
 
-/** LƯU TÀI KHOẢN */
+/** LƯU TÀI KHOẢN[cite: 9] */
 async function saveAccountAction() {
   var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginAccount');
   var accVal = accountInput ? accountInput.value.trim() : '';
@@ -258,7 +262,7 @@ async function saveAccountAction() {
   }
 }
 
-/** ĐỔI MẬT KHẨU */
+/** ĐỔI MẬT KHẨU[cite: 9] */
 function openChangePasswordModal() {
   var modal = document.getElementById('changePasswordModal');
   if (modal) {
@@ -326,10 +330,3 @@ function deleteAdminRecord(tableName, idItem) {
   }
 }
 ```[cite: 9]
-
----
-
-### 📋 Hướng dẫn triển khai:
-1. Sao chép toàn bộ đoạn mã trên và dán đè vào tệp **`admin.js`**[cite: 9].
-2. Nhấn tổ hợp phím **`Ctrl + F5`** (Hard Reload) trên trình duyệt để tải lại ứng dụng.
-3. Mở bảng quản trị: các bảng Đài VT, Trạm VT, Tuyến cáp và Đoạn tuyến cáp sẽ tự động tra cứu và hiển thị tên đầy đủ, rõ ràng thay vì các con số ID đơn thuần.
