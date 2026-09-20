@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & LƯU PHIÊN (HOÀN CHỈNH)
+// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & LƯU PHIÊN (DÙNG TOAST)
 // ==========================================================================
 
 // Tự động khôi phục phiên đăng nhập khi tải lại trang
@@ -73,13 +73,13 @@ async function handleCustomLogin() {
   var passVal = passInput ? passInput.value.trim() : '';
 
   if (!accountVal || !passVal) {
-    alert("⚠️ Vui lòng nhập đầy đủ tài khoản và mật khẩu!");
+    showToast("⚠️ Vui lòng nhập đầy đủ tài khoản và mật khẩu!", "error");
     return;
   }
 
   try {
     if (typeof supabaseClient === 'undefined') {
-      alert("❌ Chưa kết nối được với cơ sở dữ liệu Supabase!");
+      showToast("❌ Chưa kết nối được với cơ sở dữ liệu Supabase!", "error");
       return;
     }
 
@@ -93,12 +93,12 @@ async function handleCustomLogin() {
     if (error) throw error;
 
     if (!data) {
-      alert("❌ Tài khoản không tồn tại trong hệ thống!");
+      showToast("❌ Tài khoản không tồn tại trong hệ thống!", "error");
       return;
     }
 
     if (String(data.password || '') !== String(passVal)) {
-      alert("❌ Mật khẩu không chính xác!");
+      showToast("❌ Mật khẩu không chính xác!", "error");
       return;
     }
 
@@ -143,8 +143,6 @@ async function handleCustomLogin() {
       }
     }
 
-    // Đã loại bỏ thông báo đăng nhập thành công theo yêu cầu
-
     // Khởi tạo bản đồ Leaflet[cite: 3]
     if (typeof khoiTaoBanDoLeaflet === 'function') {
       khoiTaoBanDoLeaflet();
@@ -156,7 +154,7 @@ async function handleCustomLogin() {
     }
 
   } catch (err) {
-    alert("❌ Lỗi xác thực đăng nhập: " + err.message);
+    showToast("❌ Lỗi xác thực đăng nhập: " + err.message, "error");
   }
 }
 
@@ -175,3 +173,4 @@ function handleLogout() {
   localStorage.removeItem('tnn_user');
   location.reload();
 }
+```[cite: 3, 4, 6, 7, 8]
