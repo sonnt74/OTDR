@@ -289,21 +289,30 @@ function renderMasterTramTable() {
 }
 
 /** 4. BẢNG TUYẾN CÁP (HIỂN THỊ TÊN TUYẾN CHÍNH XÁC) */
+/** 4. BẢNG TUYẾN CÁP (ĐÃ MỞ RỘNG CÁC BIẾN TÊN TUYẾN ĐỂ HIỂN THỊ CHÍNH XÁC) */
 function renderMasterTuyenTable() {
   var tbody = document.getElementById('masterTuyenTableBody');
   if (!tbody) return;
   var list = getFilteredTuyenList();
-  tbody.innerHTML = list.map(item => `
-    <tr>
-      <td>${item.id_tuyen_cap || item.id}</td>
-      <td>${item.ma_tuyencap || item.ma_tuyen || ''}</td>
-      <td><b>${item.ten_tuyen || item.ten || ''}</b></td>
-      <td>
-        <button class="btn-small btn-success" onclick="moFormThemTuyen(${item.id_tuyen_cap || item.id})">✏️ Sửa</button>
-        <button class="btn-small" style="background:#ef4444; color:white;" onclick="deleteAdminRecord('tuyen_cap', '${item.id_tuyen_cap || item.id}')">🗑️ Xóa</button>
-      </td>
-    </tr>
-  `).join('') || '<tr><td colspan="4" style="text-align:center; padding:15px; color:#64748b;">Không có dữ liệu Tuyến cáp</td></tr>';
+  
+  tbody.innerHTML = list.map(item => {
+    // Kiểm tra tất cả các tên biến có thể có trong cơ sở dữ liệu cho tên tuyến và mã tuyến
+    var maTuyen = item.ma_tuyencap || item.ma_tuyen || item.macap || '';
+    var tenTuyen = item.ten_tuyen || item.ten_tuyencap || item.ten || item.name || 'Chưa cập nhật tên';
+    var idTuyen = item.id_tuyen_cap || item.id_tuyen || item.id;
+
+    return `
+      <tr>
+        <td>${idTuyen}</td>
+        <td>${maTuyen}</td>
+        <td><b>${tenTuyen}</b></td>
+        <td>
+          <button class="btn-small btn-success" onclick="moFormThemTuyen(${idTuyen})">✏️ Sửa</button>
+          <button class="btn-small" style="background:#ef4444; color:white;" onclick="deleteAdminRecord('tuyen_cap', '${idTuyen}')">🗑️ Xóa</button>
+        </td>
+      </tr>
+    `;
+  }).join('') || '<tr><td colspan="4" style="text-align:center; padding:15px; color:#64748b;">Không có dữ liệu Tuyến cáp</td></tr>';
 }
 
 /** 5. BẢNG ĐOẠN TUYẾN CÁP */
