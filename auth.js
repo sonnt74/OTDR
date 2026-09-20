@@ -2,13 +2,11 @@
 // TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & QUẢN LÝ PHIÊN
 // ==========================================================================
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', function() {
-    khoiPhucPhiênDangNhap();
-  });
-} else {
+console.log("auth.js đang được tải...");
+
+document.addEventListener('DOMContentLoaded', function() {
   khoiPhucPhiênDangNhap();
-}
+});
 
 function khoiPhucPhiênDangNhap() {
   var savedUser = localStorage.getItem('tnn_user');
@@ -16,7 +14,7 @@ function khoiPhucPhiênDangNhap() {
     try {
       var data = JSON.parse(savedUser);
       if (data && data.account) {
-        currentUser = {
+        window.currentUser = {
           isLoggedIn: true,
           account: data.account,
           role: data.role || 'nhan_vien',
@@ -29,7 +27,7 @@ function khoiPhucPhiênDangNhap() {
         };
 
         if (typeof AppStore !== 'undefined' && AppStore.setState) {
-          AppStore.setState({ currentUser: currentUser });
+          AppStore.setState({ currentUser: window.currentUser });
         }
 
         var loginModal = document.getElementById('loginModal');
@@ -40,12 +38,12 @@ function khoiPhucPhiênDangNhap() {
 
         var userInfoDisplay = document.getElementById('userInfoDisplay');
         if (userInfoDisplay) {
-          userInfoDisplay.innerText = "👤 " + currentUser.account + " (" + currentUser.role + ")";
+          userInfoDisplay.innerText = "👤 " + window.currentUser.account + " (" + window.currentUser.role + ")";
         }
 
         var adminBtn = document.getElementById('adminMobileBtn');
         if (adminBtn) {
-          var roleLower = (currentUser.role || '').toLowerCase();
+          var roleLower = (window.currentUser.role || '').toLowerCase();
           if (roleLower.includes('admin') || roleLower.includes('sys')) {
             adminBtn.style.display = 'block';
           } else {
@@ -69,6 +67,7 @@ function khoiPhucPhiênDangNhap() {
 }
 
 async function handleCustomLogin() {
+  console.log("Đang xử lý đăng nhập...");
   var accountInput = document.getElementById('loginAccount');
   var passInput = document.getElementById('loginPass');
 
@@ -120,7 +119,7 @@ async function handleCustomLogin() {
       return;
     }
 
-    currentUser = {
+    window.currentUser = {
       isLoggedIn: true,
       account: data.account,
       role: data.role || 'nhan_vien',
@@ -132,10 +131,10 @@ async function handleCustomLogin() {
       canEditMap: !!data.can_edit_map   
     };
 
-    localStorage.setItem('tnn_user', JSON.stringify(currentUser));
+    localStorage.setItem('tnn_user', JSON.stringify(window.currentUser));
     
     if (typeof AppStore !== 'undefined' && AppStore.setState) {
-      AppStore.setState({ currentUser: currentUser });
+      AppStore.setState({ currentUser: window.currentUser });
     }
 
     var loginModal = document.getElementById('loginModal');
@@ -146,12 +145,12 @@ async function handleCustomLogin() {
 
     var userInfoDisplay = document.getElementById('userInfoDisplay');
     if (userInfoDisplay) {
-      userInfoDisplay.innerText = "👤 " + currentUser.account + " (" + currentUser.role + ")";
+      userInfoDisplay.innerText = "👤 " + window.currentUser.account + " (" + window.currentUser.role + ")";
     }
 
     var adminBtn = document.getElementById('adminMobileBtn');
     if (adminBtn) {
-      var roleLower = (currentUser.role || '').toLowerCase();
+      var roleLower = (window.currentUser.role || '').toLowerCase();
       if (roleLower.includes('admin') || roleLower.includes('sys')) {
         adminBtn.style.display = 'block';
       } else {
@@ -168,6 +167,7 @@ async function handleCustomLogin() {
     }
 
   } catch (err) {
+    console.error("Lỗi đăng nhập:", err);
     if (typeof showToast === 'function') {
       showToast("❌ Lỗi xác thực đăng nhập: " + err.message, "error");
     } else {
