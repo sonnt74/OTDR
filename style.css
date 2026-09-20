@@ -13,7 +13,6 @@ html, body {
   background: #f0f2f5; 
 }
 
-/* Ẩn Sidebar cũ để tối ưu 100% diện tích bản đồ */
 #sidebar-menu { 
   display: none !important; 
 }
@@ -54,7 +53,6 @@ html, body {
   transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease !important; 
 }
 
-/* Trạng thái thu gọn Bảng điều khiển */
 #control-panel.collapsed {
   max-height: 42px !important;
   overflow: hidden !important;
@@ -111,7 +109,6 @@ html, body {
   border-radius: 4px; 
 }
 
-/* NÚT BẤM VÀ ĐỊNH DẠNG HÀNH ĐỘNG */
 .btn-action { 
   background-color: #dc3545; 
   color: white; 
@@ -155,10 +152,8 @@ html, body {
 .btn-small.del { background: #dc3545; }
 
 /* ==========================================================================
-   3. SẮP XẾP CỤM NÚT CÔNG CỤ BẢN ĐỒ GÓC PHẢI (TRỤC DỌC - KHÔNG ĐÈ NHAU)
+   3. SẮP XẾP CỤM NÚT CÔNG CỤ BẢN ĐỒ GÓC PHẢI
    ========================================================================== */
-
-/* 1. Nút ☰ Ẩn/Hiện form điều khiển - Nằm ở TRÊN CÙNG */
 #togglePanelBtn {
   position: fixed !important;
   top: 15px !important;
@@ -179,7 +174,6 @@ html, body {
   box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3) !important;
 }
 
-/* 2. Nút Định vị GPS - Nằm ngay dưới nút Toggle */
 #gps-btn {
   position: fixed !important;
   top: 63px !important;
@@ -200,7 +194,6 @@ html, body {
   font-size: 16px !important;
 }
 
-/* 3. Nút Đo khoảng cách - Nằm ngay dưới nút GPS */
 #measure-btn {
   position: fixed !important;
   top: 111px !important;
@@ -221,7 +214,6 @@ html, body {
   font-size: 16px !important;
 }
 
-/* 4. Hộp chọn lớp bản đồ (OSM / Vệ tinh) - Nằm dưới nút Đo khoảng cách */
 .leaflet-top.leaflet-right .leaflet-control-layers {
   position: fixed !important;
   top: 159px !important;
@@ -230,7 +222,6 @@ html, body {
   z-index: 3000 !important;
 }
 
-/* 5. Cụm nút Zoom (+ / -) - Nằm dưới cùng */
 .leaflet-top.leaflet-right .leaflet-control-zoom {
   position: fixed !important;
   top: 235px !important;
@@ -241,7 +232,6 @@ html, body {
   z-index: 3000 !important;
 }
 
-/* Ẩn dòng chữ liên kết bản quyền Leaflet / OpenStreetMap */
 .leaflet-control-attribution {
   display: none !important;
 }
@@ -395,16 +385,6 @@ html, body {
 .table-data tr:nth-child(even) { background-color: #f8f9fa; }
 .table-data tr:hover { background-color: #e9ecef; }
 
-.badge { 
-  display: inline-block; 
-  padding: 3px 7px; 
-  font-size: 10px; 
-  font-weight: bold; 
-  border-radius: 4px; 
-}
-.bg-info { background-color: #0dcaf0; color: #000; }
-.bg-secondary { background-color: #6c757d; color: #fff; }
-
 .admin-tabs { 
   display: flex; 
   gap: 5px; 
@@ -428,7 +408,7 @@ html, body {
 .tab-pane.active { display: block; }
 
 /* ==========================================================================
-   6. TƯƠNG THÍCH DI ĐỘNG (MOBILE BOTTOM SHEET)
+   6. TƯƠNG THÍCH DI ĐỘNG (MOBILE BOTTOM SHEET - ĐÃ XÓA PHẦN BAR & TĂNG ĐỆM ĐÁY)
    ========================================================================== */
 @media (max-width: 768px) {
   #control-panel {
@@ -438,16 +418,16 @@ html, body {
     left: 0 !important;
     right: 0 !important;
     width: 100vw !important;
-    max-height: 60vh !important;
+    max-height: 65vh !important;
     border-radius: 18px 18px 0 0 !important;
     box-shadow: 0 -5px 25px rgba(0, 0, 0, 0.3) !important;
     z-index: 4000 !important;
-    /* Tăng khoảng đệm đáy để tránh bị che bởi thanh điều hướng / nút bấm điện thoại */
-    padding-bottom: calc(50px + env(safe-area-inset-bottom)) !important;
+    /* Đệm đáy lớn hơn (75px cộng safe area) để không bị che bởi thanh điều hướng cảm ứng điện thoại */
+    padding-bottom: calc(75px + env(safe-area-inset-bottom)) !important;
   }
 
   #control-panel.collapsed {
-    max-height: 65px !important;
+    max-height: 55px !important;
   }
 
   .panel-header {
@@ -458,12 +438,4 @@ html, body {
     border-radius: 12px 12px 0 0 !important;
     touch-action: pan-y !important;
   }
-
-  .panel-header::after {
-    content: " (Vuốt ↕)" !important;
-    font-size: 10px !important;
-    font-weight: normal !important;
-    opacity: 0.8 !important;
-  }
 }
-```[cite: 1]
