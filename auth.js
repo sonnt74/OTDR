@@ -1,10 +1,21 @@
+
+### 📄 2. Tệp `auth.js` hoàn chỉnh (Đảm bảo sự kiện nút bấm hoạt động tức thì)
+
+Hãy dán đoạn mã sau vào tệp **`auth.js`**[cite: 8]:
+
+```javascript
 // ==========================================================================
-// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN VÀ QUẢN LÝ PHIÊN (ĐẦY ĐỦ)
+// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & GỌI HÀM TOÀN CỤC
 // ==========================================================================
 
-document.addEventListener('DOMContentLoaded', function() {
+// Kiểm tra phiên đăng nhập ngay khi load tệp
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() {
+    khoiPhucPhiênDangNhap();
+  });
+} else {
   khoiPhucPhiênDangNhap();
-});
+}
 
 function khoiPhucPhiênDangNhap() {
   var savedUser = localStorage.getItem('tnn_user');
@@ -72,21 +83,13 @@ async function handleCustomLogin() {
   var passVal = passInput ? passInput.value.trim() : '';
 
   if (!accountVal || !passVal) {
-    if (typeof showToast === 'function') {
-      showToast("⚠️ Vui lòng nhập đầy đủ tài khoản và mật khẩu!", "error");
-    } else {
-      alert("⚠️ Vui lòng nhập đầy đủ tài khoản và mật khẩu!");
-    }
+    showToast("⚠️ Vui lòng nhập đầy đủ tài khoản và mật khẩu!", "error");
     return;
   }
 
   try {
     if (typeof supabaseClient === 'undefined') {
-      if (typeof showToast === 'function') {
-        showToast("❌ Chưa kết nối được với cơ sở dữ liệu Supabase!", "error");
-      } else {
-        alert("❌ Chưa kết nối được với cơ sở dữ liệu Supabase!");
-      }
+      showToast("❌ Chưa kết nối được với cơ sở dữ liệu Supabase!", "error");
       return;
     }
 
@@ -99,20 +102,12 @@ async function handleCustomLogin() {
     if (error) throw error;
 
     if (!data) {
-      if (typeof showToast === 'function') {
-        showToast("❌ Tài khoản không tồn tại trong hệ thống!", "error");
-      } else {
-        alert("❌ Tài khoản không tồn tại trong hệ thống!");
-      }
+      showToast("❌ Tài khoản không tồn tại trong hệ thống!", "error");
       return;
     }
 
     if (String(data.password || '') !== String(passVal)) {
-      if (typeof showToast === 'function') {
-        showToast("❌ Mật khẩu không chính xác!", "error");
-      } else {
-        alert("❌ Mật khẩu không chính xác!");
-      }
+      showToast("❌ Mật khẩu không chính xác!", "error");
       return;
     }
 
@@ -164,11 +159,7 @@ async function handleCustomLogin() {
     }
 
   } catch (err) {
-    if (typeof showToast === 'function') {
-      showToast("❌ Lỗi xác thực đăng nhập: " + err.message, "error");
-    } else {
-      alert("❌ Lỗi xác thực đăng nhập: " + err.message);
-    }
+    showToast("❌ Lỗi xác thực đăng nhập: " + err.message, "error");
   }
 }
 
@@ -177,9 +168,7 @@ function handleLoginExit() {
   var passInput = document.getElementById('loginPass');
   if (accountInput) accountInput.value = '';
   if (passInput) passInput.value = '';
-  if (typeof showToast === 'function') {
-    showToast("Đã làm sạch thông tin đăng nhập.", "info");
-  }
+  showToast("Đã làm sạch thông tin đăng nhập.", "info");
 }
 
 function togglePasswordVisibility() {
@@ -197,4 +186,4 @@ function handleLogout() {
   localStorage.removeItem('tnn_user');
   location.reload();
 }
-```[cite: 3, 6, 7, 8]
+```[cite: 3, 4, 6, 7, 8]
