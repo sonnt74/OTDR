@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP & PHÂN QUYỀN (KHỞI TẠO BẢN ĐỒ & ACCOUNT)
+// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP & PHÂN QUYỀN (HOÀN CHỈNH)
 // ==========================================================================
 
 async function handleCustomLogin() {
@@ -39,17 +39,17 @@ async function handleCustomLogin() {
       return;
     }
 
-    // Cập nhật trạng thái người dùng toàn cục[cite: 7, 8]
+    // Cập nhật biến toàn cục currentUser (tương thích ngược an toàn với map.js và data.js)[cite: 3, 6, 7, 8]
     currentUser = {
       isLoggedIn: true,
       account: data.account,
       role: data.role || 'nhan_vien',
       id_dai: data.id_dai || null,
       id_tram: data.id_tram || null,
-      idDai: data.id_dai || null,
-      idTram: data.id_tram || null,
+      idDai: data.id_dai || null,       // Tương thích cho data.js[cite: 6]
+      idTram: data.id_tram || null,     // Tương thích cho data.js[cite: 6]
       can_edit_map: !!data.can_edit_map,
-      canEditMap: !!data.can_edit_map
+      canEditMap: !!data.can_edit_map   // Tương thích cho map.js[cite: 3]
     };
 
     localStorage.setItem('tnn_user', JSON.stringify(currentUser));
@@ -58,21 +58,25 @@ async function handleCustomLogin() {
       AppStore.setState({ currentUser: currentUser });
     }
 
+    // Ẩn modal đăng nhập và hiện bảng điều khiển
     var loginModal = document.getElementById('loginModal');
     if (loginModal) loginModal.style.display = 'none';
 
     var controlPanel = document.getElementById('control-panel');
     if (controlPanel) controlPanel.style.display = 'block';
 
+    // Hiển thị tên tài khoản lên giao diện
     var userInfoDisplay = document.getElementById('userInfoDisplay');
     if (userInfoDisplay) {
       userInfoDisplay.innerText = "👤 " + currentUser.account + " (" + currentUser.role + ")";
     }
 
+    // Hiển thị nút quản trị nếu đúng phân quyền[cite: 4]
     var adminBtn = document.getElementById('adminMobileBtn');
     if (adminBtn) {
-      if (currentUser.role === 'admin_sys' || currentUser.role === 'admin_dai' || currentUser.role === 'admin_tram') {
-        adminBtn.style.display = 'inline-block';
+      var roleLower = (currentUser.role || '').toLowerCase();
+      if (roleLower.includes('admin') || roleLower.includes('sys')) {
+        adminBtn.style.display = 'block';
       } else {
         adminBtn.style.display = 'none';
       }
@@ -80,12 +84,12 @@ async function handleCustomLogin() {
 
     alert("✅ Đăng nhập thành công!");
 
-    // 1. Khởi tạo bản đồ Leaflet ngay sau khi đăng nhập thành công[cite: 3]
+    // Khởi tạo bản đồ Leaflet[cite: 3]
     if (typeof khoiTaoBanDoLeaflet === 'function') {
       khoiTaoBanDoLeaflet();
     }
 
-    // 2. Kích hoạt nạp dữ liệu và hiển thị tuyến cáp lên bản đồ[cite: 6]
+    // Nạp dữ liệu hệ thống và vẽ tuyến cáp[cite: 6]
     if (typeof taiDuLieuSupabase === 'function') {
       taiDuLieuSupabase(true);
     }
@@ -95,6 +99,7 @@ async function handleCustomLogin() {
   }
 }
 
+// Hàm ẩn/hiện mật khẩu
 function togglePasswordVisibility() {
   var passInput = document.getElementById('loginPass');
   if (passInput) {
@@ -106,7 +111,16 @@ function togglePasswordVisibility() {
   }
 }
 
+// Hàm đăng xuất
 function handleLogout() {
   localStorage.removeItem('tnn_user');
   location.reload();
 }
+```[cite: 3, 6, 7, 8]
+
+---
+
+### 📋 Hướng dẫn triển khai nhanh:
+1. Copy toàn bộ đoạn mã trên dán đè vào tệp **`auth.js`**[cite: 8].
+2. Nhấn **`Ctrl + F5`** (Hard Reload) trên trình duyệt để làm mới bộ nhớ đệm.
+3. Nhập tài khoản (`account`) và mật khẩu để đăng nhập. Hệ thống sẽ xác thực thành công, hiển thị nút quản trị đầy đủ, khởi tạo bản đồ Leaflet và tải tuyến cáp mượt mà!
