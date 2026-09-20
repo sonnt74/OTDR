@@ -1,16 +1,15 @@
-### 📄 2. Tệp `auth.js` (Xử lý đăng nhập, khôi phục phiên, nút Thoát và Toast)
-
-Bạn hãy dán đoạn mã sau vào tệp **`auth.js`**[cite: 8]:
-
-```javascript
 // ==========================================================================
 // TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & LƯU PHIÊN (HOÀN CHỈNH)
 // ==========================================================================
 
-// Tự động khôi phục phiên đăng nhập khi tải lại trang
-document.addEventListener('DOMContentLoaded', function() {
+// Kiểm tra trạng thái tải trang an toàn vì script được đặt ở cuối body[cite: 4, 8]
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() {
+    khoiPhucPhiênDangNhap();
+  });
+} else {
   khoiPhucPhiênDangNhap();
-});
+}
 
 function khoiPhucPhiênDangNhap() {
   var savedUser = localStorage.getItem('tnn_user');
@@ -187,4 +186,3 @@ function handleLogout() {
   localStorage.removeItem('tnn_user');
   location.reload();
 }
-```[cite: 3, 4, 6, 7, 8]
