@@ -1,4 +1,7 @@
-// config.js - Cấu hình kết nối Supabase, biến toàn cục và hàm tiện ích dùng chung
+// ==========================================================================
+// TỆP CONFIG.JS - CẤU HÌNH SUPABASE & TIỆN ÍCH DÙNG CHUNG
+// ==========================================================================
+
 const SUPABASE_URL = 'https://clddwitzwuewwxawuorv.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_U3tMbsj5oQ9Wub1UAJO5Cw_NXt6Px8E';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -23,7 +26,7 @@ var rawDoanCapList = [];
 var rawLoaiDiemList = [];
 var globalDataPoints = [];
 
-// Hàm tiện ích hiển thị/ẩn xoay tròn chờ dữ liệu
+// Hàm hiển thị/ẩn xoay tròn chờ dữ liệu
 function showLoading(msg) {
   var el = document.getElementById('loading-overlay-text');
   if (el) el.innerText = msg;
@@ -55,41 +58,12 @@ function showToast(message, type = 'info') {
   }, 3000);
 }
 
-// Hàm ẩn/hiển thị khay điều khiển GIS
-function toggleGISPanel() {
-  var panel = document.getElementById('control-panel');
-  if (panel) {
-    if (panel.style.display === 'none') {
-      panel.style.display = 'block';
-    } else {
-      panel.classList.toggle('collapsed');
-    }
-  }
-}
-
-function closeModals() {
-  document.querySelectorAll('.app-modal').forEach(modal => {
-    if (modal.id !== 'loginModal' || !currentUser.isLoggedIn) modal.style.display = 'none';
-  });
-}
-
-function openModal(id, tabId = null) {
-  closeModals();
-  var modal = document.getElementById(id);
-  if (modal) modal.style.display = 'flex';
-  if (id === 'adminMasterModal' && typeof switchAdminTab === 'function') {
-    if (tabId) switchAdminTab(tabId);
-    if (typeof loadAdminMasterData === 'function') loadAdminMasterData();
-  }
-}
-
-// Hàm ghi nhật ký thao tác người dùng
-// Hàm ghi nhật ký thao tác người dùng (Sử dụng account)
+// Hàm ghi nhật ký thao tác người dùng (Sử dụng trường account)
 async function ghiNhatKyThaoTac(hanhDong, chiTiet) {
   try {
-    var currentUser = JSON.parse(localStorage.getItem('tnn_user')) || {};
-    var userAccount = currentUser && currentUser.account ? currentUser.account : "Khách";
-    var userRole = currentUser ? currentUser.role : "member";
+    var storedUser = JSON.parse(localStorage.getItem('tnn_user')) || {};
+    var userAccount = storedUser.account ? storedUser.account : "Khách";
+    var userRole = storedUser.role ? storedUser.role : "member";
 
     await supabaseClient.from('lich_su_thao_tac').insert([{
       account_nguoi_dung: userAccount,
