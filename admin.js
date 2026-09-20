@@ -107,7 +107,7 @@ function getSafeDataList(keyNames) {
 }
 
 // ==========================================================================
-// HỆ THỐNG LỌC PHÂN CẤP THEO VAI TRÒ ĐĂNG NHẬP
+// HỆ THỐNG LỌC PHÂN CẤP THEO VAI TRÒ ĐĂNG NHẬP (DÙNG CHO BẢNG HIỂN THỊ)
 // ==========================================================================
 function getFilteredUsers() {
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
@@ -327,7 +327,7 @@ function renderMasterDoanTable() {
 }
 
 // ==========================================================================
-// FORM THÊM / SỬA / XÓA CHO TỪNG DANH MỤC & TÀI KHOẢN
+// FORM THÊM / SỬA / XÓA (SỬ DỤNG DANH MỤC GỐC ĐỂ ĐẢM BẢO LUÔN ĐỦ LỰA CHỌN LIÊN KẾT)
 // ==========================================================================
 
 function chuanBiFormThemThanhVien(accToEdit) {
@@ -338,7 +338,7 @@ function chuanBiFormThemThanhVien(accToEdit) {
   var daiSelect = document.getElementById('newMemberDai');
   var tramSelect = document.getElementById('newMemberTram');
 
-  var daiList = getFilteredDaiList();
+  var daiList = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
   if (daiSelect) {
     daiSelect.innerHTML = '<option value="">-- Chọn Đài --</option>';
     daiList.forEach(d => {
@@ -346,7 +346,7 @@ function chuanBiFormThemThanhVien(accToEdit) {
     });
   }
 
-  var tramList = getFilteredTramList();
+  var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
   if (tramSelect) {
     tramSelect.innerHTML = '<option value="">-- Chọn Trạm --</option>';
     tramList.forEach(t => {
@@ -432,7 +432,7 @@ function moFormThemDai(id) {
   document.getElementById('auxRecordId').value = id || '';
   document.getElementById('auxModalTitle').innerText = id ? '✏️ Sửa Đài Viễn Thông' : '➕ Thêm Đài Viễn Thông';
   
-  var list = getFilteredDaiList();
+  var list = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
   var item = id ? list.find(d => String(d.id_dai || d.id) === String(id)) : {};
   
   var html = `
@@ -450,7 +450,7 @@ function moFormThemTram(id) {
   var list = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
   var item = id ? list.find(t => String(t.id_tram || t.id) === String(id)) : {};
   
-  var daiList = getFilteredDaiList();
+  var daiList = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
   var daiOptions = daiList.map(d => `<option value="${d.id_dai || d.id}" ${String(d.id_dai || d.id) === String(item.id_dai || item.dai_id) ? 'selected' : ''}>${d.ten_dai || d.ten}</option>`).join('');
 
   var html = `
@@ -485,10 +485,10 @@ function moFormThemDoan(id) {
   var list = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
   var item = id ? list.find(d => String(d.id_doan_cap || d.id) === String(id)) : {};
   
-  var tuyenList = getFilteredTuyenList();
+  var tuyenList = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
   var tuyenOptions = tuyenList.map(tu => `<option value="${tu.id_tuyen_cap || tu.id}" ${String(tu.id_tuyen_cap || tu.id) === String(item.id_tuyen || item.tuyen_id) ? 'selected' : ''}>${tu.ten_tuyen || tu.ten || tu.ma_tuyencap}</option>`).join('');
 
-  var tramList = getFilteredTramList();
+  var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
   var tramOptions = tramList.map(tr => `<option value="${tr.id_tram || tr.id}" ${String(tr.id_tram || tr.id) === String(item.id_tram || item.tram_id) ? 'selected' : ''}>${tr.ten_tram || tr.ten}</option>`).join('');
 
   var html = `
