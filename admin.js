@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ, ĐỔI MẬT KHẨU (DÙNG VIEW v_tai_khoan_full & TOAST)
+// TỆP ADMIN.JS - QUẢN TRỊ, ĐỔI MẬT KHẨU (HIỂN THỊ TÊN & DÙNG TOAST)
 // ==========================================================================
 
 async function openModal(modalId, tabId) {
@@ -93,6 +93,28 @@ function getSafeDataList(keyNames) {
   return [];
 }
 
+// Các hàm hỗ trợ tra cứu tên từ ID để hiển thị trực quan thay vì chỉ hiện số ID
+function getDaiName(idDai) {
+  if (!idDai) return 'Tất cả';
+  var list = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
+  var found = list.find(d => String(d.id_dai || d.id) === String(idDai));
+  return found ? (found.ten_dai || found.ten) : `Đài ID: ${idDai}`;
+}
+
+function getTramName(idTram) {
+  if (!idTram) return 'Tất cả';
+  var list = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
+  var found = list.find(t => String(t.id_tram || t.id) === String(idTram));
+  return found ? (found.ten_tram || found.ten) : `Trạm ID: ${idTram}`;
+}
+
+function getTuyenName(idTuyen) {
+  if (!idTuyen) return 'Tất cả';
+  var list = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
+  var found = list.find(t => String(t.id_tuyen_cap || t.id_tuyen || t.id) === String(idTuyen));
+  return found ? (found.ten_tuyen || found.ten || found.ma_tuyencap) : `Tuyến ID: ${idTuyen}`;
+}
+
 function renderAllAdminTables() {
   renderMasterAccountTable();
   renderMasterDaiTable();
@@ -101,15 +123,15 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
-/** VIEW HIỂN THỊ BẢNG TÀI KHOẢN (SỬ DỤNG VIEW v_tai_khoan_full)[cite: 9] */
+/** 1. BẢNG TÀI KHOẢN */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
   var html = users.map(u => {
     var accName = u.account || 'Tài khoản';
-    var tenDai = u.ten_dai || (u.id_dai ? `Đài ID: ${u.id_dai}` : 'Tất cả');
-    var tenTram = u.ten_tram || (u.id_tram ? `Trạm ID: ${u.id_tram}` : 'Tất cả');
+    var tenDai = u.ten_dai || getDaiName(u.id_dai);
+    var tenTram = u.ten_tram || getTramName(u.id_tram);
 
     return `
       <tr>
@@ -128,6 +150,7 @@ function renderMasterAccountTable() {
   tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu tài khoản</td></tr>';
 }
 
+/** 2. BẢNG ĐÀI VIỄN THÔNG */
 function renderMasterDaiTable() {
   var tbody = document.getElementById('masterDaiTableBody');
   if (!tbody) return;
@@ -141,20 +164,25 @@ function renderMasterDaiTable() {
   `).join('') || '<tr><td colspan="3" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Đài</td></tr>';
 }
 
+/** 3. BẢNG TRẠM VIỄN THÔNG (HIỂN THỊ TÊN ĐÀI THAY VÌ ID) */
 function renderMasterTramTable() {
   var tbody = document.getElementById('masterTramTableBody');
   if (!tbody) return;
   var list = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
-  tbody.innerHTML = list.map(item => `
-    <tr>
-      <td>${item.id_tram || item.id}</td>
-      <td><b>${item.ten_tram || item.ten}</b></td>
-      <td>${item.id_dai || ''}</td>
-      <td><button class="btn-small btn-success" onclick="moFormThemTram(${item.id_tram || item.id})">✏️ Sửa</button></td>
-    </tr>
-  `).join('') || '<tr><td colspan="4" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Trạm</td></tr>';
+  tbody.innerHTML = list.map(item => {
+    var tenDai = item.ten_dai || getDaiName(item.id_dai);
+    return `
+      <tr>
+        <td>${item.id_tram || item.id}</td>
+        <td><b>${item.ten_tram || item.ten}</b></td>
+        <td>🏢 ${tenDai}</td>
+        <td><button class="btn-small btn-success" onclick="moFormThemTram(${item.id_tram || item.id})">✏️ Sửa</button></td>
+      </tr>
+    `;
+  }).join('') || '<tr><td colspan="4" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Trạm</td></tr>';
 }
 
+/** 4. BẢNG TUYẾN CÁP */
 function renderMasterTuyenTable() {
   var tbody = document.getElementById('masterTuyenTableBody');
   if (!tbody) return;
@@ -169,22 +197,27 @@ function renderMasterTuyenTable() {
   `).join('') || '<tr><td colspan="4" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Tuyến cáp</td></tr>';
 }
 
+/** 5. BẢNG ĐOẠN TUYẾN CÁP (HIỂN THỊ TÊN TUYẾN VÀ TÊN TRẠM THAY VÌ ID) */
 function renderMasterDoanTable() {
   var tbody = document.getElementById('masterDoanTableBody');
   if (!tbody) return;
   var list = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap']);
-  tbody.innerHTML = list.map(item => `
-    <tr>
-      <td>${item.id_doan_cap || item.id}</td>
-      <td>${item.ma_doancap || item.ma_doan || ''}</td>
-      <td>${item.id_tuyen || ''}</td>
-      <td>${item.id_tram || ''}</td>
-      <td><button class="btn-small btn-success" onclick="moFormThemDoan(${item.id_doan_cap || item.id})">✏️ Sửa</button></td>
-    </tr>
-  `).join('') || '<tr><td colspan="5" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Đoạn cáp</td></tr>';
+  tbody.innerHTML = list.map(item => {
+    var tenTuyen = item.ten_tuyen || getTuyenName(item.id_tuyen);
+    var tenTram = item.ten_tram || getTramName(item.id_tram);
+    return `
+      <tr>
+        <td>${item.id_doan_cap || item.id}</td>
+        <td><b>${item.ma_doancap || item.ma_doan || ''}</b></td>
+        <td>🛤️ ${tenTuyen}</td>
+        <td>📡 ${tenTram}</td>
+        <td><button class="btn-small btn-success" onclick="moFormThemDoan(${item.id_doan_cap || item.id})">✏️ Sửa</button></td>
+      </tr>
+    `;
+  }).join('') || '<tr><td colspan="5" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Đoạn cáp</td></tr>';
 }
 
-/** LƯU TÀI KHOẢN (DÙNG TRƯỜNG ACCOUNT & TOAST)[cite: 9] */
+/** LƯU TÀI KHOẢN */
 async function saveAccountAction() {
   var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginAccount');
   var accVal = accountInput ? accountInput.value.trim() : '';
@@ -225,7 +258,7 @@ async function saveAccountAction() {
   }
 }
 
-/** ĐỔI MẬT KHẨU (DÙNG TRƯỜNG ACCOUNT & TOAST)[cite: 9] */
+/** ĐỔI MẬT KHẨU */
 function openChangePasswordModal() {
   var modal = document.getElementById('changePasswordModal');
   if (modal) {
@@ -293,3 +326,10 @@ function deleteAdminRecord(tableName, idItem) {
   }
 }
 ```[cite: 9]
+
+---
+
+### 📋 Hướng dẫn triển khai:
+1. Sao chép toàn bộ đoạn mã trên và dán đè vào tệp **`admin.js`**[cite: 9].
+2. Nhấn tổ hợp phím **`Ctrl + F5`** (Hard Reload) trên trình duyệt để tải lại ứng dụng.
+3. Mở bảng quản trị: các bảng Đài VT, Trạm VT, Tuyến cáp và Đoạn tuyến cáp sẽ tự động tra cứu và hiển thị tên đầy đủ, rõ ràng thay vì các con số ID đơn thuần.
