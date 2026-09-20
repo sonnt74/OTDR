@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ, ĐỔI MẬT KHẨU (CHUẨN HÓA TRA CỨU TÊN & HIỂN THỊ)
+// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB & TRA CỨU TÊN TRỰC QUAN
 // ==========================================================================
 
 async function openModal(modalId, tabId) {
@@ -20,11 +20,23 @@ async function openModal(modalId, tabId) {
           supabaseClient.from('tuyen_cap').select('*'),
           supabaseClient.from('v_doan_cap_full').select('*')
         ]);
-        window.rawUserList = uRes.data || window.rawUserList || [];
-        window.rawDaiList = dRes.data || window.rawDaiList || [];
-        window.rawTramList = tRes.data || window.rawTramList || [];
-        window.rawTuyenList = tuRes.data || window.rawTuyenList || [];
-        window.rawDoanCapList = doRes.data || window.rawDoanCapList || [];
+        
+        window.rawUserList = uRes.data || [];
+        window.rawDaiList = dRes.data || [];
+        window.rawTramList = tRes.data || [];
+        window.rawTuyenList = tuRes.data || [];
+        window.rawDoanCapList = doRes.data || [];
+
+        // Đồng bộ dữ liệu vào AppStore nếu có
+        if (typeof AppStore !== 'undefined' && AppStore.setState) {
+          AppStore.setState({
+            rawUserList: window.rawUserList,
+            rawDaiList: window.rawDaiList,
+            rawTramList: window.rawTramList,
+            rawTuyenList: window.rawTuyenList,
+            rawDoanList: window.rawDoanCapList
+          });
+        }
       }
     } catch (e) {
       console.warn("Dùng dữ liệu lưu trữ tạm:", e);
@@ -78,7 +90,7 @@ function getCurrentUser() {
   };
 }
 
-// Hàm lấy danh sách an toàn, quét toàn diện các biến toàn cục và AppStore[cite: 2, 6, 9]
+// Hàm quét dữ liệu an toàn đa tầng (AppStore + Window)
 function getSafeDataList(keyNames) {
   var state = (typeof AppStore !== 'undefined' && AppStore.getState) ? AppStore.getState() : {};
   for (var i = 0; i < keyNames.length; i++) {
@@ -86,18 +98,17 @@ function getSafeDataList(keyNames) {
     if (state[k] && Array.isArray(state[k]) && state[k].length > 0) return state[k];
     if (window[k] && Array.isArray(window[k]) && window[k].length > 0) return window[k];
   }
-  // Dự phòng mở rộng cho từng loại danh mục cụ thể
   if (keyNames.includes('rawUserList') && window.rawUserList) return window.rawUserList;
   if (keyNames.includes('rawDaiList') && window.rawDaiList) return window.rawDaiList;
   if (keyNames.includes('rawTramList') && window.rawTramList) return window.rawTramList;
   if (keyNames.includes('rawTuyenList') && window.rawTuyenList) return window.rawTuyenList;
   if (keyNames.includes('rawDoanList') || keyNames.includes('rawDoanCapList') || keyNames.includes('doanCapList')) {
-    return window.rawDoanCapList || window.rawDoanList || state.doanCapList || state.rawDoanList || [];
+    return window.rawDoanCapList || window.rawDoanList || state.rawDoanList || state.doanCapList || [];
   }
   return [];
 }
 
-// Các hàm hỗ trợ tra cứu tên từ ID (hỗ trợ so sánh chuỗi linh hoạt)
+// Các hàm tra cứu tên thông minh từ ID
 function getDaiName(idDai) {
   if (idDai === null || idDai === undefined || idDai === '') return 'Tất cả';
   var list = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
@@ -127,7 +138,7 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
-/** 1. BẢNG TÀI KHOẢN[cite: 9] */
+/** 1. BẢNG TÀI KHOẢN */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
@@ -154,7 +165,7 @@ function renderMasterAccountTable() {
   tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu tài khoản</td></tr>';
 }
 
-/** 2. BẢNG ĐÀI VIỄN THÔNG[cite: 9] */
+/** 2. BẢNG ĐÀI VIỄN THÔNG */
 function renderMasterDaiTable() {
   var tbody = document.getElementById('masterDaiTableBody');
   if (!tbody) return;
@@ -168,7 +179,7 @@ function renderMasterDaiTable() {
   `).join('') || '<tr><td colspan="3" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Đài</td></tr>';
 }
 
-/** 3. BẢNG TRẠM VIỄN THÔNG[cite: 9] */
+/** 3. BẢNG TRẠM VIỄN THÔNG */
 function renderMasterTramTable() {
   var tbody = document.getElementById('masterTramTableBody');
   if (!tbody) return;
@@ -186,7 +197,7 @@ function renderMasterTramTable() {
   }).join('') || '<tr><td colspan="4" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Trạm</td></tr>';
 }
 
-/** 4. BẢNG TUYẾN CÁP[cite: 9] */
+/** 4. BẢNG TUYẾN CÁP */
 function renderMasterTuyenTable() {
   var tbody = document.getElementById('masterTuyenTableBody');
   if (!tbody) return;
@@ -201,7 +212,7 @@ function renderMasterTuyenTable() {
   `).join('') || '<tr><td colspan="4" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Tuyến cáp</td></tr>';
 }
 
-/** 5. BẢNG ĐOẠN TUYẾN CÁP[cite: 9] */
+/** 5. BẢNG ĐOẠN TUYẾN CÁP */
 function renderMasterDoanTable() {
   var tbody = document.getElementById('masterDoanTableBody');
   if (!tbody) return;
@@ -221,7 +232,7 @@ function renderMasterDoanTable() {
   }).join('') || '<tr><td colspan="5" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Đoạn cáp</td></tr>';
 }
 
-/** LƯU TÀI KHOẢN[cite: 9] */
+/** LƯU TÀI KHOẢN */
 async function saveAccountAction() {
   var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginAccount');
   var accVal = accountInput ? accountInput.value.trim() : '';
@@ -262,7 +273,7 @@ async function saveAccountAction() {
   }
 }
 
-/** ĐỔI MẬT KHẨU[cite: 9] */
+/** ĐỔI MẬT KHẨU */
 function openChangePasswordModal() {
   var modal = document.getElementById('changePasswordModal');
   if (modal) {
@@ -329,4 +340,3 @@ function deleteAdminRecord(tableName, idItem) {
     console.log("Xóa tài khoản có account:", idItem);
   }
 }
-```[cite: 9]
