@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN CẤP PHÂN QUYỀN & CRUD ĐẦY ĐỦ LIÊN KẾT
+// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN CẤP PHÂN QUYỀN & CRUD LIÊN KẾT ĐẦY ĐỦ
 // ==========================================================================
 
 async function openModal(modalId, tabId) {
@@ -107,7 +107,7 @@ function getSafeDataList(keyNames) {
 }
 
 // ==========================================================================
-// HỆ THỐNG LỌC PHÂN CẤP THEO VAI TRÒ ĐĂNG NHẬP
+// HỆ THỐNG LỌC PHÂN CẤP THEO VAI TRÒ ĐĂNG NHẬP (ĐÃ CẬP NHẬT LIÊN KẾT TUYẾN)
 // ==========================================================================
 function getFilteredUsers() {
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
@@ -156,7 +156,28 @@ function getFilteredTramList() {
 }
 
 function getFilteredTuyenList() {
-  return getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
+  var tuyenList = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
+  var user = getCurrentUser();
+  var role = (user.role || '').toLowerCase();
+  var idTram = user.id_tram || user.idTram;
+
+  if (role.includes('sys') || role === 'admin_sys') {
+    return tuyenList;
+  } else if (role.includes('dai') || role === 'admin_dai') {
+    // Lọc tuyến cáp dựa trên các đoạn cáp thuộc các trạm nằm trong Đài của người dùng
+    var validTramIds = getFilteredTramList().map(t => String(t.id_tram || t.id));
+    var doanList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
+    var validTuyenIds = doanList.filter(d => validTramIds.includes(String(d.id_tram || d.tram_id)))
+                                .map(d => String(d.id_tuyen || d.tuyen_id));
+    return tuyenList.filter(tu => validTuyenIds.includes(String(tu.id_tuyen_cap || tu.id || tu.tuyen_id)));
+  } else if (role.includes('tram') || role === 'admin_tram') {
+    // Lọc tuyến cáp dựa trên các đoạn cáp thuộc Trạm của người dùng
+    var doanList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
+    var validTuyenIds = doanList.filter(d => String(d.id_tram || d.tram_id) === String(idTram))
+                                .map(d => String(d.id_tuyen || d.tuyen_id));
+    return tuyenList.filter(tu => validTuyenIds.includes(String(tu.id_tuyen_cap || tu.id || tu.tuyen_id)));
+  }
+  return tuyenList;
 }
 
 function getFilteredDoanList() {
@@ -308,7 +329,7 @@ function renderMasterDoanTable() {
 }
 
 // ==========================================================================
-// FORM THÊM / SỬA / XÓA CHO TỪNG DANH MỤC & TÀI KHOẢN (ĐÃ TẢI ĐẦY ĐỦ LIÊN KẾT)
+// FORM THÊM / SỬA / XÓA CHO TỪNG DANH MỤC & TÀI KHOẢN
 // ==========================================================================
 
 function chuanBiFormThemThanhVien(accToEdit) {
@@ -405,7 +426,7 @@ async function saveAccountAction() {
 }
 
 // ==========================================================================
-// QUẢN LÝ FORM PHỤ (ĐÀI, TRẠM, TUYẾN, ĐOẠN CÁP) CÓ ĐỦ DỮ LIỆU LIÊN KẾT
+// QUẢN LÝ FORM PHỤ (ĐÀI, TRẠM, TUYẾN, ĐOẠN CÁP)
 // ==========================================================================
 
 function moFormThemDai(id) {
@@ -466,10 +487,10 @@ function moFormThemDoan(id) {
   var list = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
   var item = id ? list.find(d => String(d.id_doan_cap || d.id) === String(id)) : {};
   
-  var tuyenList = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
+  var tuyenList = getFilteredTuyenList();
   var tuyenOptions = tuyenList.map(tu => `<option value="${tu.id_tuyen_cap || tu.id}" ${String(tu.id_tuyen_cap || tu.id) === String(item.id_tuyen || item.tuyen_id) ? 'selected' : ''}>${tu.ten_tuyen || tu.ten || tu.ma_tuyencap}</option>`).join('');
 
-  var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
+  var tramList = getFilteredTramList();
   var tramOptions = tramList.map(tr => `<option value="${tr.id_tram || tr.id}" ${String(tr.id_tram || tr.id) === String(item.id_tram || item.tram_id) ? 'selected' : ''}>${tr.ten_tram || tr.ten}</option>`).join('');
 
   var html = `
