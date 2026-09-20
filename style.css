@@ -438,11 +438,12 @@ html, body {
     left: 0 !important;
     right: 0 !important;
     width: 100vw !important;
-    max-height: 65vh !important;
+    max-height: 60vh !important;
     border-radius: 18px 18px 0 0 !important;
     box-shadow: 0 -5px 25px rgba(0, 0, 0, 0.3) !important;
     z-index: 4000 !important;
-    padding-bottom: calc(15px + env(safe-area-inset-bottom)) !important;
+    /* Tăng khoảng đệm đáy để tránh bị che bởi thanh điều hướng / nút bấm điện thoại */
+    padding-bottom: calc(45px + env(safe-area-inset-bottom)) !important;
   }
 
   #control-panel.collapsed {
@@ -465,3 +466,4 @@ html, body {
     opacity: 0.8 !important;
   }
 }
+```[cite: 1]
