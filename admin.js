@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN CẤP PHÂN QUYỀN & LIÊN KẾT DỮ LIỆU ĐOẠN - TUYẾN
+// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN CẤP PHÂN QUYỀN & LUỒNG LIÊN KẾT DỮ LIỆU
 // ==========================================================================
 
 async function openModal(modalId, tabId) {
@@ -107,7 +107,7 @@ function getSafeDataList(keyNames) {
 }
 
 // ==========================================================================
-// HỆ THỐNG LỌC PHÂN CẤP THEO VAI TRÒ ĐĂNG NHẬP (DÙNG CHO BẢNG HIỂN THỊ)
+// HỆ THỐNG LỌC PHÂN CẤP THEO VAI TRÒ ĐĂNG NHẬP (LUỒNG DỮ LIỆU ĐỒNG BỘ)
 // ==========================================================================
 function getFilteredUsers() {
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
@@ -184,8 +184,11 @@ function getFilteredDoanList() {
   var role = (user.role || '').toLowerCase();
   var idTram = user.id_tram || user.idTram;
 
-  if (role.includes('sys') || role === 'admin_sys' || role.includes('dai')) return doanList;
-  else if (role.includes('tram') || role === 'admin_tram') {
+  if (role.includes('sys') || role === 'admin_sys') return doanList;
+  else if (role.includes('dai') || role === 'admin_dai') {
+    var validTramIds = getFilteredTramList().map(t => String(t.id_tram || t.id));
+    return doanList.filter(d => validTramIds.includes(String(d.id_tram || d.tram_id)));
+  } else if (role.includes('tram') || role === 'admin_tram') {
     return doanList.filter(d => String(d.id_tram || d.tram_id) === String(idTram));
   }
   return doanList;
@@ -285,7 +288,7 @@ function renderMasterTramTable() {
   }).join('') || '<tr><td colspan="4" style="text-align:center; padding:15px; color:#64748b;">Không có dữ liệu Trạm</td></tr>';
 }
 
-/** 4. BẢNG TUYẾN CÁP */
+/** 4. BẢNG TUYẾN CÁP (HIỂN THỊ TÊN TUYẾN CHÍNH XÁC) */
 function renderMasterTuyenTable() {
   var tbody = document.getElementById('masterTuyenTableBody');
   if (!tbody) return;
@@ -294,7 +297,7 @@ function renderMasterTuyenTable() {
     <tr>
       <td>${item.id_tuyen_cap || item.id}</td>
       <td>${item.ma_tuyencap || item.ma_tuyen || ''}</td>
-      <td><b>${item.ten_tuyen || item.ten}</b></td>
+      <td><b>${item.ten_tuyen || item.ten || ''}</b></td>
       <td>
         <button class="btn-small btn-success" onclick="moFormThemTuyen(${item.id_tuyen_cap || item.id})">✏️ Sửa</button>
         <button class="btn-small" style="background:#ef4444; color:white;" onclick="deleteAdminRecord('tuyen_cap', '${item.id_tuyen_cap || item.id}')">🗑️ Xóa</button>
@@ -327,7 +330,7 @@ function renderMasterDoanTable() {
 }
 
 // ==========================================================================
-// FORM THÊM / SỬA / XÓA (SỬ DỤNG DANH MỤC GỐC ĐỂ ĐẢM BẢO LUÔN ĐỦ LỰA CHỌN LIÊN KẾT)
+// FORM THÊM / SỬA / XÓA (ĐẢM BẢO TẢI ĐẦY ĐỦ LIÊN KẾT GỐC)
 // ==========================================================================
 
 function chuanBiFormThemThanhVien(accToEdit) {
