@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN CẤP PHÂN QUYỀN & CRUD LIÊN KẾT ĐẦY ĐỦ
+// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN CẤP PHÂN QUYỀN & LIÊN KẾT DỮ LIỆU ĐOẠN - TUYẾN
 // ==========================================================================
 
 async function openModal(modalId, tabId) {
@@ -107,7 +107,7 @@ function getSafeDataList(keyNames) {
 }
 
 // ==========================================================================
-// HỆ THỐNG LỌC PHÂN CẤP THEO VAI TRÒ ĐĂNG NHẬP (ĐÃ CẬP NHẬT LIÊN KẾT TUYẾN)
+// HỆ THỐNG LỌC PHÂN CẤP THEO VAI TRÒ ĐĂNG NHẬP
 // ==========================================================================
 function getFilteredUsers() {
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
@@ -164,14 +164,12 @@ function getFilteredTuyenList() {
   if (role.includes('sys') || role === 'admin_sys') {
     return tuyenList;
   } else if (role.includes('dai') || role === 'admin_dai') {
-    // Lọc tuyến cáp dựa trên các đoạn cáp thuộc các trạm nằm trong Đài của người dùng
     var validTramIds = getFilteredTramList().map(t => String(t.id_tram || t.id));
     var doanList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
     var validTuyenIds = doanList.filter(d => validTramIds.includes(String(d.id_tram || d.tram_id)))
                                 .map(d => String(d.id_tuyen || d.tuyen_id));
     return tuyenList.filter(tu => validTuyenIds.includes(String(tu.id_tuyen_cap || tu.id || tu.tuyen_id)));
   } else if (role.includes('tram') || role === 'admin_tram') {
-    // Lọc tuyến cáp dựa trên các đoạn cáp thuộc Trạm của người dùng
     var doanList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
     var validTuyenIds = doanList.filter(d => String(d.id_tram || d.tram_id) === String(idTram))
                                 .map(d => String(d.id_tuyen || d.tuyen_id));
