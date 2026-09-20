@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ, ĐỔI MẬT KHẨU (DÙNG VIEW v_tai_khoan_full)
+// TỆP ADMIN.JS - QUẢN TRỊ, ĐỔI MẬT KHẨU (DÙNG VIEW v_tai_khoan_full & TOAST)
 // ==========================================================================
 
 async function openModal(modalId, tabId) {
@@ -47,7 +47,7 @@ function closeModals() {
   
   var user = getCurrentUser();
   var panel = document.getElementById('control-panel');
-  if (panel && user && (user.account || user.username) && (user.account || user.username) !== 'guest') {
+  if (panel && user && user.account && user.account !== 'guest') {
     panel.style.display = 'block';
   }
 }
@@ -74,7 +74,7 @@ function switchAdminTab(tabPaneId, btnEl) {
 function getCurrentUser() {
   var state = (typeof AppStore !== 'undefined' && AppStore.getState) ? AppStore.getState() : {};
   return state.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null) || JSON.parse(localStorage.getItem('tnn_user')) || {
-    account: 'guest', username: 'guest', role: 'nhan_vien', id_dai: null, id_tram: null
+    account: 'guest', role: 'nhan_vien', id_dai: null, id_tram: null
   };
 }
 
@@ -101,13 +101,13 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
-/** VIEW HIỂN THỊ BẢNG TÀI KHOẢN (SỬ DỤNG VIEW v_tai_khoan_full) */
+/** VIEW HIỂN THỊ BẢNG TÀI KHOẢN (SỬ DỤNG VIEW v_tai_khoan_full)[cite: 9] */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
   var html = users.map(u => {
-    var accName = u.account || u.username || 'Tài khoản';
+    var accName = u.account || 'Tài khoản';
     var tenDai = u.ten_dai || (u.id_dai ? `Đài ID: ${u.id_dai}` : 'Tất cả');
     var tenTram = u.ten_tram || (u.id_tram ? `Trạm ID: ${u.id_tram}` : 'Tất cả');
 
@@ -184,7 +184,7 @@ function renderMasterDoanTable() {
   `).join('') || '<tr><td colspan="5" style="text-align:center; padding:15px; color:#64748b;">Chưa có dữ liệu Đoạn cáp</td></tr>';
 }
 
-/** LƯU TÀI KHOẢN (DÙNG TRƯỜNG ACCOUNT) */
+/** LƯU TÀI KHOẢN (DÙNG TRƯỜNG ACCOUNT & TOAST)[cite: 9] */
 async function saveAccountAction() {
   var accountInput = document.getElementById('newMemberAccount') || document.getElementById('loginAccount');
   var accVal = accountInput ? accountInput.value.trim() : '';
@@ -194,7 +194,10 @@ async function saveAccountAction() {
   var idDai = document.getElementById('newMemberDai').value || null;
   var idTram = document.getElementById('newMemberTram').value || null;
 
-  if (!accVal) { alert("⚠️ Vui lòng nhập tên tài khoản!"); return; }
+  if (!accVal) { 
+    showToast("⚠️ Vui lòng nhập tên tài khoản!", "error"); 
+    return; 
+  }
 
   var payload = {
     account: accVal,
@@ -209,18 +212,20 @@ async function saveAccountAction() {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       var { error } = await supabaseClient.from('tai_khoan').upsert([payload]);
       if (error) throw error;
-      alert("✅ Đã lưu thông tin tài khoản thành công!");
+      showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
     } else {
-      alert("⚠️ Cần kết nối mạng trực tuyến để lưu tài khoản!");
+      showToast("⚠️ Cần kết nối mạng trực tuyến để lưu tài khoản!", "error");
     }
 
     document.getElementById('addMemberModal').style.display = 'none';
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
     renderAllAdminTables();
-  } catch (err) { alert("❌ Lỗi khi lưu tài khoản: " + err.message); }
+  } catch (err) { 
+    showToast("❌ Lỗi khi lưu tài khoản: " + err.message, "error"); 
+  }
 }
 
-/** ĐỔI MẬT KHẨU (DÙNG TRƯỜNG ACCOUNT) */
+/** ĐỔI MẬT KHẨU (DÙNG TRƯỜNG ACCOUNT & TOAST)[cite: 9] */
 function openChangePasswordModal() {
   var modal = document.getElementById('changePasswordModal');
   if (modal) {
@@ -237,30 +242,33 @@ async function executeChangePassword() {
   var confirmPass = document.getElementById('txtConfirmPass').value.trim();
 
   if (!currentPass || !newPass || !confirmPass) {
-    alert("⚠️ Vui lòng nhập đầy đủ thông tin mật khẩu!");
+    showToast("⚠️ Vui lòng nhập đầy đủ thông tin mật khẩu!", "error");
     return;
   }
   if (newPass !== confirmPass) {
-    alert("❌ Mật khẩu mới và xác nhận mật khẩu không khớp!");
+    showToast("❌ Mật khẩu mới và xác nhận mật khẩu không khớp!", "error");
     return;
   }
 
   var user = getCurrentUser();
-  var accName = user.account || user.username;
-  if (!accName) { alert("⚠️ Không tìm thấy thông tin tài khoản!"); return; }
+  var accName = user.account;
+  if (!accName) { 
+    showToast("⚠️ Không tìm thấy thông tin tài khoản!", "error"); 
+    return; 
+  }
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       var res = await supabaseClient.from('tai_khoan').update({ password: newPass }).eq('account', accName);
       if (res.error) throw res.error;
 
-      alert("✅ Đổi mật khẩu thành công!");
+      showToast("✅ Đổi mật khẩu thành công!", "success");
       document.getElementById('changePasswordModal').style.display = 'none';
     } else {
-      alert("⚠️ Yêu cầu kết nối mạng để đổi mật khẩu!");
+      showToast("⚠️ Yêu cầu kết nối mạng để đổi mật khẩu!", "error");
     }
   } catch (err) {
-    alert("❌ Lỗi đổi mật khẩu: " + err.message);
+    showToast("❌ Lỗi đổi mật khẩu: " + err.message, "error");
   }
 }
 
@@ -284,3 +292,4 @@ function deleteAdminRecord(tableName, idItem) {
     console.log("Xóa tài khoản có account:", idItem);
   }
 }
+```[cite: 9]
