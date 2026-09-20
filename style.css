@@ -443,11 +443,11 @@ html, body {
     box-shadow: 0 -5px 25px rgba(0, 0, 0, 0.3) !important;
     z-index: 4000 !important;
     /* Tăng khoảng đệm đáy để tránh bị che bởi thanh điều hướng / nút bấm điện thoại */
-    padding-bottom: calc(45px + env(safe-area-inset-bottom)) !important;
+    padding-bottom: calc(50px + env(safe-area-inset-bottom)) !important;
   }
 
   #control-panel.collapsed {
-    max-height: 55px !important;
+    max-height: 65px !important;
   }
 
   .panel-header {
