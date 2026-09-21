@@ -439,3 +439,27 @@ html, body {
     touch-action: pan-y !important;
   }
 }
+/* ==========================================================================
+   7. HỘP THOẠI XÁC THỰC TÙY CHỈNH (CUSTOM CONFIRM DIALOG)
+   ========================================================================== */
+#custom-confirm-overlay {
+  display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(15, 23, 42, 0.7); z-index: 9999999; justify-content: center; align-items: center;
+  backdrop-filter: blur(3px);
+}
+.confirm-box {
+  background: #ffffff; width: 90%; max-width: 320px; padding: 20px; border-radius: 12px;
+  text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 1px solid #e2e8f0;
+}
+.confirm-msg { 
+  font-size: 14px; color: #1e293b; margin-bottom: 20px; line-height: 1.5; font-weight: 600; 
+}
+.confirm-actions { display: flex; gap: 10px; justify-content: center; }
+.btn-confirm-yes { 
+  background: #dc3545; color: white; border: none; padding: 10px 20px; 
+  border-radius: 6px; font-weight: bold; cursor: pointer; flex: 1; 
+}
+.btn-confirm-no { 
+  background: #64748b; color: white; border: none; padding: 10px 20px; 
+  border-radius: 6px; font-weight: bold; cursor: pointer; flex: 1; 
+}
