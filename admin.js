@@ -1,6 +1,15 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN QUYỀN, XÁC NHẬN TOAST & GHI DỮ LIỆU
+// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN QUYỀN, XÁC NHẬN TOAST & KẾT NỐI LINH HOẠT
 // ==========================================================================
+
+// Hàm hỗ trợ nhận diện kết nối Supabase linh hoạt qua nhiều tên biến khác nhau
+function getSupabaseClient() {
+  if (typeof supabaseClient !== 'undefined' && supabaseClient) return supabaseClient;
+  if (typeof window.supabaseClient !== 'undefined' && window.supabaseClient) return window.supabaseClient;
+  if (typeof supabase !== 'undefined' && supabase) return supabase;
+  if (typeof window.supabase !== 'undefined' && window.supabase) return window.supabase;
+  return null;
+}
 
 function openModal(modalId, tabId) {
   closeModals();
@@ -401,11 +410,12 @@ async function saveAccountAction() {
   if (password) payload.password = password;
 
   try {
-    if (typeof supabaseClient === 'undefined') {
-      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
+    var client = getSupabaseClient();
+    if (!client) {
+      throw new Error("Không tìm thấy đối tượng kết nối Supabase trong hệ thống!");
     }
 
-    var { error } = await supabaseClient.from('tai_khoan').upsert([payload]);
+    var { error } = await client.from('tai_khoan').upsert([payload]);
     if (error) throw error;
     
     if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
@@ -551,11 +561,12 @@ async function saveAuxRecord() {
   }
 
   try {
-    if (typeof supabaseClient === 'undefined') {
-      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
+    var client = getSupabaseClient();
+    if (!client) {
+      throw new Error("Không tìm thấy đối tượng kết nối Supabase trong hệ thống!");
     }
 
-    var { error } = await supabaseClient.from(tableType).upsert([payload]);
+    var { error } = await client.from(tableType).upsert([payload]);
     if (error) throw error;
     
     if (typeof showToast === 'function') showToast("✅ Lưu dữ liệu danh mục thành công!", "success");
@@ -580,11 +591,12 @@ async function deleteAdminRecord(tableName, idItem) {
   else if (tableName === 'doan_cap') pkCol = 'id_doan_cap';
 
   try {
-    if (typeof supabaseClient === 'undefined') {
-      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
+    var client = getSupabaseClient();
+    if (!client) {
+      throw new Error("Không tìm thấy đối tượng kết nối Supabase trong hệ thống!");
     }
 
-    var query = supabaseClient.from(tableName).delete();
+    var query = client.from(tableName).delete();
     if (tableName === 'tai_khoan') {
       query = query.eq(pkCol, idItem);
     } else {
@@ -635,11 +647,12 @@ async function executeChangePassword() {
   }
 
   try {
-    if (typeof supabaseClient === 'undefined') {
-      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
+    var client = getSupabaseClient();
+    if (!client) {
+      throw new Error("Không tìm thấy đối tượng kết nối Supabase trong hệ thống!");
     }
 
-    var res = await supabaseClient.from('tai_khoan').update({ password: newPass }).eq('account', accName);
+    var res = await client.from('tai_khoan').update({ password: newPass }).eq('account', accName);
     if (res.error) throw res.error;
 
     if (typeof showToast === 'function') showToast("✅ Đổi mật khẩu thành công!", "success");
