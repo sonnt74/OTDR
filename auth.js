@@ -75,22 +75,14 @@ async function handleCustomLogin() {
   var passVal = passInput ? passInput.value.trim() : '';
 
   if (!accountVal || !passVal) {
-    if (typeof showToast === 'function') {
-      showToast("⚠️ Vui lòng nhập đầy đủ tài khoản và mật khẩu!", "error");
-    } else {
-      alert("⚠️ Vui lòng nhập đầy đủ tài khoản và mật khẩu!");
-    }
+    showToast("⚠️ Vui lòng nhập đầy đủ tài khoản và mật khẩu!", "error");
     return;
   }
 
   try {
+    showLoading("Đang xác thực...");
     if (typeof supabaseClient === 'undefined') {
-      if (typeof showToast === 'function') {
-        showToast("❌ Chưa kết nối được với cơ sở dữ liệu Supabase!", "error");
-      } else {
-        alert("❌ Chưa kết nối được với cơ sở dữ liệu Supabase!");
-      }
-      return;
+      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
     }
 
     var { data, error } = await supabaseClient
@@ -102,20 +94,14 @@ async function handleCustomLogin() {
     if (error) throw error;
 
     if (!data) {
-      if (typeof showToast === 'function') {
-        showToast("❌ Tài khoản không tồn tại trong hệ thống!", "error");
-      } else {
-        alert("❌ Tài khoản không tồn tại trong hệ thống!");
-      }
+      hideLoading();
+      showToast("❌ Tài khoản không tồn tại trong hệ thống!", "error");
       return;
     }
 
     if (String(data.password || '') !== String(passVal)) {
-      if (typeof showToast === 'function') {
-        showToast("❌ Mật khẩu không chính xác!", "error");
-      } else {
-        alert("❌ Mật khẩu không chính xác!");
-      }
+      hideLoading();
+      showToast("❌ Mật khẩu không chính xác!", "error");
       return;
     }
 
@@ -158,21 +144,16 @@ async function handleCustomLogin() {
       }
     }
 
-    if (typeof khoiTaoBanDoLeaflet === 'function') {
-      khoiTaoBanDoLeaflet();
-    }
+    hideLoading();
+    showToast("✅ Đăng nhập thành công!", "success");
 
-    if (typeof taiDuLieuSupabase === 'function') {
-      taiDuLieuSupabase(true);
-    }
+    if (typeof khoiTaoBanDoLeaflet === 'function') khoiTaoBanDoLeaflet();
+    if (typeof taiDuLieuSupabase === 'function') taiDuLieuSupabase(true);
 
   } catch (err) {
+    hideLoading();
     console.error("Lỗi đăng nhập:", err);
-    if (typeof showToast === 'function') {
-      showToast("❌ Lỗi xác thực đăng nhập: " + err.message, "error");
-    } else {
-      alert("❌ Lỗi xác thực đăng nhập: " + err.message);
-    }
+    showToast("❌ Lỗi xác thực đăng nhập: " + err.message, "error");
   }
 }
 
@@ -181,9 +162,7 @@ function handleLoginExit() {
   var passInput = document.getElementById('loginPass');
   if (accountInput) accountInput.value = '';
   if (passInput) passInput.value = '';
-  if (typeof showToast === 'function') {
-    showToast("Đã làm sạch thông tin đăng nhập.", "info");
-  }
+  showToast("Đã làm sạch thông tin đăng nhập.", "info");
 }
 
 function togglePasswordVisibility() {
