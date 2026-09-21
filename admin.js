@@ -380,7 +380,6 @@ async function saveAccountAction() {
 
   if (!accVal) { 
     if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên tài khoản!", "error");
-    else alert("⚠️ Vui lòng nhập tên tài khoản!");
     return; 
   }
 
@@ -396,20 +395,30 @@ async function saveAccountAction() {
   if (password) payload.password = password;
 
   try {
-    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      var { error } = await supabaseClient.from('tai_khoan').upsert([payload]);
-      if (error) throw error;
-      if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
-    } else {
-      throw new Error("Mất kết nối mạng trực tuyến với cơ sở dữ liệu!");
+    showLoading("Đang lưu tài khoản...");
+    // Bỏ điều kiện navigator.onLine, để Supabase tự catch lỗi mạng
+    var { data, error } = await supabaseClient.from('tai_khoan').upsert([payload]).select();
+    if (error) throw error;
+    
+    // TỐI ƯU: Cập nhật trực tiếp vào State/Biến toàn cục thay vì gọi lại taiDuLieuSupabase(true)
+    if (data && data.length > 0) {
+        var existingIndex = rawUserList.findIndex(u => u.account === accVal);
+        if (existingIndex >= 0) rawUserList[existingIndex] = data[0];
+        else rawUserList.push(data[0]);
+        
+        AppStore.setState({ rawUserList: rawUserList });
+        if (typeof idbLuuMaster === 'function') idbLuuMaster({ rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList, rawUserList });
     }
 
+    if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
     document.getElementById('addMemberModal').style.display = 'none';
-    if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
+    
+    // Render lại giao diện quản trị tức thì
     renderAllAdminTables();
+    hideLoading();
   } catch (err) { 
+    hideLoading();
     if (typeof showToast === 'function') showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
-    else alert("❌ Lỗi không ghi được tài khoản: " + err.message);
   }
 }
 
@@ -502,63 +511,74 @@ async function saveAuxRecord() {
   var payload = {};
   var pkCol = '';
 
+  // Logic validate giữ nguyên như cũ của bạn
   if (tableType === 'dai_vt') {
     pkCol = 'id_dai';
     payload.ten_dai = document.getElementById('auxTenDai').value.trim();
-    if (!payload.ten_dai) { 
-      if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên Đài!", "error");
-      else alert("⚠️ Vui lòng nhập tên Đài!");
-      return; 
-    }
+    if (!payload.ten_dai) { showToast("⚠️ Vui lòng nhập tên Đài!", "error"); return; }
   } else if (tableType === 'tram_vt') {
     pkCol = 'id_tram';
     payload.ten_tram = document.getElementById('auxTenTram').value.trim();
     payload.id_dai = document.getElementById('auxIdDai').value ? Number(document.getElementById('auxIdDai').value) : null;
-    if (!payload.ten_tram) { 
-      if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên Trạm!", "error");
-      else alert("⚠️ Vui lòng nhập tên Trạm!");
-      return; 
-    }
+    if (!payload.ten_tram) { showToast("⚠️ Vui lòng nhập tên Trạm!", "error"); return; }
   } else if (tableType === 'tuyen_cap') {
     pkCol = 'id_tuyen_cap';
     payload.ma_tuyencap = document.getElementById('auxMaTuyen').value.trim();
     payload.ten_tuyen = document.getElementById('auxTenTuyen').value.trim();
-    if (!payload.ten_tuyen) { 
-      if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên Tuyến cáp!", "error");
-      else alert("⚠️ Vui lòng nhập tên Tuyến cáp!");
-      return; 
-    }
+    if (!payload.ten_tuyen) { showToast("⚠️ Vui lòng nhập tên Tuyến cáp!", "error"); return; }
   } else if (tableType === 'doan_cap') {
     pkCol = 'id_doan_cap';
     payload.ma_doancap = document.getElementById('auxMaDoan').value.trim();
     payload.id_tuyen = document.getElementById('auxIdTuyen').value ? Number(document.getElementById('auxIdTuyen').value) : null;
     payload.id_tram = document.getElementById('auxIdTram').value ? Number(document.getElementById('auxIdTram').value) : null;
-    if (!payload.ma_doancap) { 
-      if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập mã đoạn cáp!", "error");
-      else alert("⚠️ Vui lòng nhập mã đoạn cáp!");
-      return; 
-    }
+    if (!payload.ma_doancap) { showToast("⚠️ Vui lòng nhập mã đoạn cáp!", "error"); return; }
   }
 
-  if (recordId && recordId !== '') {
-    payload[pkCol] = Number(recordId);
-  }
+  if (recordId && recordId !== '') { payload[pkCol] = Number(recordId); }
 
   try {
-    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      var { error } = await supabaseClient.from(tableType).upsert([payload]);
-      if (error) throw error;
-      if (typeof showToast === 'function') showToast("✅ Lưu dữ liệu danh mục thành công!", "success");
-    } else {
-      throw new Error("Không có kết nối mạng trực tuyến với cơ sở dữ liệu!");
+    showLoading("Đang đồng bộ dữ liệu...");
+    var { data, error } = await supabaseClient.from(tableType).upsert([payload]).select();
+    if (error) throw error;
+    
+    // TỐI ƯU: Đưa dữ liệu mới trả về từ DB thẳng vào mảng tương ứng
+    if (data && data.length > 0) {
+        let savedItem = data[0];
+        let idVal = savedItem[pkCol] || savedItem.id;
+        
+        if (tableType === 'dai_vt') {
+            let idx = rawDaiList.findIndex(x => (x.id_dai || x.id) == idVal);
+            if (idx >= 0) rawDaiList[idx] = savedItem; else rawDaiList.push(savedItem);
+            AppStore.setState({ daiList: rawDaiList, rawDaiList: rawDaiList });
+        } else if (tableType === 'tram_vt') {
+            let idx = rawTramList.findIndex(x => (x.id_tram || x.id) == idVal);
+            if (idx >= 0) rawTramList[idx] = savedItem; else rawTramList.push(savedItem);
+            AppStore.setState({ tramList: rawTramList, rawTramList: rawTramList });
+        } else if (tableType === 'tuyen_cap') {
+            let idx = rawTuyenList.findIndex(x => (x.id_tuyen_cap || x.id) == idVal);
+            if (idx >= 0) rawTuyenList[idx] = savedItem; else rawTuyenList.push(savedItem);
+            AppStore.setState({ tuyenList: rawTuyenList, rawTuyenList: rawTuyenList });
+        } else if (tableType === 'doan_cap') {
+            let idx = rawDoanCapList.findIndex(x => (x.id_doan_cap || x.id) == idVal);
+            if (idx >= 0) rawDoanCapList[idx] = savedItem; else rawDoanCapList.push(savedItem);
+            AppStore.setState({ doanCapList: rawDoanCapList, rawDoanList: rawDoanCapList });
+        }
+        
+        // Cập nhật IndexedDB ngoại tuyến
+        if (typeof idbLuuMaster === 'function') {
+            idbLuuMaster({ rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList, rawUserList });
+        }
     }
 
+    if (typeof showToast === 'function') showToast("✅ Lưu dữ liệu danh mục thành công!", "success");
     document.getElementById('genericAuxModal').style.display = 'none';
-    if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
+    
     renderAllAdminTables();
+    if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser(); // Cập nhật lại các combobox
+    hideLoading();
   } catch (err) {
+    hideLoading();
     if (typeof showToast === 'function') showToast("❌ Không thể ghi dữ liệu: " + err.message, "error");
-    else alert("❌ Không thể ghi dữ liệu: " + err.message);
   }
 }
 
@@ -573,25 +593,46 @@ async function deleteAdminRecord(tableName, idItem) {
   else if (tableName === 'doan_cap') pkCol = 'id_doan_cap';
 
   try {
-    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      var query = supabaseClient.from(tableName).delete();
-      if (tableName === 'tai_khoan') {
-        query = query.eq(pkCol, idItem);
-      } else {
-        query = query.eq(pkCol, Number(idItem));
-      }
-      var { error } = await query;
-      if (error) throw error;
-      if (typeof showToast === 'function') showToast("🗑️ Đã xóa bản ghi thành công!", "success");
+    showLoading("Đang xóa bản ghi...");
+    var query = supabaseClient.from(tableName).delete();
+    if (tableName === 'tai_khoan') {
+      query = query.eq(pkCol, idItem);
     } else {
-      throw new Error("Mất kết nối mạng trực tuyến!");
+      query = query.eq(pkCol, Number(idItem));
+    }
+    
+    var { error } = await query;
+    if (error) throw error;
+    
+    // TỐI ƯU: Xóa trực tiếp phần tử khỏi mảng cục bộ
+    if (tableName === 'tai_khoan') {
+        rawUserList = rawUserList.filter(x => x.account !== idItem);
+        AppStore.setState({ rawUserList: rawUserList });
+    } else if (tableName === 'dai_vt') {
+        rawDaiList = rawDaiList.filter(x => (x.id_dai || x.id) != idItem);
+        AppStore.setState({ daiList: rawDaiList, rawDaiList: rawDaiList });
+    } else if (tableName === 'tram_vt') {
+        rawTramList = rawTramList.filter(x => (x.id_tram || x.id) != idItem);
+        AppStore.setState({ tramList: rawTramList, rawTramList: rawTramList });
+    } else if (tableName === 'tuyen_cap') {
+        rawTuyenList = rawTuyenList.filter(x => (x.id_tuyen_cap || x.id) != idItem);
+        AppStore.setState({ tuyenList: rawTuyenList, rawTuyenList: rawTuyenList });
+    } else if (tableName === 'doan_cap') {
+        rawDoanCapList = rawDoanCapList.filter(x => (x.id_doan_cap || x.id) != idItem);
+        AppStore.setState({ doanCapList: rawDoanCapList, rawDoanList: rawDoanCapList });
+    }
+    
+    if (typeof idbLuuMaster === 'function') {
+        idbLuuMaster({ rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList, rawUserList });
     }
 
-    if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
+    if (typeof showToast === 'function') showToast("🗑️ Đã xóa bản ghi thành công!", "success");
     renderAllAdminTables();
+    if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser(); // Cập nhật lại các combobox
+    hideLoading();
   } catch (err) {
+    hideLoading();
     if (typeof showToast === 'function') showToast("❌ Không thể xóa bản ghi: " + err.message, "error");
-    else alert("❌ Không thể xóa bản ghi: " + err.message);
   }
 }
 
