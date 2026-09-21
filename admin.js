@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN QUYỀN, XÁC NHẬN TOAST & GHI DỮ LIỆU
+// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN QUYỀN CHẶT CHẼ & XÁC NHẬN CRUD
 // ==========================================================================
 
 function openModal(modalId, tabId) {
@@ -30,12 +30,6 @@ function closeModals() {
   var panel = document.getElementById('control-panel');
   if (panel && user && user.account && user.account !== 'guest') {
     panel.style.display = 'block';
-  }
-
-  if (typeof map !== 'undefined' && map && typeof map.invalidateSize === 'function') {
-    setTimeout(function() {
-      map.invalidateSize();
-    }, 100);
   }
 }
 
@@ -113,6 +107,7 @@ function getFilteredDaiList() {
   else if (role.includes('dai') || role === 'admin_dai') {
     return daiList.filter(d => String(d.id_dai || d.id) === String(idDai));
   } else if (role.includes('tram') || role === 'admin_tram') {
+    // Admin Trạm chỉ thấy đúng Đài quản lý trạm của mình (không có quyền sửa/thêm Đài)
     var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
     var myTram = tramList.find(t => String(t.id_tram || t.id) === String(idTram));
     var parentDaiId = myTram ? (myTram.id_dai || myTram.dai_id) : null;
@@ -210,7 +205,7 @@ function renderMasterAccountTable() {
   tbody.innerHTML = html || '<tr><td colspan="6" style="text-align:center; padding:15px; color:#64748b;">Không có dữ liệu tài khoản</td></tr>';
 }
 
-/** 2. BẢNG ĐÀI VIỄN THÔNG */
+/** 2. BẢNG ĐÀI VIỄN THÔNG (PHÂN QUYỀN CHẶT CHẼ) */
 function renderMasterDaiTable() {
   var tbody = document.getElementById('masterDaiTableBody');
   if (!tbody) return;
@@ -229,6 +224,7 @@ function renderMasterDaiTable() {
     </tr>
   `).join('') || '<tr><td colspan="3" style="text-align:center; padding:15px; color:#64748b;">Không có dữ liệu Đài</td></tr>';
   
+  // Ẩn nút thêm Đài nếu không đủ quyền
   var addDaiBtn = document.querySelector('#tab-dai button.btn-success');
   if (addDaiBtn) addDaiBtn.style.display = canEdit ? 'inline-block' : 'none';
 }
@@ -281,7 +277,7 @@ function renderMasterTuyenTable() {
   }).join('') || '<tr><td colspan="4" style="text-align:center; padding:15px; color:#64748b;">Không có dữ liệu Tuyến cáp</td></tr>';
 }
 
-/** 5. BẢNG ĐOẠN TUYẾN CÁP */
+/** 5. BẢNG ĐOẠN TUYẾN CÁP (HIỂN THỊ TÊN TUYẾN CHÍNH XÁC) */
 function renderMasterDoanTable() {
   var tbody = document.getElementById('masterDoanTableBody');
   if (!tbody) return;
@@ -309,7 +305,7 @@ function renderMasterDoanTable() {
 }
 
 // ==========================================================================
-// FORM THÊM / SỬA / XÓA (NẠP ĐẦY ĐỦ VAI TRÒ & XÁC NHẬN QUA TOAST)
+// FORM THÊM / SỬA / XÓA (CÓ YÊU CẦU XÁC NHẬN TRƯỚC KHI THỰC HIỆN)
 // ==========================================================================
 
 function chuanBiFormThemThanhVien(accToEdit) {
@@ -319,15 +315,6 @@ function chuanBiFormThemThanhVien(accToEdit) {
   var canEditCheck = document.getElementById('newMemberCanEdit');
   var daiSelect = document.getElementById('newMemberDai');
   var tramSelect = document.getElementById('newMemberTram');
-
-  if (roleSelect) {
-    roleSelect.innerHTML = `
-      <option value="nhan_vien">Nhân viên</option>
-      <option value="admin_tram">Admin Trạm</option>
-      <option value="admin_dai">Admin Đài</option>
-      <option value="admin_sys">Admin Hệ thống</option>
-    `;
-  }
 
   var daiList = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
   if (daiSelect) {
@@ -384,12 +371,11 @@ async function saveAccountAction() {
   var idTram = document.getElementById('newMemberTram').value || null;
 
   if (!accVal) { 
-    if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên tài khoản!", "error");
-    else alert("⚠️ Vui lòng nhập tên tài khoản!");
+    showToast("⚠️ Vui lòng nhập tên tài khoản!", "error"); 
     return; 
   }
 
-  if (!confirm(`Bạn có chắc chắn muốn lưu thông tin tài khoản "${accVal}" không?`)) return;
+  if (!confirm(`Bạn có chắc chắn muốn lưu thông tin cho tài khoản "${accVal}" này không?`)) return;
 
   var payload = {
     account: accVal,
@@ -401,21 +387,19 @@ async function saveAccountAction() {
   if (password) payload.password = password;
 
   try {
-    if (typeof supabaseClient === 'undefined') {
-      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
+    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
+      var { error } = await supabaseClient.from('tai_khoan').upsert([payload]);
+      if (error) throw error;
+      showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
+    } else {
+      showToast("⚠️ Cần kết nối mạng trực tuyến để lưu tài khoản!", "error");
     }
-
-    var { error } = await supabaseClient.from('tai_khoan').upsert([payload]);
-    if (error) throw error;
-    
-    if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
 
     document.getElementById('addMemberModal').style.display = 'none';
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
     renderAllAdminTables();
   } catch (err) { 
-    if (typeof showToast === 'function') showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
-    else alert("❌ Lỗi không ghi được tài khoản: " + err.message);
+    showToast("❌ Lỗi khi lưu tài khoản: " + err.message, "error"); 
   }
 }
 
@@ -423,8 +407,7 @@ function moFormThemDai(id) {
   var user = getCurrentUser();
   var role = (user.role || '').toLowerCase();
   if (role.includes('tram') || role === 'admin_tram') {
-    if (typeof showToast === 'function') showToast("❌ Admin Trạm không có quyền thêm hoặc sửa Đài Viễn Thông!", "error");
-    else alert("❌ Admin Trạm không có quyền thêm hoặc sửa Đài Viễn Thông!");
+    showToast("❌ Admin Trạm không có quyền thêm hoặc sửa Đài Viễn Thông!", "error");
     return;
   }
 
@@ -501,7 +484,7 @@ function moFormThemDoan(id) {
 }
 
 async function saveAuxRecord() {
-  if (!confirm("Bạn có chắc chắn muốn lưu thông tin danh mục này không?")) return;
+  if (!confirm("Bạn có chắc chắn muốn lưu thông tin thay đổi này không?")) return;
 
   var tableType = document.getElementById('auxTableType').value;
   var recordId = document.getElementById('auxRecordId').value;
@@ -511,39 +494,23 @@ async function saveAuxRecord() {
   if (tableType === 'dai_vt') {
     pkCol = 'id_dai';
     payload.ten_dai = document.getElementById('auxTenDai').value.trim();
-    if (!payload.ten_dai) { 
-      if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên Đài!", "error");
-      else alert("⚠️ Vui lòng nhập tên Đài!");
-      return; 
-    }
+    if (!payload.ten_dai) { showToast("⚠️ Vui lòng nhập tên Đài!", "error"); return; }
   } else if (tableType === 'tram_vt') {
     pkCol = 'id_tram';
     payload.ten_tram = document.getElementById('auxTenTram').value.trim();
     payload.id_dai = document.getElementById('auxIdDai').value ? Number(document.getElementById('auxIdDai').value) : null;
-    if (!payload.ten_tram) { 
-      if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên Trạm!", "error");
-      else alert("⚠️ Vui lòng nhập tên Trạm!");
-      return; 
-    }
+    if (!payload.ten_tram) { showToast("⚠️ Vui lòng nhập tên Trạm!", "error"); return; }
   } else if (tableType === 'tuyen_cap') {
     pkCol = 'id_tuyen_cap';
     payload.ma_tuyencap = document.getElementById('auxMaTuyen').value.trim();
     payload.ten_tuyen = document.getElementById('auxTenTuyen').value.trim();
-    if (!payload.ten_tuyen) { 
-      if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên Tuyến cáp!", "error");
-      else alert("⚠️ Vui lòng nhập tên Tuyến cáp!");
-      return; 
-    }
+    if (!payload.ten_tuyen) { showToast("⚠️ Vui lòng nhập tên Tuyến cáp!", "error"); return; }
   } else if (tableType === 'doan_cap') {
     pkCol = 'id_doan_cap';
     payload.ma_doancap = document.getElementById('auxMaDoan').value.trim();
     payload.id_tuyen = document.getElementById('auxIdTuyen').value ? Number(document.getElementById('auxIdTuyen').value) : null;
     payload.id_tram = document.getElementById('auxIdTram').value ? Number(document.getElementById('auxIdTram').value) : null;
-    if (!payload.ma_doancap) { 
-      if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập mã đoạn cáp!", "error");
-      else alert("⚠️ Vui lòng nhập mã đoạn cáp!");
-      return; 
-    }
+    if (!payload.ma_doancap) { showToast("⚠️ Vui lòng nhập mã đoạn cáp!", "error"); return; }
   }
 
   if (recordId && recordId !== '') {
@@ -551,26 +518,24 @@ async function saveAuxRecord() {
   }
 
   try {
-    if (typeof supabaseClient === 'undefined') {
-      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
+    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
+      var { error } = await supabaseClient.from(tableType).upsert([payload]);
+      if (error) throw error;
+      showToast("✅ Lưu dữ liệu danh mục thành công!", "success");
+    } else {
+      showToast("⚠️ Cần kết nối mạng để lưu dữ liệu!", "error");
     }
-
-    var { error } = await supabaseClient.from(tableType).upsert([payload]);
-    if (error) throw error;
-    
-    if (typeof showToast === 'function') showToast("✅ Lưu dữ liệu danh mục thành công!", "success");
 
     document.getElementById('genericAuxModal').style.display = 'none';
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
     renderAllAdminTables();
   } catch (err) {
-    if (typeof showToast === 'function') showToast("❌ Không thể ghi dữ liệu: " + err.message, "error");
-    else alert("❌ Không thể ghi dữ liệu: " + err.message);
+    showToast("❌ Lỗi khi lưu dữ liệu: " + err.message, "error");
   }
 }
 
 async function deleteAdminRecord(tableName, idItem) {
-  if (!confirm(`⚠️ CẢNH BÁO: Bạn có chắc chắn muốn xóa bản ghi này khỏi cơ sở dữ liệu không?`)) return;
+  if (!confirm(`⚠️ CẢNH BÁO: Bạn có chắc chắn muốn xóa bản ghi này khỏi hệ thống không?`)) return;
 
   var pkCol = '';
   if (tableName === 'tai_khoan') pkCol = 'account';
@@ -580,26 +545,24 @@ async function deleteAdminRecord(tableName, idItem) {
   else if (tableName === 'doan_cap') pkCol = 'id_doan_cap';
 
   try {
-    if (typeof supabaseClient === 'undefined') {
-      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
-    }
-
-    var query = supabaseClient.from(tableName).delete();
-    if (tableName === 'tai_khoan') {
-      query = query.eq(pkCol, idItem);
+    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
+      var query = supabaseClient.from(tableName).delete();
+      if (tableName === 'tai_khoan') {
+        query = query.eq(pkCol, idItem);
+      } else {
+        query = query.eq(pkCol, Number(idItem));
+      }
+      var { error } = await query;
+      if (error) throw error;
+      showToast("🗑️ Đã xóa bản ghi thành công!", "success");
     } else {
-      query = query.eq(pkCol, Number(idItem));
+      showToast("⚠️ Cần kết nối mạng để xóa dữ liệu!", "error");
     }
-    var { error } = await query;
-    if (error) throw error;
-    
-    if (typeof showToast === 'function') showToast("🗑️ Đã xóa bản ghi thành công!", "success");
 
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
     renderAllAdminTables();
   } catch (err) {
-    if (typeof showToast === 'function') showToast("❌ Không thể xóa bản ghi: " + err.message, "error");
-    else alert("❌ Không thể xóa bản ghi: " + err.message);
+    showToast("❌ Lỗi khi xóa bản ghi: " + err.message, "error");
   }
 }
 
@@ -619,32 +582,32 @@ async function executeChangePassword() {
   var confirmPass = document.getElementById('txtConfirmPass').value.trim();
 
   if (!currentPass || !newPass || !confirmPass) {
-    if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập đầy đủ thông tin mật khẩu!", "error");
+    showToast("⚠️ Vui lòng nhập đầy đủ thông tin mật khẩu!", "error");
     return;
   }
   if (newPass !== confirmPass) {
-    if (typeof showToast === 'function') showToast("❌ Mật khẩu mới và xác nhận mật khẩu không khớp!", "error");
+    showToast("❌ Mật khẩu mới và xác nhận mật khẩu không khớp!", "error");
     return;
   }
 
   var user = getCurrentUser();
   var accName = user.account;
   if (!accName) { 
-    if (typeof showToast === 'function') showToast("⚠️ Không tìm thấy thông tin tài khoản!", "error");
+    showToast("⚠️ Không tìm thấy thông tin tài khoản!", "error"); 
     return; 
   }
 
   try {
-    if (typeof supabaseClient === 'undefined') {
-      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
+    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
+      var res = await supabaseClient.from('tai_khoan').update({ password: newPass }).eq('account', accName);
+      if (res.error) throw res.error;
+
+      showToast("✅ Đổi mật khẩu thành công!", "success");
+      document.getElementById('changePasswordModal').style.display = 'none';
+    } else {
+      showToast("⚠️ Yêu cầu kết nối mạng để đổi mật khẩu!", "error");
     }
-
-    var res = await supabaseClient.from('tai_khoan').update({ password: newPass }).eq('account', accName);
-    if (res.error) throw res.error;
-
-    if (typeof showToast === 'function') showToast("✅ Đổi mật khẩu thành công!", "success");
-    document.getElementById('changePasswordModal').style.display = 'none';
   } catch (err) {
-    if (typeof showToast === 'function') showToast("❌ Lỗi đổi mật khẩu: " + err.message, "error");
+    showToast("❌ Lỗi đổi mật khẩu: " + err.message, "error");
   }
 }
