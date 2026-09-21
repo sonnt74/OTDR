@@ -284,37 +284,61 @@ function chuanBiFormThemThanhVien(accToEdit) {
   var daiSelect = document.getElementById('newMemberDai');
   var tramSelect = document.getElementById('newMemberTram');
 
+  var access = getRoleAccess();
+
+  // 1. Lọc động danh sách quyền: Admin Đài không được tạo Admin Hệ thống
   if (roleSelect) {
-    roleSelect.innerHTML = `
-      <option value="nhan_vien">Nhân viên</option>
-      <option value="admin_tram">Admin Trạm</option>
-      <option value="admin_dai">Admin Đài</option>
-      <option value="admin_sys">Admin Hệ thống</option>
-    `;
+    let roleHtml = `<option value="nhan_vien">Nhân viên</option>`;
+    if (access.isSys) {
+      roleHtml += `
+        <option value="admin_tram">Admin Trạm</option>
+        <option value="admin_dai">Admin Đài</option>
+        <option value="admin_sys">Admin Hệ thống</option>
+      `;
+    } else if (access.isDai) {
+      roleHtml += `<option value="admin_tram">Admin Trạm</option>`;
+    }
+    roleSelect.innerHTML = roleHtml;
   }
 
+  // 2. Load danh sách Đài và tự động Khóa nếu là Admin Đài
   var daiList = getFilteredDaiList();
   if (daiSelect) {
     daiSelect.innerHTML = '<option value="">-- Chọn Đài --</option>';
-    daiList.forEach(d => { daiSelect.innerHTML += `<option value="${d.id_dai || d.id}">${d.ten_dai || d.ten}</option>`; });
+    daiList.forEach(d => { 
+      daiSelect.innerHTML += `<option value="${d.id_dai || d.id}">${d.ten_dai || d.ten}</option>`; 
+    });
+    
+    if (access.isDai && !access.isSys) {
+      daiSelect.value = access.idDai;
+      daiSelect.disabled = true; // Khóa cứng không cho đổi sang Đài khác
+    } else {
+      daiSelect.disabled = false;
+    }
   }
 
+  // 3. Load danh sách Trạm
   var tramList = getFilteredTramList();
   if (tramSelect) {
     tramSelect.innerHTML = '<option value="">-- Chọn Trạm --</option>';
-    tramList.forEach(t => { tramSelect.innerHTML += `<option value="${t.id_tram || t.id}">${t.ten_tram || t.ten}</option>`; });
+    tramList.forEach(t => { 
+      tramSelect.innerHTML += `<option value="${t.id_tram || t.id}">${t.ten_tram || t.ten}</option>`; 
+    });
   }
 
+  // 4. Xử lý logic Nạp dữ liệu Sửa hoặc Làm mới form Thêm
   if (accToEdit && accountInput) {
-    accountInput.value = accToEdit; accountInput.disabled = true;
+    accountInput.value = accToEdit; 
+    accountInput.disabled = true; // Không cho phép sửa tên tài khoản
     if (passInput) passInput.value = '';
 
     var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
     var uObj = users.find(u => u.account === accToEdit);
+    
     if (uObj) {
       if (roleSelect) roleSelect.value = uObj.role || 'nhan_vien';
       if (canEditCheck) canEditCheck.checked = !!uObj.can_edit_map;
-      if (daiSelect) daiSelect.value = uObj.id_dai || '';
+      if (daiSelect) daiSelect.value = uObj.id_dai || (access.isDai ? access.idDai : '');
       if (tramSelect) tramSelect.value = uObj.id_tram || '';
     }
   } else {
@@ -322,7 +346,7 @@ function chuanBiFormThemThanhVien(accToEdit) {
     if (passInput) passInput.value = '';
     if (roleSelect) roleSelect.value = 'nhan_vien';
     if (canEditCheck) canEditCheck.checked = false;
-    if (daiSelect) daiSelect.value = '';
+    if (daiSelect) daiSelect.value = access.isDai ? access.idDai : '';
     if (tramSelect) tramSelect.value = '';
   }
 
@@ -420,20 +444,30 @@ async function saveAccountAction() {
   var accountInput = document.getElementById('newMemberAccount');
   var accVal = accountInput ? accountInput.value.trim() : '';
   var password = document.getElementById('newMemberPass').value.trim();
+  var access = getRoleAccess();
   
   if (!accVal) { showToast("⚠️ Vui lòng nhập tên tài khoản!", "error"); return; }
 
-  // XÁC THỰC 2 LỚP TRƯỚC KHI GHI
   let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu thông tin tài khoản <b>${accVal}</b> không?`, 'success');
   if (!isConfirmed) return;
 
+  var selectedRole = document.getElementById('newMemberRole').value;
+  var selectedDai = document.getElementById('newMemberDai').value;
+  
+  // BẢO MẬT CUỐI: Ngăn chặn hack DOM đổi quyền trên giao diện
+  if (!access.isSys && (selectedRole === 'admin_sys' || selectedRole === 'admin_dai')) {
+    showToast("❌ Lỗi bảo mật: Bạn không có quyền cấp vai trò này!", "error");
+    return;
+  }
+
   var payload = {
     account: accVal,
-    role: document.getElementById('newMemberRole').value,
+    role: selectedRole,
     can_edit_map: document.getElementById('newMemberCanEdit').checked,
-    id_dai: document.getElementById('newMemberDai').value ? Number(document.getElementById('newMemberDai').value) : null,
+    id_dai: (access.isDai && !access.isSys) ? Number(access.idDai) : (selectedDai ? Number(selectedDai) : null),
     id_tram: document.getElementById('newMemberTram').value ? Number(document.getElementById('newMemberTram').value) : null
   };
+  
   if (password) payload.password = password;
 
   try {
