@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN QUYỀN, XÁC NHẬN TOAST & KHÔI PHỤC BẢN ĐỒ
+// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN QUYỀN, XÁC NHẬN TOAST & GHI DỮ LIỆU
 // ==========================================================================
 
 function openModal(modalId, tabId) {
@@ -32,7 +32,6 @@ function closeModals() {
     panel.style.display = 'block';
   }
 
-  // Khôi phục và làm mới khung nhìn bản đồ Leaflet ngay lập tức khi thoát modal
   if (typeof map !== 'undefined' && map && typeof map.invalidateSize === 'function') {
     setTimeout(function() {
       map.invalidateSize();
@@ -402,13 +401,14 @@ async function saveAccountAction() {
   if (password) payload.password = password;
 
   try {
-    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      var { error } = await supabaseClient.from('tai_khoan').upsert([payload]);
-      if (error) throw error;
-      if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
-    } else {
-      throw new Error("Mất kết nối mạng trực tuyến với cơ sở dữ liệu!");
+    if (typeof supabaseClient === 'undefined') {
+      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
     }
+
+    var { error } = await supabaseClient.from('tai_khoan').upsert([payload]);
+    if (error) throw error;
+    
+    if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
 
     document.getElementById('addMemberModal').style.display = 'none';
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
@@ -551,13 +551,14 @@ async function saveAuxRecord() {
   }
 
   try {
-    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      var { error } = await supabaseClient.from(tableType).upsert([payload]);
-      if (error) throw error;
-      if (typeof showToast === 'function') showToast("✅ Lưu dữ liệu danh mục thành công!", "success");
-    } else {
-      throw new Error("Không có kết nối mạng trực tuyến với cơ sở dữ liệu!");
+    if (typeof supabaseClient === 'undefined') {
+      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
     }
+
+    var { error } = await supabaseClient.from(tableType).upsert([payload]);
+    if (error) throw error;
+    
+    if (typeof showToast === 'function') showToast("✅ Lưu dữ liệu danh mục thành công!", "success");
 
     document.getElementById('genericAuxModal').style.display = 'none';
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
@@ -579,19 +580,20 @@ async function deleteAdminRecord(tableName, idItem) {
   else if (tableName === 'doan_cap') pkCol = 'id_doan_cap';
 
   try {
-    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      var query = supabaseClient.from(tableName).delete();
-      if (tableName === 'tai_khoan') {
-        query = query.eq(pkCol, idItem);
-      } else {
-        query = query.eq(pkCol, Number(idItem));
-      }
-      var { error } = await query;
-      if (error) throw error;
-      if (typeof showToast === 'function') showToast("🗑️ Đã xóa bản ghi thành công!", "success");
-    } else {
-      throw new Error("Mất kết nối mạng trực tuyến!");
+    if (typeof supabaseClient === 'undefined') {
+      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
     }
+
+    var query = supabaseClient.from(tableName).delete();
+    if (tableName === 'tai_khoan') {
+      query = query.eq(pkCol, idItem);
+    } else {
+      query = query.eq(pkCol, Number(idItem));
+    }
+    var { error } = await query;
+    if (error) throw error;
+    
+    if (typeof showToast === 'function') showToast("🗑️ Đã xóa bản ghi thành công!", "success");
 
     if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase(true);
     renderAllAdminTables();
@@ -633,15 +635,15 @@ async function executeChangePassword() {
   }
 
   try {
-    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      var res = await supabaseClient.from('tai_khoan').update({ password: newPass }).eq('account', accName);
-      if (res.error) throw res.error;
-
-      if (typeof showToast === 'function') showToast("✅ Đổi mật khẩu thành công!", "success");
-      document.getElementById('changePasswordModal').style.display = 'none';
-    } else {
-      throw new Error("Yêu cầu kết nối mạng để đổi mật khẩu!");
+    if (typeof supabaseClient === 'undefined') {
+      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
     }
+
+    var res = await supabaseClient.from('tai_khoan').update({ password: newPass }).eq('account', accName);
+    if (res.error) throw res.error;
+
+    if (typeof showToast === 'function') showToast("✅ Đổi mật khẩu thành công!", "success");
+    document.getElementById('changePasswordModal').style.display = 'none';
   } catch (err) {
     if (typeof showToast === 'function') showToast("❌ Lỗi đổi mật khẩu: " + err.message, "error");
   }
