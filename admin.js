@@ -388,7 +388,6 @@ function chuanBiFormThemThanhVien(accToEdit) {
 
   var access = getRoleAccess();
 
-  // 1. Lọc động danh sách quyền: Admin Đài không được tạo Admin Hệ thống
   if (roleSelect) {
     let roleHtml = `<option value="nhan_vien">Nhân viên</option>`;
     if (access.isSys) {
@@ -403,35 +402,39 @@ function chuanBiFormThemThanhVien(accToEdit) {
     roleSelect.innerHTML = roleHtml;
   }
 
-  // 2. Load danh sách Đài và tự động Khóa nếu là Admin Đài
   var daiList = getFilteredDaiList();
   if (daiSelect) {
     daiSelect.innerHTML = '<option value="">-- Chọn Đài --</option>';
     daiList.forEach(d => { 
       daiSelect.innerHTML += `<option value="${d.id_dai || d.id}">${d.ten_dai || d.ten}</option>`; 
     });
-    
     if (access.isDai && !access.isSys) {
       daiSelect.value = access.idDai;
-      daiSelect.disabled = true; // Khóa cứng không cho đổi sang Đài khác
+      daiSelect.disabled = true; 
     } else {
       daiSelect.disabled = false;
     }
   }
 
-  // 3. Load danh sách Trạm
   var tramList = getFilteredTramList();
   if (tramSelect) {
     tramSelect.innerHTML = '<option value="">-- Chọn Trạm --</option>';
     tramList.forEach(t => { 
       tramSelect.innerHTML += `<option value="${t.id_tram || t.id}">${t.ten_tram || t.ten}</option>`; 
     });
+    if (access.isTram && !access.isSys && !access.isDai) {
+      tramSelect.value = access.idTram;
+      tramSelect.disabled = true; 
+    } else {
+      tramSelect.disabled = false;
+    }
   }
 
-  // 4. Xử lý logic Nạp dữ liệu Sửa hoặc Làm mới form Thêm
+  // XỬ LÝ KHI SỬA HOẶC THÊM MỚI
   if (accToEdit && accountInput) {
     accountInput.value = accToEdit; 
-    accountInput.disabled = true; // Không cho phép sửa tên tài khoản
+    accountInput.readOnly = true; // SỬA TỪ disabled THÀNH readOnly ĐỂ JAVASCRIPT ĐỌC ĐƯỢC DỮ LIỆU
+    accountInput.style.backgroundColor = "#e2e8f0"; // Tô màu xám nhẹ để nhận biết đang khóa
     if (passInput) passInput.value = '';
 
     var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
@@ -441,15 +444,19 @@ function chuanBiFormThemThanhVien(accToEdit) {
       if (roleSelect) roleSelect.value = uObj.role || 'nhan_vien';
       if (canEditCheck) canEditCheck.checked = !!uObj.can_edit_map;
       if (daiSelect) daiSelect.value = uObj.id_dai || (access.isDai ? access.idDai : '');
-      if (tramSelect) tramSelect.value = uObj.id_tram || '';
+      if (tramSelect) tramSelect.value = uObj.id_tram || (access.isTram ? access.idTram : '');
     }
   } else {
-    if (accountInput) { accountInput.value = ''; accountInput.disabled = false; }
+    if (accountInput) { 
+      accountInput.value = ''; 
+      accountInput.readOnly = false; // Cho phép nhập tên khi thêm mới
+      accountInput.style.backgroundColor = "#ffffff";
+    }
     if (passInput) passInput.value = '';
     if (roleSelect) roleSelect.value = 'nhan_vien';
     if (canEditCheck) canEditCheck.checked = false;
     if (daiSelect) daiSelect.value = access.isDai ? access.idDai : '';
-    if (tramSelect) tramSelect.value = '';
+    if (tramSelect) tramSelect.value = access.isTram ? access.idTram : '';
   }
 
   var modal = document.getElementById('addMemberModal');
@@ -556,7 +563,6 @@ async function saveAccountAction() {
     return; 
   }
 
-  // Hộp thoại xác thực 2 lớp tùy chỉnh an toàn
   let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu thông tin tài khoản <b>${accVal}</b> không?`, 'success');
   if (!isConfirmed) return;
 
@@ -564,11 +570,10 @@ async function saveAccountAction() {
   var selectedDai = document.getElementById('newMemberDai').value;
   var selectedTram = document.getElementById('newMemberTram').value;
 
-  // Lấy danh sách user cũ để giữ lại mật khẩu nếu không nhập mật khẩu mới
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
   var existingUser = users.find(u => u.account === accVal);
 
-  // Xây dựng payload chuẩn xác 100% với các cột thực tế của bảng tai_khoan
+  // Xây dựng payload chuẩn xác với khóa chính account
   var payload = {
     account: accVal,
     role: selectedRole,
@@ -577,7 +582,7 @@ async function saveAccountAction() {
     id_tram: (access.isTram && !access.isSys && !access.isDai) ? Number(access.idTram) : (selectedTram ? Number(selectedTram) : null)
   };
 
-  // Xử lý mật khẩu: Nếu nhập mới thì lưu, nếu để trống thì giữ nguyên mật khẩu cũ
+  // Giữ nguyên mật khẩu cũ nếu không nhập mật khẩu mới
   if (password) {
     payload.password = password;
   } else if (existingUser && existingUser.password) {
@@ -586,12 +591,10 @@ async function saveAccountAction() {
 
   try {
     showLoading("Đang lưu tài khoản...");
-    
-    // Thực hiện upsert lên Supabase chỉ với các trường hợp lệ
     var { data, error } = await supabaseClient.from('tai_khoan').upsert([payload]).select();
     if (error) throw error;
     
-    // Cập nhật mảng cục bộ trên RAM để giao diện đổi ngay lập tức
+    // Cập nhật mảng cục bộ trên RAM
     if (data && data.length > 0) {
       var idx = users.findIndex(u => u.account === accVal);
       if (idx >= 0) users[idx] = data[0]; else users.push(data[0]);
