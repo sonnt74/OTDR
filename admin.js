@@ -232,7 +232,7 @@ async function saveAccountAction() {
     return; 
   }
 
-  // Bước xác thực 2 lớp trực quan
+  // Hộp thoại xác thực 2 lớp tùy chỉnh
   let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu thông tin tài khoản <b>${accVal}</b> không?`, 'success');
   if (!isConfirmed) return;
 
@@ -240,24 +240,33 @@ async function saveAccountAction() {
   var selectedDai = document.getElementById('newMemberDai').value;
   var selectedTram = document.getElementById('newMemberTram').value;
 
+  // Lấy dữ liệu user cũ trong bộ nhớ để phòng trường hợp giữ nguyên mật khẩu
+  var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
+  var existingUser = users.find(u => u.account === accVal);
+
+  // Xây dựng payload chính xác, tuyệt đối không dùng trường email hay trường lạ
   var payload = {
     account: accVal,
     role: selectedRole,
     can_edit_map: document.getElementById('newMemberCanEdit').checked,
     id_dai: (access.isDai && !access.isSys) ? Number(access.idDai) : (selectedDai ? Number(selectedDai) : null),
-    id_tram: selectedTram ? Number(selectedTram) : null
+    id_tram: (access.isTram && !access.isSys && !access.isDai) ? Number(access.idTram) : (selectedTram ? Number(selectedTram) : null)
   };
-  
-  if (password) payload.password = password;
+
+  // Xử lý mật khẩu thông minh: Nếu có nhập pass mới thì dùng, nếu không thì giữ pass cũ
+  if (password) {
+    payload.password = password;
+  } else if (existingUser && existingUser.password) {
+    payload.password = existingUser.password;
+  }
 
   try {
     showLoading("Đang lưu tài khoản...");
     var { data, error } = await supabaseClient.from('tai_khoan').upsert([payload]).select();
     if (error) throw error;
     
-    // Cập nhật State cục bộ để giao diện đổi ngay lập tức
+    // Cập nhật trực tiếp vào danh sách cục bộ trên RAM
     if (data && data.length > 0) {
-      var users = window.rawUserList || [];
       var idx = users.findIndex(u => u.account === accVal);
       if (idx >= 0) users[idx] = data[0]; else users.push(data[0]);
       window.rawUserList = users;
