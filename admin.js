@@ -340,8 +340,14 @@ async function saveAccountAction() {
   var accVal = accountInput ? accountInput.value.trim() : '';
   var password = document.getElementById('newMemberPass').value.trim();
   
-  if (!accVal) { showToast("⚠️ Vui lòng nhập tên tài khoản!", "error"); return; }
-  if (!confirm(`Bạn có chắc chắn muốn lưu thông tin tài khoản "${accVal}" không?`)) return;
+  if (!accVal) { 
+    if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên tài khoản!", "error");
+    return; 
+  }
+
+  // Gọi xác thực lớp thứ 2
+  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu thông tin tài khoản <b>${accVal}</b> không?`, 'success');
+  if (!isConfirmed) return;
 
   var payload = {
     account: accVal,
@@ -357,7 +363,6 @@ async function saveAccountAction() {
     var { data, error } = await supabaseClient.from('tai_khoan').upsert([payload]).select();
     if (error) throw error;
     
-    // Tối ưu: Cập nhật biến Local thay vì bắt ứng dụng tải lại toàn bộ Database
     if (data && data.length > 0) {
       var users = window.rawUserList || [];
       var idx = users.findIndex(u => u.account === accVal);
@@ -366,13 +371,13 @@ async function saveAccountAction() {
       AppStore.setState({ rawUserList: users });
     }
 
-    showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
+    if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
     document.getElementById('addMemberModal').style.display = 'none';
     renderAllAdminTables();
     hideLoading();
   } catch (err) { 
     hideLoading();
-    showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
+    if (typeof showToast === 'function') showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
   }
 }
 
@@ -457,43 +462,49 @@ function moFormThemDoan(id) {
 }
 
 async function saveAuxRecord() {
-  if (!confirm("Bạn có chắc chắn muốn lưu thông tin danh mục này không?")) return;
-
   var tableType = document.getElementById('auxTableType').value;
   var recordId = document.getElementById('auxRecordId').value;
   var payload = {};
   var pkCol = '';
+  var itemName = '';
 
   if (tableType === 'dai_vt') {
     pkCol = 'id_dai';
     payload.ten_dai = document.getElementById('auxTenDai').value.trim();
+    itemName = payload.ten_dai;
     if (!payload.ten_dai) { showToast("⚠️ Vui lòng nhập tên Đài!", "error"); return; }
   } else if (tableType === 'tram_vt') {
     pkCol = 'id_tram';
     payload.ten_tram = document.getElementById('auxTenTram').value.trim();
     payload.id_dai = document.getElementById('auxIdDai').value ? Number(document.getElementById('auxIdDai').value) : null;
+    itemName = payload.ten_tram;
     if (!payload.ten_tram) { showToast("⚠️ Vui lòng nhập tên Trạm!", "error"); return; }
   } else if (tableType === 'tuyen_cap') {
     pkCol = 'id_tuyen_cap';
     payload.ma_tuyencap = document.getElementById('auxMaTuyen').value.trim();
     payload.ten_tuyen = document.getElementById('auxTenTuyen').value.trim();
+    itemName = payload.ten_tuyen;
     if (!payload.ten_tuyen) { showToast("⚠️ Vui lòng nhập tên Tuyến cáp!", "error"); return; }
   } else if (tableType === 'doan_cap') {
     pkCol = 'id_doan_cap';
     payload.ma_doancap = document.getElementById('auxMaDoan').value.trim();
     payload.id_tuyen = document.getElementById('auxIdTuyen').value ? Number(document.getElementById('auxIdTuyen').value) : null;
     payload.id_tram = document.getElementById('auxIdTram').value ? Number(document.getElementById('auxIdTram').value) : null;
+    itemName = payload.ma_doancap;
     if (!payload.ma_doancap) { showToast("⚠️ Vui lòng nhập mã đoạn cáp!", "error"); return; }
   }
 
   if (recordId && recordId !== '') { payload[pkCol] = Number(recordId); }
+
+  // Gọi xác thực lớp thứ 2
+  let isConfirmed = await showConfirmDialog(`Xác nhận lưu thay đổi cho mục: <b>${itemName}</b>?`, 'success');
+  if (!isConfirmed) return;
 
   try {
     showLoading("Đang lưu dữ liệu...");
     var { data, error } = await supabaseClient.from(tableType).upsert([payload]).select();
     if (error) throw error;
     
-    // Tối ưu: Đưa dữ liệu mới cập nhật thẳng vào biến cục bộ (Local State)
     if (data && data.length > 0) {
       var savedItem = data[0];
       var idVal = savedItem[pkCol] || savedItem.id;
@@ -517,7 +528,7 @@ async function saveAuxRecord() {
       }
     }
 
-    showToast("✅ Lưu dữ liệu danh mục thành công!", "success");
+    if (typeof showToast === 'function') showToast("✅ Lưu dữ liệu danh mục thành công!", "success");
     document.getElementById('genericAuxModal').style.display = 'none';
     
     renderAllAdminTables();
@@ -525,12 +536,14 @@ async function saveAuxRecord() {
     hideLoading();
   } catch (err) {
     hideLoading();
-    showToast("❌ Không thể ghi dữ liệu: " + err.message, "error");
+    if (typeof showToast === 'function') showToast("❌ Không thể ghi dữ liệu: " + err.message, "error");
   }
 }
 
 async function deleteAdminRecord(tableName, idItem) {
-  if (!confirm(`⚠️ CẢNH BÁO: Bạn có chắc chắn muốn xóa bản ghi này khỏi cơ sở dữ liệu không?`)) return;
+  // Gọi xác thực lớp thứ 2 với cảnh báo mức độ xóa
+  let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn bản ghi <b>ID: ${idItem}</b> này khỏi cơ sở dữ liệu không?`, 'danger');
+  if (!isConfirmed) return;
 
   var pkCol = '';
   if (tableName === 'tai_khoan') pkCol = 'account';
@@ -548,7 +561,6 @@ async function deleteAdminRecord(tableName, idItem) {
     var { error } = await query;
     if (error) throw error;
     
-    // Tối ưu: Loại bỏ bản ghi trực tiếp khỏi mảng cục bộ
     if (tableName === 'tai_khoan') {
       window.rawUserList = window.rawUserList.filter(x => x.account !== idItem);
       AppStore.setState({ rawUserList: window.rawUserList });
@@ -566,13 +578,13 @@ async function deleteAdminRecord(tableName, idItem) {
       AppStore.setState({ doanCapList: window.rawDoanCapList, rawDoanList: window.rawDoanCapList });
     }
     
-    showToast("🗑️ Đã xóa bản ghi thành công!", "success");
+    if (typeof showToast === 'function') showToast("🗑️ Đã xóa bản ghi thành công!", "success");
     renderAllAdminTables();
     if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser();
     hideLoading();
   } catch (err) {
     hideLoading();
-    showToast("❌ Không thể xóa bản ghi: " + err.message, "error");
+    if (typeof showToast === 'function') showToast("❌ Không thể xóa bản ghi: " + err.message, "error");
   }
 }
 
