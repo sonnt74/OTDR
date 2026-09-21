@@ -1,4 +1,7 @@
-// config.js - Cấu hình kết nối Supabase, biến toàn cục và hàm tiện ích dùng chung
+// ==========================================================================
+// TỆP CONFIG.JS - CẤU HÌNH SUPABASE & TIỆN ÍCH DÙNG CHUNG
+// ==========================================================================
+
 const SUPABASE_URL = 'https://clddwitzwuewwxawuorv.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_U3tMbsj5oQ9Wub1UAJO5Cw_NXt6Px8E';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -23,7 +26,7 @@ var rawDoanCapList = [];
 var rawLoaiDiemList = [];
 var globalDataPoints = [];
 
-// Hàm tiện ích hiển thị/ẩn xoay tròn chờ dữ liệu
+// Hàm hiển thị/ẩn xoay tròn chờ dữ liệu
 function showLoading(msg) {
   var el = document.getElementById('loading-overlay-text');
   if (el) el.innerText = msg;
@@ -54,43 +57,56 @@ function showToast(message, type = 'info') {
     setTimeout(() => toast.remove(), 300);
   }, 3000);
 }
-
-// Hàm ẩn/hiển thị khay điều khiển GIS
-function toggleGISPanel() {
-  var panel = document.getElementById('control-panel');
-  if (panel) {
-    if (panel.style.display === 'none') {
-      panel.style.display = 'block';
-    } else {
-      panel.classList.toggle('collapsed');
+// Hàm hiển thị hộp thoại xác nhận tùy chỉnh thay thế confirm() của trình duyệt
+function showConfirmDialog(message, type = 'danger') {
+  return new Promise((resolve) => {
+    let overlay = document.getElementById('custom-confirm-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'custom-confirm-overlay';
+      overlay.innerHTML = `
+        <div class="confirm-box">
+          <div class="confirm-msg" id="custom-confirm-msg"></div>
+          <div class="confirm-actions">
+            <button class="btn-confirm-no" id="custom-confirm-no">Hủy bỏ</button>
+            <button class="btn-confirm-yes" id="custom-confirm-yes">Xác nhận</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
     }
-  }
-}
+    
+    document.getElementById('custom-confirm-msg').innerHTML = message;
+    
+    // Đổi màu nút dựa trên hành động (Lưu: Xanh, Xóa: Đỏ)
+    let btnYes = document.getElementById('custom-confirm-yes');
+    if (type === 'success') {
+      btnYes.style.background = '#198754';
+    } else {
+      btnYes.style.background = '#dc3545';
+    }
 
-function closeModals() {
-  document.querySelectorAll('.app-modal').forEach(modal => {
-    if (modal.id !== 'loginModal' || !currentUser.isLoggedIn) modal.style.display = 'none';
+    overlay.style.display = 'flex';
+
+    btnYes.onclick = function() {
+      overlay.style.display = 'none';
+      resolve(true);
+    };
+    document.getElementById('custom-confirm-no').onclick = function() {
+      overlay.style.display = 'none';
+      resolve(false);
+    };
   });
 }
-
-function openModal(id, tabId = null) {
-  closeModals();
-  var modal = document.getElementById(id);
-  if (modal) modal.style.display = 'flex';
-  if (id === 'adminMasterModal' && typeof switchAdminTab === 'function') {
-    if (tabId) switchAdminTab(tabId);
-    if (typeof loadAdminMasterData === 'function') loadAdminMasterData();
-  }
-}
-
-// Hàm ghi nhật ký thao tác người dùng
+// Hàm ghi nhật ký thao tác người dùng (Sử dụng trường account)
 async function ghiNhatKyThaoTac(hanhDong, chiTiet) {
   try {
-    var userEmail = currentUser && currentUser.isLoggedIn ? (currentUser.email || "Thành viên hệ thống") : "Khách";
-    var userRole = currentUser ? currentUser.role : "member";
+    var storedUser = JSON.parse(localStorage.getItem('tnn_user')) || {};
+    var userAccount = storedUser.account ? storedUser.account : "Khách";
+    var userRole = storedUser.role ? storedUser.role : "member";
 
     await supabaseClient.from('lich_su_thao_tac').insert([{
-      email_nguoi_dung: userEmail,
+      account_nguoi_dung: userAccount,
       vai_tro: userRole,
       hanh_dong: hanhDong,
       chi_tiet: chiTiet

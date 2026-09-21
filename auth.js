@@ -1,189 +1,178 @@
 // ==========================================================================
-// TỆP AUTH.JS - QUẢN LÝ XÁC THỰC VÀ ĐĂNG NHẬP (DÙNG DUY NHẤT BẢNG TAI_KHOAN)
+// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & QUẢN LÝ PHIÊN
 // ==========================================================================
 
-window.onload = function() {
-  var savedEmail = localStorage.getItem('tnn_saved_email');
-  var savedPass = localStorage.getItem('tnn_saved_pass');
-  if (savedEmail && savedPass) {
-    var emailEl = document.getElementById('loginEmail');
-    var passEl = document.getElementById('loginPass');
-    var chkEl = document.getElementById('chkRememberMe');
-    if (emailEl) emailEl.value = savedEmail;
-    if (passEl) passEl.value = savedPass;
-    if (chkEl) chkEl.checked = true;
-  }
+console.log("auth.js đang được tải...");
 
-  var savedSession = localStorage.getItem('tnn_user');
-  if (savedSession) {
+document.addEventListener('DOMContentLoaded', function() {
+  khoiPhucPhiênDangNhap();
+});
+
+function khoiPhucPhiênDangNhap() {
+  var savedUser = localStorage.getItem('tnn_user');
+  if (savedUser) {
     try {
-      currentUser = JSON.parse(savedSession);
-      capNhatGiaoDienSauDangNhap();
-      if (typeof khoiTaoBanDoLeaflet === 'function') khoiTaoBanDoLeaflet();
-      if (typeof taiDuLieuSupabase === 'function') taiDuLieuSupabase();
+      var data = JSON.parse(savedUser);
+      if (data && data.account) {
+        window.currentUser = {
+          isLoggedIn: true,
+          account: data.account,
+          role: data.role || 'nhan_vien',
+          id_dai: data.id_dai || null,
+          id_tram: data.id_tram || null,
+          idDai: data.id_dai || null,
+          idTram: data.id_tram || null,
+          can_edit_map: !!data.can_edit_map,
+          canEditMap: !!data.can_edit_map
+        };
+
+        if (typeof AppStore !== 'undefined' && AppStore.setState) {
+          AppStore.setState({ currentUser: window.currentUser });
+        }
+
+        var loginModal = document.getElementById('loginModal');
+        if (loginModal) loginModal.style.display = 'none';
+
+        var controlPanel = document.getElementById('control-panel');
+        if (controlPanel) controlPanel.style.display = 'block';
+
+        var userInfoDisplay = document.getElementById('userInfoDisplay');
+        if (userInfoDisplay) {
+          userInfoDisplay.innerText = "👤 " + window.currentUser.account + " (" + window.currentUser.role + ")";
+        }
+
+        var adminBtn = document.getElementById('adminMobileBtn');
+        if (adminBtn) {
+          var roleLower = (window.currentUser.role || '').toLowerCase();
+          if (roleLower.includes('admin') || roleLower.includes('sys')) {
+            adminBtn.style.display = 'block';
+          } else {
+            adminBtn.style.display = 'none';
+          }
+        }
+
+        if (typeof khoiTaoBanDoLeaflet === 'function') {
+          khoiTaoBanDoLeaflet();
+        }
+
+        if (typeof taiDuLieuSupabase === 'function') {
+          taiDuLieuSupabase(false);
+        }
+      }
     } catch (e) {
       console.error("Lỗi khôi phục phiên đăng nhập:", e);
+      localStorage.removeItem('tnn_user');
     }
   }
-};
+}
 
-/**
- * HÀM HIỂN THỊ THÔNG TIN NGƯỜI DÙNG LÊN GIAO DIỆN (ĐÃ LÀM GỌN THEO YÊU CẦU)
- */
-function hienThiThongTinNguoiDung() {
-  var displayEl = document.getElementById('userInfoDisplay');
-  if (!displayEl) return; 
+async function handleCustomLogin() {
+  console.log("Đang xử lý đăng nhập...");
+  var accountInput = document.getElementById('loginAccount');
+  var passInput = document.getElementById('loginPass');
 
-  if (!currentUser || !currentUser.isLoggedIn) {
-    displayEl.innerHTML = '';
+  var accountVal = accountInput ? accountInput.value.trim() : '';
+  var passVal = passInput ? passInput.value.trim() : '';
+
+  if (!accountVal || !passVal) {
+    showToast("⚠️ Vui lòng nhập đầy đủ tài khoản và mật khẩu!", "error");
     return;
   }
 
-  // Dịch mã quyền hệ thống sang Tiếng Việt
-  var roleName = "Nhân viên";
-  if (currentUser.role === 'sys_admin' || currentUser.role === 'admin_sys') {
-    roleName = "Quản trị hệ thống";
-  } else if (currentUser.role === 'dai_admin' || currentUser.role === 'admin_dai') {
-    roleName = "Quản trị Đài";
-  } else if (currentUser.role === 'tram_admin' || currentUser.role === 'admin_tram') {
-    roleName = "Quản lý Trạm";
+  try {
+    showLoading("Đang xác thực...");
+    if (typeof supabaseClient === 'undefined') {
+      throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
+    }
+
+    var { data, error } = await supabaseClient
+      .from('tai_khoan')
+      .select('*')
+      .eq('account', accountVal)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!data) {
+      hideLoading();
+      showToast("❌ Tài khoản không tồn tại trong hệ thống!", "error");
+      return;
+    }
+
+    if (String(data.password || '') !== String(passVal)) {
+      hideLoading();
+      showToast("❌ Mật khẩu không chính xác!", "error");
+      return;
+    }
+
+    window.currentUser = {
+      isLoggedIn: true,
+      account: data.account,
+      role: data.role || 'nhan_vien',
+      id_dai: data.id_dai || null,
+      id_tram: data.id_tram || null,
+      idDai: data.id_dai || null,       
+      idTram: data.id_tram || null,     
+      can_edit_map: !!data.can_edit_map,
+      canEditMap: !!data.can_edit_map   
+    };
+
+    localStorage.setItem('tnn_user', JSON.stringify(window.currentUser));
+    
+    if (typeof AppStore !== 'undefined' && AppStore.setState) {
+      AppStore.setState({ currentUser: window.currentUser });
+    }
+
+    var loginModal = document.getElementById('loginModal');
+    if (loginModal) loginModal.style.display = 'none';
+
+    var controlPanel = document.getElementById('control-panel');
+    if (controlPanel) controlPanel.style.display = 'block';
+
+    var userInfoDisplay = document.getElementById('userInfoDisplay');
+    if (userInfoDisplay) {
+      userInfoDisplay.innerText = "👤 " + window.currentUser.account + " (" + window.currentUser.role + ")";
+    }
+
+    var adminBtn = document.getElementById('adminMobileBtn');
+    if (adminBtn) {
+      var roleLower = (window.currentUser.role || '').toLowerCase();
+      if (roleLower.includes('admin') || roleLower.includes('sys')) {
+        adminBtn.style.display = 'block';
+      } else {
+        adminBtn.style.display = 'none';
+      }
+    }
+
+    hideLoading();
+    showToast("✅ Đăng nhập thành công!", "success");
+
+    if (typeof khoiTaoBanDoLeaflet === 'function') khoiTaoBanDoLeaflet();
+    if (typeof taiDuLieuSupabase === 'function') taiDuLieuSupabase(true);
+
+  } catch (err) {
+    hideLoading();
+    console.error("Lỗi đăng nhập:", err);
+    showToast("❌ Lỗi xác thực đăng nhập: " + err.message, "error");
   }
-
-  var tenTaiKhoan = currentUser.email || currentUser.username || "Tài khoản";
-
-  // Thiết kế giao diện cực kỳ tinh gọn, không có biểu tượng
-  var html = `
-    <div style="font-size: 12px; font-weight: bold; color: #333; padding: 5px 0;">
-      Account: ${tenTaiKhoan} (${roleName})
-    </div>
-  `;
-  
-  displayEl.innerHTML = html;
 }
 
-function capNhatGiaoDienSauDangNhap() {
-  var loginModal = document.getElementById('loginModal');
-  if (loginModal) loginModal.style.display = 'none';
-
-  var controlPanel = document.getElementById('control-panel');
-  if (controlPanel) controlPanel.style.display = 'block';
-
-  var sidebar = document.getElementById('sidebar-menu');
-  if (sidebar) sidebar.style.display = 'flex';
-
-  var adminMenuIcon = document.getElementById('adminMenuIcon');
-  if (adminMenuIcon) {
-    adminMenuIcon.style.display = (currentUser && currentUser.role === 'sys_admin') ? 'flex' : 'none';
-  }
-
-  var adminMob = document.getElementById('adminMobileBtn');
-  if (adminMob) {
-    var isAuthorized = currentUser && (currentUser.role === 'sys_admin' || currentUser.role === 'dai_admin' || currentUser.role === 'admin_sys');
-    adminMob.style.display = isAuthorized ? 'block' : 'none';
-  }
-
-  // GỌI HÀM HIỂN THỊ THÔNG TIN NGAY SAU KHI CẬP NHẬT GIAO DIỆN
-  hienThiThongTinNguoiDung();
+function handleLoginExit() {
+  var accountInput = document.getElementById('loginAccount');
+  var passInput = document.getElementById('loginPass');
+  if (accountInput) accountInput.value = '';
+  if (passInput) passInput.value = '';
+  showToast("Đã làm sạch thông tin đăng nhập.", "info");
 }
 
 function togglePasswordVisibility() {
   var passInput = document.getElementById('loginPass');
   if (passInput) {
-    passInput.type = (passInput.type === 'password') ? 'text' : 'password';
-  }
-}
-
-/**
- * ĐĂNG NHẬP CHUẨN HÓA CSDL (CHỈ TRUY VẤN BẢNG TAI_KHOAN)
- */
-async function handleCustomLogin() {
-  var emailEl = document.getElementById('loginEmail');
-  var passEl = document.getElementById('loginPass');
-  var chkEl = document.getElementById('chkRememberMe');
-  
-  var email = emailEl ? emailEl.value.trim() : '';
-  var pass = passEl ? passEl.value : '';
-  var rememberMe = chkEl ? chkEl.checked : false;
-  
-  if (!email || !pass) { 
-    showToast("Vui lòng nhập đầy đủ tài khoản và mật khẩu!", "error"); 
-    return; 
-  }
-  
-  showLoading("Đang xác thực thông tin...");
-  try {
-    if (navigator.onLine) {
-      // Chỉ truy vấn duy nhất bảng 'tai_khoan'
-      const { data, error } = await supabaseClient
-        .from('tai_khoan')
-        .select('*')
-        .or(`email.eq.${email},username.eq.${email}`)
-        .eq('password', pass)
-        .limit(1);
-
-      if (error) throw error;
-      if (!data || data.length === 0) {
-        throw new Error("Sai thông tin tài khoản hoặc mật khẩu!");
-      }
-
-      var account = data[0];
-      currentUser = { 
-        isLoggedIn: true, 
-        role: account.role || 'member', 
-        idDai: account.id_dai, 
-        idTram: account.id_tram, 
-        canEditMap: account.can_edit_map === true,
-        email: account.email || account.username
-      };
-
-      // Đồng bộ thông tin vào IndexedDB
-      if (typeof idbLuuTaiKhoan === 'function') {
-        await idbLuuTaiKhoan({
-          email: account.email || account.username,
-          password: account.password,
-          role: account.role || 'member',
-          id_dai: account.id_dai,
-          id_tram: account.id_tram,
-          can_edit_map: account.can_edit_map === true
-        });
-      }
-
-      showToast("Đăng nhập thành công (Online)!", "success");
+    if (passInput.type === 'password') {
+      passInput.type = 'text';
     } else {
-      if (typeof idbDocTaiKhoan !== 'function') throw new Error("Chưa khởi tạo bộ nhớ đệm Offline!");
-
-      const localAcc = await idbDocTaiKhoan(email);
-      if (!localAcc || localAcc.password !== pass) throw new Error("Tài khoản hoặc mật khẩu không đúng (Offline)!");
-
-      currentUser = { 
-        isLoggedIn: true, 
-        role: localAcc.role || 'member', 
-        idDai: localAcc.id_dai, 
-        idTram: localAcc.id_tram, 
-        canEditMap: localAcc.can_edit_map === true,
-        email: localAcc.email
-      };
-
-      showToast("⚡ Đã đăng nhập thành công ở Chế độ Offline!", "info");
+      passInput.type = 'password';
     }
-    
-    localStorage.setItem('tnn_user', JSON.stringify(currentUser));
-
-    if (rememberMe) {
-      localStorage.setItem('tnn_saved_email', email);
-      localStorage.setItem('tnn_saved_pass', pass);
-    } else {
-      localStorage.removeItem('tnn_saved_email');
-      localStorage.removeItem('tnn_saved_pass');
-    }
-    
-    capNhatGiaoDienSauDangNhap();
-    if (typeof khoiTaoBanDoLeaflet === 'function') khoiTaoBanDoLeaflet();
-    if (typeof taiDuLieuSupabase === 'function') await taiDuLieuSupabase();
-  } catch (err) { 
-    showToast("Lỗi đăng nhập: " + err.message, "error"); 
-  } finally {
-    hideLoading();
   }
 }
 
