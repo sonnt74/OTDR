@@ -221,6 +221,9 @@ function renderMasterAccountTable() {
 }
 
 /** HÀM LƯU TÀI KHOẢN (THÊM HOẶC CẬP NHẬT) */
+// ==========================================================================
+// HÀM LƯU TÀI KHOẢN (THÊM / SỬA) CHUẨN XÁC VỚI KHÓA CHÍNH ACCOUNT
+// ==========================================================================
 async function saveAccountAction() {
   var accountInput = document.getElementById('newMemberAccount');
   var accVal = accountInput ? accountInput.value.trim() : '';
@@ -232,19 +235,24 @@ async function saveAccountAction() {
     return; 
   }
 
-  // Hộp thoại xác thực 2 lớp tùy chỉnh
-  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu thông tin tài khoản <b>${accVal}</b> không?`, 'success');
+  var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
+  var existingUser = users.find(u => u.account === accVal);
+  var isEditing = accountInput.readOnly;
+
+  // Kiểm tra chống trùng lặp khi tạo mới
+  if (!isEditing && existingUser) {
+    if (typeof showToast === 'function') showToast(`❌ Tên tài khoản "${accVal}" đã tồn tại! Vui lòng chọn tên khác.`, "error");
+    return;
+  }
+
+  let actionTitle = isEditing ? `Cập nhật thông tin tài khoản <b>${accVal}</b>` : `Thêm mới tài khoản <b>${accVal}</b>`;
+  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn ${actionTitle} không?`, 'success');
   if (!isConfirmed) return;
 
   var selectedRole = document.getElementById('newMemberRole').value;
   var selectedDai = document.getElementById('newMemberDai').value;
   var selectedTram = document.getElementById('newMemberTram').value;
 
-  // Lấy dữ liệu user cũ trong bộ nhớ để phòng trường hợp giữ nguyên mật khẩu
-  var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
-  var existingUser = users.find(u => u.account === accVal);
-
-  // Xây dựng payload chính xác, tuyệt đối không dùng trường email hay trường lạ
   var payload = {
     account: accVal,
     role: selectedRole,
@@ -253,7 +261,7 @@ async function saveAccountAction() {
     id_tram: (access.isTram && !access.isSys && !access.isDai) ? Number(access.idTram) : (selectedTram ? Number(selectedTram) : null)
   };
 
-  // Xử lý mật khẩu thông minh: Nếu có nhập pass mới thì dùng, nếu không thì giữ pass cũ
+  // Giữ nguyên mật khẩu cũ nếu không nhập mật khẩu mới khi sửa
   if (password) {
     payload.password = password;
   } else if (existingUser && existingUser.password) {
@@ -262,10 +270,11 @@ async function saveAccountAction() {
 
   try {
     showLoading("Đang lưu tài khoản...");
+    
+    // Sử dụng upsert: vì account đã là Khóa chính, nếu trùng account nó sẽ tự động Sửa, nếu chưa có sẽ tự động Thêm
     var { data, error } = await supabaseClient.from('tai_khoan').upsert([payload]).select();
     if (error) throw error;
     
-    // Cập nhật trực tiếp vào danh sách cục bộ trên RAM
     if (data && data.length > 0) {
       var idx = users.findIndex(u => u.account === accVal);
       if (idx >= 0) users[idx] = data[0]; else users.push(data[0]);
@@ -273,7 +282,7 @@ async function saveAccountAction() {
       AppStore.setState({ rawUserList: users });
     }
 
-    if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
+    if (typeof showToast === 'function') showToast("✅ Lưu tài khoản thành công!", "success");
     document.getElementById('addMemberModal').style.display = 'none';
     renderAllAdminTables();
     hideLoading();
