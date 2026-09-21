@@ -56,12 +56,20 @@ function getCurrentUser() {
 
 function getRoleAccess() {
   var user = getCurrentUser();
-  var r = (user.role || '').toLowerCase();
+  var r = (user.role || '').toLowerCase().trim();
+  
+  // Xác định rõ ràng các cấp bậc
+  var isSys = r.includes('sys') || r === 'admin_sys';
+  var isDai = r.includes('dai') || r === 'admin_dai';
+  var isTram = r.includes('tram') || r === 'admin_tram';
+  // Nếu không phải các quyền admin trên thì mặc định là nhân viên / member
+  var isMember = !isSys && !isDai && !isTram;
+
   return {
-    isSys: r.includes('sys') || r === 'admin_sys',
-    isDai: r.includes('dai') || r === 'admin_dai',
-    isTram: r.includes('tram') || r === 'admin_tram',
-    isMember: r === 'member' || r === 'nhan_vien' || !r,
+    isSys: isSys,
+    isDai: isDai,
+    isTram: isTram,
+    isMember: isMember,
     idDai: String(user.id_dai || user.idDai || ''),
     idTram: String(user.id_tram || user.idTram || ''),
     account: user.account
@@ -139,19 +147,17 @@ function getFilteredTuyenList() {
 }
 
 // 5. Lọc danh sách Đoạn tuyến theo phân cấp
-function getFilteredDoanList() {
-  var doanList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
+function getFilteredTramList() {
+  var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
   var access = getRoleAccess();
 
-  if (access.isSys) return doanList;
-  if (access.isDai) {
-    var tramIdsInDai = getFilteredTramList().map(t => String(t.id_tram || t.id));
-    return doanList.filter(d => tramIdsInDai.includes(String(d.id_tram || d.tram_id)));
+  if (access.isSys) return tramList;
+  if (access.isDai) return tramList.filter(t => String(t.id_dai || t.dai_id) === access.idDai);
+  if (access.isTram || access.isMember) {
+    // Nhân viên chỉ thấy trạm của chính mình
+    return tramList.filter(t => String(t.id_tram || t.id) === access.idTram);
   }
-  if (access.isTram) {
-    return doanList.filter(d => String(d.id_tram || d.tram_id) === access.idTram);
-  }
-  return doanList;
+  return [];
 }
 
 function getDaiName(idDai) {
