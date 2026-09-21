@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, PHÂN QUYỀN CHẶT CHẼ & TỐI ƯU HÓA CRUD
+// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, BẢO MẬT 2 LỚP & SỬA LỖI DATABASE CONSTRAINT
 // ==========================================================================
 
 function openModal(modalId, tabId) {
@@ -54,7 +54,6 @@ function getCurrentUser() {
   };
 }
 
-// Hàm xác định quyền hạn người dùng hiện tại một cách rõ ràng
 function getRoleAccess() {
   var user = getCurrentUser();
   var r = (user.role || '').toLowerCase();
@@ -79,12 +78,11 @@ function getSafeDataList(keyNames) {
 }
 
 // ==========================================================================
-// HỆ THỐNG LỌC PHÂN CẤP PHÂN QUYỀN THEO VAI TRÒ
+// BỘ LỌC PHÂN QUYỀN
 // ==========================================================================
 function getFilteredUsers() {
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
   var access = getRoleAccess();
-
   if (access.isSys) return users;
   if (access.isDai) return users.filter(u => String(u.id_dai) === access.idDai);
   if (access.isTram) return users.filter(u => String(u.id_tram) === access.idTram);
@@ -94,7 +92,6 @@ function getFilteredUsers() {
 function getFilteredDaiList() {
   var daiList = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
   var access = getRoleAccess();
-
   if (access.isSys) return daiList;
   if (access.isDai) return daiList.filter(d => String(d.id_dai || d.id) === access.idDai);
   if (access.isTram) {
@@ -109,7 +106,6 @@ function getFilteredDaiList() {
 function getFilteredTramList() {
   var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
   var access = getRoleAccess();
-
   if (access.isSys) return tramList;
   if (access.isDai) return tramList.filter(t => String(t.id_dai || t.dai_id) === access.idDai);
   if (access.isTram) return tramList.filter(t => String(t.id_tram || t.id) === access.idTram);
@@ -123,7 +119,6 @@ function getFilteredTuyenList() {
 function getFilteredDoanList() {
   var doanList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
   var access = getRoleAccess();
-
   if (access.isSys || access.isDai) return doanList;
   if (access.isTram) return doanList.filter(d => String(d.id_tram || d.tram_id) === access.idTram);
   return doanList;
@@ -278,7 +273,7 @@ function renderMasterDoanTable() {
 }
 
 // ==========================================================================
-// FORM THÊM / SỬA / XÓA (TỐI ƯU CẬP NHẬT TRẠNG THÁI LOCAL & SHOWTOAST)
+// CÁC FORM THÊM/SỬA (ĐÃ BỔ SUNG CỘT TÊN ĐOẠN CÁP TRÁNH LỖI NOT-NULL)
 // ==========================================================================
 
 function chuanBiFormThemThanhVien(accToEdit) {
@@ -333,52 +328,6 @@ function chuanBiFormThemThanhVien(accToEdit) {
 
   var modal = document.getElementById('addMemberModal');
   if (modal) modal.style.display = 'flex';
-}
-
-async function saveAccountAction() {
-  var accountInput = document.getElementById('newMemberAccount');
-  var accVal = accountInput ? accountInput.value.trim() : '';
-  var password = document.getElementById('newMemberPass').value.trim();
-  
-  if (!accVal) { 
-    if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên tài khoản!", "error");
-    return; 
-  }
-
-  // Gọi xác thực lớp thứ 2
-  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu thông tin tài khoản <b>${accVal}</b> không?`, 'success');
-  if (!isConfirmed) return;
-
-  var payload = {
-    account: accVal,
-    role: document.getElementById('newMemberRole').value,
-    can_edit_map: document.getElementById('newMemberCanEdit').checked,
-    id_dai: document.getElementById('newMemberDai').value ? Number(document.getElementById('newMemberDai').value) : null,
-    id_tram: document.getElementById('newMemberTram').value ? Number(document.getElementById('newMemberTram').value) : null
-  };
-  if (password) payload.password = password;
-
-  try {
-    showLoading("Đang lưu tài khoản...");
-    var { data, error } = await supabaseClient.from('tai_khoan').upsert([payload]).select();
-    if (error) throw error;
-    
-    if (data && data.length > 0) {
-      var users = window.rawUserList || [];
-      var idx = users.findIndex(u => u.account === accVal);
-      if (idx >= 0) users[idx] = data[0]; else users.push(data[0]);
-      window.rawUserList = users;
-      AppStore.setState({ rawUserList: users });
-    }
-
-    if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
-    document.getElementById('addMemberModal').style.display = 'none';
-    renderAllAdminTables();
-    hideLoading();
-  } catch (err) { 
-    hideLoading();
-    if (typeof showToast === 'function') showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
-  }
 }
 
 function moFormThemDai(id) {
@@ -453,12 +402,61 @@ function moFormThemDoan(id) {
   var tramList = getFilteredTramList();
   var tramOptions = tramList.map(tr => `<option value="${tr.id_tram || tr.id}" ${String(tr.id_tram || tr.id) === String(item.id_tram || item.tram_id) ? 'selected' : ''}>${tr.ten_tram || tr.ten}</option>`).join('');
 
+  // SỬA LỖI: Bổ sung trường nhập Tên Đoạn Cáp
   document.getElementById('auxFormFields').innerHTML = `
     <div class="form-group"><label>Mã đoạn cáp:</label><input type="text" id="auxMaDoan" value="${item.ma_doancap || item.ma_doan || ''}" placeholder="VD: D01"></div>
+    <div class="form-group"><label>Tên đoạn cáp:</label><input type="text" id="auxTenDoan" value="${item.ten_doan_cap || item.ten_doancap || item.ten || ''}" placeholder="VD: Đoạn từ TNN - Cột 1"></div>
     <div class="form-group"><label>Thuộc Tuyến:</label><select id="auxIdTuyen"><option value="">-- Chọn Tuyến --</option>${tuyenOptions}</select></div>
     <div class="form-group"><label>Thuộc Trạm:</label><select id="auxIdTram"><option value="">-- Chọn Trạm --</option>${tramOptions}</select></div>
   `;
   document.getElementById('genericAuxModal').style.display = 'flex';
+}
+
+// ==========================================================================
+// CÁC HÀM GHI/XÓA CÓ XÁC THỰC 2 LỚP BẰNG CUSTOM CONFIRM DIALOG
+// ==========================================================================
+
+async function saveAccountAction() {
+  var accountInput = document.getElementById('newMemberAccount');
+  var accVal = accountInput ? accountInput.value.trim() : '';
+  var password = document.getElementById('newMemberPass').value.trim();
+  
+  if (!accVal) { showToast("⚠️ Vui lòng nhập tên tài khoản!", "error"); return; }
+
+  // XÁC THỰC 2 LỚP TRƯỚC KHI GHI
+  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu thông tin tài khoản <b>${accVal}</b> không?`, 'success');
+  if (!isConfirmed) return;
+
+  var payload = {
+    account: accVal,
+    role: document.getElementById('newMemberRole').value,
+    can_edit_map: document.getElementById('newMemberCanEdit').checked,
+    id_dai: document.getElementById('newMemberDai').value ? Number(document.getElementById('newMemberDai').value) : null,
+    id_tram: document.getElementById('newMemberTram').value ? Number(document.getElementById('newMemberTram').value) : null
+  };
+  if (password) payload.password = password;
+
+  try {
+    showLoading("Đang lưu tài khoản...");
+    var { data, error } = await supabaseClient.from('tai_khoan').upsert([payload]).select();
+    if (error) throw error;
+    
+    if (data && data.length > 0) {
+      var users = window.rawUserList || [];
+      var idx = users.findIndex(u => u.account === accVal);
+      if (idx >= 0) users[idx] = data[0]; else users.push(data[0]);
+      window.rawUserList = users;
+      AppStore.setState({ rawUserList: users });
+    }
+
+    showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
+    document.getElementById('addMemberModal').style.display = 'none';
+    renderAllAdminTables();
+    hideLoading();
+  } catch (err) { 
+    hideLoading();
+    showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
+  }
 }
 
 async function saveAuxRecord() {
@@ -486,18 +484,20 @@ async function saveAuxRecord() {
     itemName = payload.ten_tuyen;
     if (!payload.ten_tuyen) { showToast("⚠️ Vui lòng nhập tên Tuyến cáp!", "error"); return; }
   } else if (tableType === 'doan_cap') {
+    // SỬA LỖI: Thu thập tên đoạn cáp để gửi lên Database
     pkCol = 'id_doan_cap';
     payload.ma_doancap = document.getElementById('auxMaDoan').value.trim();
+    payload.ten_doan_cap = document.getElementById('auxTenDoan').value.trim();
     payload.id_tuyen = document.getElementById('auxIdTuyen').value ? Number(document.getElementById('auxIdTuyen').value) : null;
     payload.id_tram = document.getElementById('auxIdTram').value ? Number(document.getElementById('auxIdTram').value) : null;
-    itemName = payload.ma_doancap;
-    if (!payload.ma_doancap) { showToast("⚠️ Vui lòng nhập mã đoạn cáp!", "error"); return; }
+    itemName = payload.ten_doan_cap;
+    if (!payload.ma_doancap || !payload.ten_doan_cap) { showToast("⚠️ Vui lòng nhập đủ mã và tên đoạn cáp!", "error"); return; }
   }
 
   if (recordId && recordId !== '') { payload[pkCol] = Number(recordId); }
 
-  // Gọi xác thực lớp thứ 2
-  let isConfirmed = await showConfirmDialog(`Xác nhận lưu thay đổi cho mục: <b>${itemName}</b>?`, 'success');
+  // XÁC THỰC 2 LỚP TRƯỚC KHI GHI
+  let isConfirmed = await showConfirmDialog(`Xác nhận lưu thay đổi cho mục:<br><b>${itemName}</b>?`, 'success');
   if (!isConfirmed) return;
 
   try {
@@ -528,7 +528,7 @@ async function saveAuxRecord() {
       }
     }
 
-    if (typeof showToast === 'function') showToast("✅ Lưu dữ liệu danh mục thành công!", "success");
+    showToast("✅ Lưu dữ liệu danh mục thành công!", "success");
     document.getElementById('genericAuxModal').style.display = 'none';
     
     renderAllAdminTables();
@@ -536,13 +536,13 @@ async function saveAuxRecord() {
     hideLoading();
   } catch (err) {
     hideLoading();
-    if (typeof showToast === 'function') showToast("❌ Không thể ghi dữ liệu: " + err.message, "error");
+    showToast("❌ Không thể ghi dữ liệu: " + err.message, "error");
   }
 }
 
 async function deleteAdminRecord(tableName, idItem) {
-  // Gọi xác thực lớp thứ 2 với cảnh báo mức độ xóa
-  let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn bản ghi <b>ID: ${idItem}</b> này khỏi cơ sở dữ liệu không?`, 'danger');
+  // XÁC THỰC 2 LỚP TRƯỚC KHI XÓA (Cảnh báo màu đỏ)
+  let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn bản ghi <b>ID: ${idItem}</b> này khỏi hệ thống không?`, 'danger');
   if (!isConfirmed) return;
 
   var pkCol = '';
@@ -578,13 +578,13 @@ async function deleteAdminRecord(tableName, idItem) {
       AppStore.setState({ doanCapList: window.rawDoanCapList, rawDoanList: window.rawDoanCapList });
     }
     
-    if (typeof showToast === 'function') showToast("🗑️ Đã xóa bản ghi thành công!", "success");
+    showToast("🗑️ Đã xóa bản ghi thành công!", "success");
     renderAllAdminTables();
     if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser();
     hideLoading();
   } catch (err) {
     hideLoading();
-    if (typeof showToast === 'function') showToast("❌ Không thể xóa bản ghi: " + err.message, "error");
+    showToast("❌ Không thể xóa bản ghi: " + err.message, "error");
   }
 }
 
