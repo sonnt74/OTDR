@@ -57,7 +57,47 @@ function showToast(message, type = 'info') {
     setTimeout(() => toast.remove(), 300);
   }, 3000);
 }
+// Hàm hiển thị hộp thoại xác nhận tùy chỉnh thay thế confirm() của trình duyệt
+function showConfirmDialog(message, type = 'danger') {
+  return new Promise((resolve) => {
+    let overlay = document.getElementById('custom-confirm-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'custom-confirm-overlay';
+      overlay.innerHTML = `
+        <div class="confirm-box">
+          <div class="confirm-msg" id="custom-confirm-msg"></div>
+          <div class="confirm-actions">
+            <button class="btn-confirm-no" id="custom-confirm-no">Hủy bỏ</button>
+            <button class="btn-confirm-yes" id="custom-confirm-yes">Xác nhận</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+    
+    document.getElementById('custom-confirm-msg').innerHTML = message;
+    
+    // Đổi màu nút dựa trên hành động (Lưu: Xanh, Xóa: Đỏ)
+    let btnYes = document.getElementById('custom-confirm-yes');
+    if (type === 'success') {
+      btnYes.style.background = '#198754';
+    } else {
+      btnYes.style.background = '#dc3545';
+    }
 
+    overlay.style.display = 'flex';
+
+    btnYes.onclick = function() {
+      overlay.style.display = 'none';
+      resolve(true);
+    };
+    document.getElementById('custom-confirm-no').onclick = function() {
+      overlay.style.display = 'none';
+      resolve(false);
+    };
+  });
+}
 // Hàm ghi nhật ký thao tác người dùng (Sử dụng trường account)
 async function ghiNhatKyThaoTac(hanhDong, chiTiet) {
   try {
