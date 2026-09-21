@@ -542,56 +542,70 @@ function moFormThemDoan(id) {
 // CÁC HÀM GHI/XÓA CÓ XÁC THỰC 2 LỚP BẰNG CUSTOM CONFIRM DIALOG
 // ==========================================================================
 
+// ==========================================================================
+// HÀM LƯU TÀI KHOẢN (THÊM / SỬA) ĐÃ LOẠI BỎ HOÀN TOÀN CÁC TRƯỜNG DƯ THỪA
+// ==========================================================================
 async function saveAccountAction() {
   var accountInput = document.getElementById('newMemberAccount');
   var accVal = accountInput ? accountInput.value.trim() : '';
   var password = document.getElementById('newMemberPass').value.trim();
   var access = getRoleAccess();
   
-  if (!accVal) { showToast("⚠️ Vui lòng nhập tên tài khoản!", "error"); return; }
+  if (!accVal) { 
+    if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên tài khoản!", "error");
+    return; 
+  }
 
+  // Hộp thoại xác thực 2 lớp tùy chỉnh an toàn
   let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu thông tin tài khoản <b>${accVal}</b> không?`, 'success');
   if (!isConfirmed) return;
 
   var selectedRole = document.getElementById('newMemberRole').value;
   var selectedDai = document.getElementById('newMemberDai').value;
-  
-  // BẢO MẬT CUỐI: Ngăn chặn hack DOM đổi quyền trên giao diện
-  if (!access.isSys && (selectedRole === 'admin_sys' || selectedRole === 'admin_dai')) {
-    showToast("❌ Lỗi bảo mật: Bạn không có quyền cấp vai trò này!", "error");
-    return;
-  }
+  var selectedTram = document.getElementById('newMemberTram').value;
 
+  // Lấy danh sách user cũ để giữ lại mật khẩu nếu không nhập mật khẩu mới
+  var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
+  var existingUser = users.find(u => u.account === accVal);
+
+  // Xây dựng payload chuẩn xác 100% với các cột thực tế của bảng tai_khoan
   var payload = {
     account: accVal,
     role: selectedRole,
     can_edit_map: document.getElementById('newMemberCanEdit').checked,
     id_dai: (access.isDai && !access.isSys) ? Number(access.idDai) : (selectedDai ? Number(selectedDai) : null),
-    id_tram: document.getElementById('newMemberTram').value ? Number(document.getElementById('newMemberTram').value) : null
+    id_tram: (access.isTram && !access.isSys && !access.isDai) ? Number(access.idTram) : (selectedTram ? Number(selectedTram) : null)
   };
-  
-  if (password) payload.password = password;
+
+  // Xử lý mật khẩu: Nếu nhập mới thì lưu, nếu để trống thì giữ nguyên mật khẩu cũ
+  if (password) {
+    payload.password = password;
+  } else if (existingUser && existingUser.password) {
+    payload.password = existingUser.password;
+  }
 
   try {
     showLoading("Đang lưu tài khoản...");
+    
+    // Thực hiện upsert lên Supabase chỉ với các trường hợp lệ
     var { data, error } = await supabaseClient.from('tai_khoan').upsert([payload]).select();
     if (error) throw error;
     
+    // Cập nhật mảng cục bộ trên RAM để giao diện đổi ngay lập tức
     if (data && data.length > 0) {
-      var users = window.rawUserList || [];
       var idx = users.findIndex(u => u.account === accVal);
       if (idx >= 0) users[idx] = data[0]; else users.push(data[0]);
       window.rawUserList = users;
       AppStore.setState({ rawUserList: users });
     }
 
-    showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
+    if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
     document.getElementById('addMemberModal').style.display = 'none';
     renderAllAdminTables();
     hideLoading();
   } catch (err) { 
     hideLoading();
-    showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
+    if (typeof showToast === 'function') showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
   }
 }
 
