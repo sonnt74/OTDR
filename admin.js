@@ -58,9 +58,10 @@ function getRoleAccess() {
   var user = getCurrentUser();
   var r = (user.role || '').toLowerCase();
   return {
-    isSys: r.includes('sys'),
-    isDai: r.includes('dai'),
-    isTram: r.includes('tram'),
+    isSys: r.includes('sys') || r === 'admin_sys',
+    isDai: r.includes('dai') || r === 'admin_dai',
+    isTram: r.includes('tram') || r === 'admin_tram',
+    isMember: r === 'member' || r === 'nhan_vien' || !r,
     idDai: String(user.id_dai || user.idDai || ''),
     idTram: String(user.id_tram || user.idTram || ''),
     account: user.account
@@ -80,18 +81,28 @@ function getSafeDataList(keyNames) {
 // ==========================================================================
 // BỘ LỌC PHÂN QUYỀN
 // ==========================================================================
+// 1. Lọc danh sách Tài khoản theo phân cấp
 function getFilteredUsers() {
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
   var access = getRoleAccess();
+
   if (access.isSys) return users;
-  if (access.isDai) return users.filter(u => String(u.id_dai) === access.idDai);
-  if (access.isTram) return users.filter(u => String(u.id_tram) === access.idTram);
+  if (access.isDai) {
+    // Admin đài thấy user thuộc đài mình hoặc thuộc các trạm nằm trong đài mình
+    var tramIdsInDai = getFilteredTramList().map(t => String(t.id_tram || t.id));
+    return users.filter(u => String(u.id_dai) === access.idDai || tramIdsInDai.includes(String(u.id_tram)));
+  }
+  if (access.isTram) {
+    return users.filter(u => String(u.id_tram) === access.idTram);
+  }
   return users.filter(u => u.account === access.account);
 }
 
+// 2. Lọc danh sách Đài theo phân cấp
 function getFilteredDaiList() {
   var daiList = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
   var access = getRoleAccess();
+
   if (access.isSys) return daiList;
   if (access.isDai) return daiList.filter(d => String(d.id_dai || d.id) === access.idDai);
   if (access.isTram) {
@@ -103,24 +114,43 @@ function getFilteredDaiList() {
   return [];
 }
 
+// 3. Lọc danh sách Trạm theo phân cấp
 function getFilteredTramList() {
   var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
   var access = getRoleAccess();
+
   if (access.isSys) return tramList;
   if (access.isDai) return tramList.filter(t => String(t.id_dai || t.dai_id) === access.idDai);
   if (access.isTram) return tramList.filter(t => String(t.id_tram || t.id) === access.idTram);
   return tramList;
 }
 
+// 4. Lọc danh sách Tuyến cáp theo phân cấp (Admin đài/trạm chỉ thấy tuyến qua đoạn tuyến thuộc quản lý)
 function getFilteredTuyenList() {
-  return getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
+  var tuyenList = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
+  var access = getRoleAccess();
+
+  if (access.isSys) return tuyenList;
+  
+  var validDoanList = getFilteredDoanList();
+  var validTuyenIds = validDoanList.map(d => String(d.id_tuyen || d.tuyen_id || d.id_tuyen_cap));
+  
+  return tuyenList.filter(t => validTuyenIds.includes(String(t.id_tuyen_cap || t.id_tuyen || t.id)));
 }
 
+// 5. Lọc danh sách Đoạn tuyến theo phân cấp
 function getFilteredDoanList() {
   var doanList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
   var access = getRoleAccess();
-  if (access.isSys || access.isDai) return doanList;
-  if (access.isTram) return doanList.filter(d => String(d.id_tram || d.tram_id) === access.idTram);
+
+  if (access.isSys) return doanList;
+  if (access.isDai) {
+    var tramIdsInDai = getFilteredTramList().map(t => String(t.id_tram || t.id));
+    return doanList.filter(d => tramIdsInDai.includes(String(d.id_tram || d.tram_id)));
+  }
+  if (access.isTram) {
+    return doanList.filter(d => String(d.id_tram || d.tram_id) === access.idTram);
+  }
   return doanList;
 }
 
@@ -153,22 +183,26 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
-/** 1. BẢNG TÀI KHOẢN */
+/** 1. RENDER BẢNG TÀI KHOẢN (Cho phép admin_tram quản lý user trong trạm) */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
   var access = getRoleAccess();
   var users = getFilteredUsers();
   
-  // Hiển thị nút Thêm tài khoản nếu là Sys hoặc Đài
   var addBtn = document.querySelector('#tab-accounts button.btn-success');
   if (addBtn) {
-    addBtn.style.display = (access.isSys || access.isDai) ? 'inline-block' : 'none';
+    // Sys, Đài, Trạm đều được phép thêm user trong phạm vi của mình
+    addBtn.style.display = access.isMember ? 'none' : 'inline-block';
   }
 
   tbody.innerHTML = users.map(u => {
     var accName = u.account || 'Tài khoản';
-    var canModify = access.isSys || (access.isDai && String(u.id_dai) === access.idDai);
+    
+    // Quyền sửa/xóa user: Sys toàn quyền, Đài sửa user trong đài, Trạm sửa user trong trạm mình
+    var canModify = access.isSys || 
+                    (access.isDai && String(u.id_dai) === access.idDai) || 
+                    (access.isTram && String(u.id_tram) === access.idTram);
 
     return `
       <tr>
@@ -179,7 +213,7 @@ function renderMasterAccountTable() {
         <td>${u.can_edit_map ? '✅ Có' : '❌ Không'}</td>
         <td>
           ${canModify ? `<button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien('${accName}')">✏️ Sửa</button>` : ''}
-          ${access.isSys ? `<button class="btn-small del" onclick="deleteAdminRecord('tai_khoan', '${accName}')">🗑️ Xóa</button>` : ''}
+          ${(access.isSys || (access.isDai && canModify)) ? `<button class="btn-small del" onclick="deleteAdminRecord('tai_khoan', '${accName}')">🗑️ Xóa</button>` : ''}
         </td>
       </tr>
     `;
