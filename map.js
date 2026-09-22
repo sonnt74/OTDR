@@ -446,27 +446,25 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
 window.suaGhiChu = async function(id, oldNote, lat, lng) {
   let currentNote = (oldNote === 'undefined' || oldNote === 'null') ? '' : oldNote;
   
-  // Bước 1: Nhập nội dung
-  let newNote = prompt(`Nhập ghi chú hoặc thông tin suy hao cho Măng xông này:`, currentNote);
+  // Gọi hộp thoại nhập liệu nhiều dòng chuyên nghiệp
+  let newNote = await showTextareaDialog(`📝 Cập nhật thông tin ghi chú & suy hao Măng xông:`, currentNote);
   
-  if (newNote !== null && newNote.trim() !== currentNote) { 
-    // Bước 2: XÁC THỰC THÊM 1 LẦN NỮA
-    let isConfirmed = await showConfirmDialog(`Bạn muốn lưu nội dung ghi chú mới này chứ?`, 'success');
+  if (newNote !== null && newNote !== currentNote) { 
+    let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu nội dung ghi chú này không?`, 'success');
     if (!isConfirmed) return;
 
     showLoading("Đang lưu ghi chú...");
     try {
-      const { error } = await supabaseClient.from('diem_ha_tang').update({ ghi_chu: newNote.trim() }).eq('id_diem', id);
+      const { error } = await supabaseClient.from('diem_ha_tang').update({ ghi_chu: newNote }).eq('id_diem', id);
       if (error) throw error;
       
       let localPt = globalDataPoints.find(p => String(p.id) === String(id));
-      if (localPt) localPt.ghiChu = newNote.trim();
+      if (localPt) localPt.ghiChu = newNote;
       
       if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("SUA_GHI_CHU", `Cập nhật ghi chú cho MX ID: ${id}`);
       showToast("✅ Lưu thông tin ghi chú thành công!", "success");
       
       veLaiTuyenAB();
-      // Bước 3: Zoom focus sát vào đúng măng xông vừa sửa
       map.setView([lat, lng], 19, { animate: true });
     } catch (err) {
       showToast("❌ Lỗi lưu ghi chú: " + err.message, "error");
