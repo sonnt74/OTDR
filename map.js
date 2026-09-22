@@ -525,6 +525,9 @@ window.copyToClipboardTNN = function(text) {
 /**
  * HÀM TỰ ĐỘNG ĐÁNH LẠI STT THEO ĐOẠN TUYẾN VÀ LƯU VÀO BẢNG doan_cap_diem
  */
+/**
+ * HÀM TỰ ĐỘNG ĐÁNH LẠI THỨ TỰ (thu_tu) VÀ UPSERT VÀO BẢNG doan_cap_diem
+ */
 window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   var selectTuyen = document.getElementById('selectTuyen');
   var selectDoanCap = document.getElementById('selectDoanCap');
@@ -533,7 +536,7 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   var doanVal = selectDoanCap ? selectDoanCap.value : 'ALL';
 
   if (!tuyenVal || tuyenVal === 'ALL') {
-    showToast("⚠️ Vui lòng chọn Tuyến cáp trước khi đồng bộ STT!", "error");
+    showToast("⚠️ Vui lòng chọn Tuyến cáp trước khi đồng bộ thứ tự!", "error");
     return;
   }
 
@@ -542,18 +545,13 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
     return;
   }
 
-  let processedSegments = JSON.parse(sessionStorage.getItem('synced_doan_stt') || '[]');
-  if (processedSegments.includes(String(doanVal))) {
-    let reRun = await showConfirmDialog(`ℹ️ <b>Thông báo:</b> Đoạn tuyến này đã được thực hiện đồng bộ STT trước đó rồi!<br><br>Bạn có chắc chắn muốn chạy lại không?`, 'info');
-    if (!reRun) return;
-  }
-
-  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn tự động gán lại STT cho các điểm thuộc đoạn cáp này theo khoảng cách thực tế không?`, 'success');
+  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn tự động gán lại thứ tự (thu_tu) cho các điểm thuộc đoạn cáp này theo khoảng cách thực tế không?`, 'success');
   if (!isConfirmed) return;
 
-  showLoading("Đang tính toán thứ tự không gian và cập nhật STT...");
+  showLoading("Đang tính toán thứ tự không gian và cập nhật CSDL...");
 
   try {
+    // 1. Lấy danh sách điểm đã sắp xếp theo khoảng cách thực tế
     var backbonePts = getMasterRouteBackbone(tuyenVal, 'ALL', doanVal);
     
     if (!backbonePts || backbonePts.length <= 1) {
@@ -564,51 +562,52 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
 
     let count = 0;
 
+    // 2. Duyệt qua từng điểm và thực hiện Upsert vào bảng doan_cap_diem
     for (let i = 0; i < backbonePts.length; i++) {
       let pt = backbonePts[i];
-      if (pt.id === 'TNN_BASE') continue;
+      if (pt.id === 'TNN_BASE') continue; // Bỏ qua điểm gốc trạm
 
-      let sttMoi = count + 1;
+      let thuTuMoi = count + 1;
       count++;
 
-      pt.stt = sttMoi;
+      pt.stt = thuTuMoi;
       var localPt = globalDataPoints.find(p => String(p.id) === String(pt.id));
-      if (localPt) localPt.stt = sttMoi;
+      if (localPt) localPt.stt = thuTuMoi;
 
       if (typeof supabaseClient !== 'undefined') {
-        // Cập nhật STT vào bảng trung gian doan_cap_diem theo đúng id_doan_cap và id_diem
+        // Dùng upsert: Nếu đã có liên kết giữa đoạn và điểm thì cập nhật thu_tu, nếu chưa có (ví dụ măng xông mới) thì tự động chèn mới
         let { error } = await supabaseClient
           .from('doan_cap_diem')
-          .update({ stt: sttMoi })
-          .eq('id_doan_cap', Number(doanVal))
-          .eq('id_diem', Number(pt.id));
+          .upsert({
+            id_doan_cap: Number(doanVal),
+            id_diem: Number(pt.id),
+            thu_tu: thuTuMoi
+          }, {
+            onConflict: 'id_doan_cap,id_diem'
+          });
 
         if (error) {
-          console.error(`Lỗi cập nhật STT cho điểm ID ${pt.id}:`, error.message);
+          console.error(`Lỗi cập nhật thứ tự điểm ID ${pt.id}:`, error.message);
           throw new Error(`Không thể cập nhật điểm ${pt.ten}: ${error.message}`);
         }
       }
     }
 
-    if (!processedSegments.includes(String(doanVal))) {
-      processedSegments.push(String(doanVal));
-      sessionStorage.setItem('synced_doan_stt', JSON.stringify(processedSegments));
-    }
-
     hideLoading();
-    showToast(`✅ Đã đồng bộ thành công STT cho ${count} điểm trên đoạn tuyến!`, "success");
+    showToast(`✅ Đã đồng bộ và cập nhật thành công thứ tự cho ${count} điểm!`, "success");
 
+    // 3. Vẽ lại bản đồ để hiển thị thứ tự mới chính xác
     if (typeof veLaiTuyenAB === 'function') {
       veLaiTuyenAB();
     }
 
     if (typeof ghiNhatKyThaoTac === 'function') {
-      await ghiNhatKyThaoTac("TU_DONG_GAN_STT", `Đánh lại STT theo đoạn cáp ID: ${doanVal} (${count} điểm)`);
+      await ghiNhatKyThaoTac("TU_DONG_GAN_THU_TU", `Đánh lại thu_tu theo đoạn cáp ID: ${doanVal} (${count} điểm)`);
     }
 
   } catch (err) {
     hideLoading();
-    showToast("❌ Lỗi đồng bộ STT: " + err.message, "error");
-    console.error("Chi tiết lỗi gán STT tự động:", err);
+    showToast("❌ Lỗi đồng bộ thứ tự: " + err.message, "error");
+    console.error("Chi tiết lỗi:", err);
   }
 };
