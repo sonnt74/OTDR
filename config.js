@@ -117,6 +117,97 @@ async function ghiNhatKyThaoTac(hanhDong, chiTiet) {
 }
 
 // ==========================================================================
+// CÁC HÀM XỬ LÝ SỰ KIỆN NÚT BẤM TRÊN POPUP BẢN ĐỒ (SỬ DỤNG CUSTOM PROMPT)
+// ==========================================================================
+
+// 1. Hàm xử lý Sửa tên và Xóa đối tượng hạ tầng
+window.moFormCrud = async function(action, id, ten, lat, lng) {
+  if (action === 'DELETE') {
+    let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn điểm <b>${ten}</b> khỏi tuyến không?`, 'danger');
+    
+    if (isConfirmed) {
+      showLoading("Đang xóa điểm hạ tầng...");
+      try {
+        const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id);
+        if (error) throw error;
+        
+        globalDataPoints = globalDataPoints.filter(p => String(p.id) !== String(id));
+        if (typeof AppStore !== 'undefined') AppStore.setState({ dataPoints: globalDataPoints });
+        
+        if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("XOA_DIEM", `Kỹ sư đã xóa điểm [${ten}] ID: ${id}`);
+        showToast("✅ Đã xóa điểm hạ tầng thành công!", "success");
+        
+        veLaiTuyenAB();
+        map.setView([lat, lng], 19, { animate: true });
+      } catch (err) {
+        showToast("❌ Lỗi xóa điểm: " + err.message, "error");
+      }
+      hideLoading();
+    }
+  } 
+  else if (action === 'EDIT') {
+    // Sử dụng hộp thoại nhập liệu tùy chỉnh chuyên nghiệp thay vì prompt()
+    let newTen = await showPromptDialog(`Nhập tên mới cho điểm hạ tầng:`, ten);
+    
+    if (newTen !== null && newTen !== '' && newTen !== ten) {
+      let isConfirmed = await showConfirmDialog(`Xác nhận đổi tên điểm thành:<br><b style="color:#0d6efd;">${newTen}</b>?`, 'success');
+      if (!isConfirmed) return;
+
+      showLoading("Đang cập nhật tên...");
+      try {
+        const { error } = await supabaseClient.from('diem_ha_tang').update({ ten: newTen }).eq('id_diem', id);
+        if (error) throw error;
+        
+        let localPt = globalDataPoints.find(p => String(p.id) === String(id));
+        if (localPt) localPt.ten = newTen;
+        
+        if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("SUA_TEN_DIEM", `Kỹ sư đổi tên điểm từ [${ten}] thành [${newTen}]`);
+        showToast("✅ Cập nhật tên điểm thành công!", "success");
+        
+        veLaiTuyenAB();
+        map.setView([lat, lng], 19, { animate: true });
+      } catch (err) {
+        showToast("❌ Lỗi cập nhật tên: " + err.message, "error");
+      }
+      hideLoading();
+    }
+  }
+  else if (action === 'ADD') {
+    showToast("Tính năng thêm điểm mới trên bản đồ đang được hoàn thiện.", "info");
+  }
+};
+
+// 2. Hàm xử lý Ghi chú riêng cho Măng xông
+window.suaGhiChu = async function(id, oldNote, lat, lng) {
+  let currentNote = (oldNote === 'undefined' || oldNote === 'null') ? '' : oldNote;
+  
+  // Sử dụng hộp thoại nhập liệu tùy chỉnh chuyên nghiệp thay vì prompt()
+  let newNote = await showPromptDialog(`Nhập ghi chú hoặc thông tin suy hao cho Măng xông:`, currentNote);
+  
+  if (newNote !== null && newNote !== currentNote) { 
+    let isConfirmed = await showConfirmDialog(`Bạn muốn lưu nội dung ghi chú mới này chứ?`, 'success');
+    if (!isConfirmed) return;
+
+    showLoading("Đang lưu ghi chú...");
+    try {
+      const { error } = await supabaseClient.from('diem_ha_tang').update({ ghi_chu: newNote }).eq('id_diem', id);
+      if (error) throw error;
+      
+      let localPt = globalDataPoints.find(p => String(p.id) === String(id));
+      if (localPt) localPt.ghiChu = newNote;
+      
+      if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("SUA_GHI_CHU", `Cập nhật ghi chú cho MX ID: ${id}`);
+      showToast("✅ Lưu thông tin ghi chú thành công!", "success");
+      
+      veLaiTuyenAB();
+      map.setView([lat, lng], 19, { animate: true });
+    } catch (err) {
+      showToast("❌ Lỗi lưu ghi chú: " + err.message, "error");
+    }
+    hideLoading();
+  }
+};
+// ==========================================================================
 // HỘP THOẠI NHẬP LIỆU TÙY CHỈNH (CUSTOM PROMPT DIALOG CHUYÊN NGHIỆP)
 // ==========================================================================
 function showPromptDialog(title, defaultValue = '') {
