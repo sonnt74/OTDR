@@ -522,6 +522,9 @@ window.copyToClipboardTNN = function(text) {
 /**
  * HÀM TỰ ĐỘNG ĐÁNH LẠI STT THEO ĐOẠN TUYẾN, CÓ KIỂM TRA LỊCH SỬ ĐÃ THỰC HIỆN
  */
+/**
+ * HÀM TỰ ĐỘNG ĐÁNH LẠI STT THEO ĐOẠN TUYẾN VÀ LƯU VÀO BẢNG doan_cap_diem
+ */
 window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   var selectTuyen = document.getElementById('selectTuyen');
   var selectDoanCap = document.getElementById('selectDoanCap');
@@ -539,7 +542,6 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
     return;
   }
 
-  // 1. Kiểm tra lịch sử xem đoạn tuyến này đã được đồng bộ trong phiên làm việc chưa
   let processedSegments = JSON.parse(sessionStorage.getItem('synced_doan_stt') || '[]');
   if (processedSegments.includes(String(doanVal))) {
     let reRun = await showConfirmDialog(`ℹ️ <b>Thông báo:</b> Đoạn tuyến này đã được thực hiện đồng bộ STT trước đó rồi!<br><br>Bạn có chắc chắn muốn chạy lại không?`, 'info');
@@ -552,7 +554,6 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   showLoading("Đang tính toán thứ tự không gian và cập nhật STT...");
 
   try {
-    // 2. Lấy danh sách điểm theo tuyến và đoạn được chọn
     var backbonePts = getMasterRouteBackbone(tuyenVal, 'ALL', doanVal);
     
     if (!backbonePts || backbonePts.length <= 1) {
@@ -561,13 +562,11 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
       return;
     }
 
-    // 3. Duyệt và gán STT mới tăng dần theo khoảng cách
-    let updatePromises = [];
     let count = 0;
 
     for (let i = 0; i < backbonePts.length; i++) {
       let pt = backbonePts[i];
-      if (pt.id === 'TNN_BASE') continue; // Bỏ qua trạm gốc
+      if (pt.id === 'TNN_BASE') continue;
 
       let sttMoi = count + 1;
       count++;
@@ -577,27 +576,28 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
       if (localPt) localPt.stt = sttMoi;
 
       if (typeof supabaseClient !== 'undefined') {
-        let promise = supabaseClient
-          .from('diem_ha_tang')
+        // Cập nhật STT vào bảng trung gian doan_cap_diem theo đúng id_doan_cap và id_diem
+        let { error } = await supabaseClient
+          .from('doan_cap_diem')
           .update({ stt: sttMoi })
-          .eq('id_diem', pt.id);
-        updatePromises.push(promise);
+          .eq('id_doan_cap', Number(doanVal))
+          .eq('id_diem', Number(pt.id));
+
+        if (error) {
+          console.error(`Lỗi cập nhật STT cho điểm ID ${pt.id}:`, error.message);
+          throw new Error(`Không thể cập nhật điểm ${pt.ten}: ${error.message}`);
+        }
       }
     }
 
-    // 4. Thực thi cập nhật đồng loạt lên Supabase
-    await Promise.all(updatePromises);
-
-    // 5. Ghi nhận lịch sử vào bộ nhớ tạm
     if (!processedSegments.includes(String(doanVal))) {
       processedSegments.push(String(doanVal));
       sessionStorage.setItem('synced_doan_stt', JSON.stringify(processedSegments));
     }
 
     hideLoading();
-    showToast(`✅ Đã đồng bộ thành công STT cho ${count} điểm của đoạn tuyến!`, "success");
+    showToast(`✅ Đã đồng bộ thành công STT cho ${count} điểm trên đoạn tuyến!`, "success");
 
-    // 6. Vẽ lại bản đồ
     if (typeof veLaiTuyenAB === 'function') {
       veLaiTuyenAB();
     }
@@ -609,6 +609,6 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   } catch (err) {
     hideLoading();
     showToast("❌ Lỗi đồng bộ STT: " + err.message, "error");
-    console.error("Lỗi gán STT tự động:", err);
+    console.error("Chi tiết lỗi gán STT tự động:", err);
   }
 };
