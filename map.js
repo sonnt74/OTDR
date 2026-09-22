@@ -556,6 +556,9 @@ window.copyToClipboardTNN = function(text) {
  * HÀM TỰ ĐỘNG SẮP XẾP KHÔNG GIAN VÀ GÁN THỨ TỰ (thu_tu) VÀO BẢNG doan_cap_diem
  * Tuân thủ 3 bước: Lọc danh mục -> Xác định mốc gốc -> Sắp xếp Nearest Neighbor & Upsert CSDL
  */
+/**
+ * HÀM TỰ ĐỘNG SẮP XẾP THEO TỌA ĐỘ (lat, lng) VÀ UPSERT THỨ TỰ (thu_tu) VÀO BẢNG doan_cap_diem
+ */
 window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   var selectTuyen = document.getElementById('selectTuyen');
   var selectDoanCap = document.getElementById('selectDoanCap');
@@ -568,15 +571,13 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
     return;
   }
 
-  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn tự động sắp xếp theo không gian thực tế và gán lại thu_tu vào bảng doan_cap_diem không?`, 'success');
+  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn tự động sắp xếp theo tọa độ (lat, lng) từ Trạm TNN và gán lại thu_tu vào bảng doan_cap_diem không?`, 'success');
   if (!isConfirmed) return;
 
-  showLoading("Đang phân tích không gian thực địa và cập nhật cơ sở dữ liệu...");
+  showLoading("Đang tính toán khoảng cách không gian (lat, lng) và cập nhật CSDL...");
 
   try {
-    // =========================================================================
-    // BƯỚC 1: Lọc toàn bộ danh sách điểm thuộc đoạn tuyến từ globalDataPoints (kể cả doan_dung_chung)
-    // =========================================================================
+    // 1. Lọc toàn bộ danh sách điểm thuộc đoạn tuyến từ globalDataPoints (bao gồm doan_dung_chung và măng xông)
     var allPts = globalDataPoints.filter(pt => {
       let matchTuyen = (tuyenVal === 'ALL' || pt.idTuyen == tuyenVal);
       let matchDoan = (doanVal === 'ALL' || pt.idDoanCap == doanVal || (pt.doanDungChung && pt.doanDungChung.includes(String(doanVal))));
@@ -589,18 +590,14 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
       return;
     }
 
-    // =========================================================================
-    // BƯỚC 2: Xác định điểm mốc xuất phát (Base Point - Trạm TNN)
-    // =========================================================================
+    // 2. Xác định điểm mốc gốc tại Trạm TNN dựa trên lat, lng chuẩn
     var basePt = allPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
     if (!basePt) {
       basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945 };
       allPts.unshift(basePt);
     }
 
-    // =========================================================================
-    // BƯỚC 3: Sắp xếp theo không gian thực tế (Nearest Neighbor) kể cả măng xông
-    // =========================================================================
+    // 3. Sắp xếp theo khoảng cách lat/lng (Nearest Neighbor) kể cả măng xông
     let sortedPath = [basePt];
     let remaining = allPts.filter(p => p !== basePt);
     
@@ -619,7 +616,6 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
       remaining.splice(nearestIdx, 1);
     }
 
-    // Loại bỏ điểm gốc ra khỏi danh sách cần ghi vào CSDL
     let validPts = sortedPath.filter(pt => pt.id !== 'TNN_BASE');
 
     if (validPts.length === 0) {
@@ -628,10 +624,7 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
       return;
     }
 
-    // =========================================================================
-    // BƯỚC 4 & 5: Cập nhật an toàn vào bảng doan_cap_diem (Upsert thông minh)
-    // 4a. Gán số âm tạm thời để xóa sạch xung đột Unique Constraint trên CSDL
-    // =========================================================================
+    // 4. Gán số âm tạm thời để tránh xung đột Unique Constraint trên CSDL
     for (let i = 0; i < validPts.length; i++) {
       let pt = validPts[i];
       await supabaseClient.from('doan_cap_diem').upsert({
@@ -641,11 +634,11 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
       }, { onConflict: 'id_doan_cap,id_diem' });
     }
 
-    // 4b. Gán số thứ tự chính xác tăng dần 1, 2, 3... (tích hợp cả măng xông mới)
+    // 5. Cập nhật thứ tự chính xác tăng dần 1, 2, 3... dựa theo thứ tự tính bằng lat, lng
     for (let i = 0; i < validPts.length; i++) {
       let pt = validPts[i];
       let thuTuMoi = i + 1;
-      pt.thu_tu = thuTuMoi; // Cập nhật trực tiếp vào biến cục bộ
+      pt.thu_tu = thuTuMoi;
 
       let { error } = await supabaseClient.from('doan_cap_diem').upsert({
         id_doan_cap: Number(doanVal),
@@ -659,9 +652,8 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
     }
 
     hideLoading();
-    showToast(`✅ Đã tự động gán thu_tu thành công cho ${validPts.length} điểm (bao gồm măng xông) vào bảng doan_cap_diem!`, "success");
+    showToast(`✅ Đã đồng bộ thành công ${validPts.length} điểm vào bảng doan_cap_diem theo tọa độ lat, lng!`, "success");
 
-    // Tự động vẽ lại bản đồ để cập nhật lộ trình chuẩn xác ngay lập tức
     if (typeof veLaiTuyenAB === 'function') {
       veLaiTuyenAB();
     }
