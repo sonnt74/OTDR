@@ -720,9 +720,3 @@ function toggleGISPanel() {
     panel.classList.toggle('collapsed');
   }
 }
-```[cite: 4, 7]
-
----
-
-### 📄 2. Toàn bộ mã nguồn tệp `map.js` 
-*(Đã tích hợp Form Thêm/Sửa chi tiết, tự động load đúng danh mục loại điểm từ Supabase, phân quyền xem ghi chú măng xông)*
