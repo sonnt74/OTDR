@@ -58,12 +58,11 @@ function getRoleAccess() {
   var user = getCurrentUser();
   var r = (user.role || '').toLowerCase().trim();
   
-  // Xác định rõ ràng các cấp bậc
   var isSys = r.includes('sys') || r === 'admin_sys';
   var isDai = r.includes('dai') || r === 'admin_dai';
   var isTram = r.includes('tram') || r === 'admin_tram';
-  // Nếu không phải các quyền admin trên thì mặc định là nhân viên / member
-  var isMember = !isSys && !isDai && !isTram;
+  // Hỗ trợ cả hai tên gọi 'nhan_vien' và 'member' là cấp bậc nhân viên trạm
+  var isMember = r === 'nhan_vien' || r === 'member' || (!isSys && !isDai && !isTram);
 
   return {
     isSys: isSys,
@@ -74,6 +73,26 @@ function getRoleAccess() {
     idTram: String(user.id_tram || user.idTram || ''),
     account: user.account
   };
+}
+
+// Lọc danh sách tài khoản theo phân quyền nghiêm ngặt
+function getFilteredUsers() {
+  var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
+  var access = getRoleAccess();
+
+  if (access.isSys) return users;
+  if (access.isDai) {
+    var tramIdsInDai = getFilteredTramList().map(t => String(t.id_tram || t.id));
+    return users.filter(u => String(u.id_dai) === access.idDai || tramIdsInDai.includes(String(u.id_tram)));
+  }
+  if (access.isTram) {
+    return users.filter(u => String(u.id_tram) === access.idTram);
+  }
+  if (access.isMember) {
+    // Nhân viên chỉ nhìn thấy tài khoản của chính mình
+    return users.filter(u => u.account === access.account);
+  }
+  return [];
 }
 
 function getSafeDataList(keyNames) {
@@ -198,13 +217,14 @@ function renderMasterAccountTable() {
   
   var addBtn = document.querySelector('#tab-accounts button.btn-success');
   if (addBtn) {
+    // Nhân viên (member hoặc nhan_vien) không được phép thêm tài khoản mới
     addBtn.style.display = access.isMember ? 'none' : 'inline-block';
   }
 
   tbody.innerHTML = users.map(u => {
     var accName = u.account || 'Tài khoản';
-    var tenAcc = u.ten_account || '(Chưa cập nhật)';
-    var soDt = u.so_dt || '(Chưa có)';
+    var tenAcc = u.ten_account ? u.ten_account : '<span style="color:#999; font-style:italic;">Chưa cập nhật</span>';
+    var soDt = u.so_dt ? u.so_dt : '<span style="color:#999; font-style:italic;">Chưa có</span>';
     
     var canModify = access.isSys || 
                     (access.isDai && String(u.id_dai) === access.idDai) || 
@@ -212,7 +232,8 @@ function renderMasterAccountTable() {
 
     return `
       <tr>
-        <td><b>${accName}</b><br><small style="color:#666;">👤 ${tenAcc}</small></td>
+        <td><b>${accName}</b></td>
+        <td>👤 ${tenAcc}</td>
         <td>📞 ${soDt}</td>
         <td><span style="background:#0ea5e9; color:#fff; padding:2px 6px; border-radius:4px; font-size:11px;">${u.role || 'nhan_vien'}</span></td>
         <td>🏢 ${u.ten_dai || getDaiName(u.id_dai)}</td>
@@ -223,7 +244,7 @@ function renderMasterAccountTable() {
         </td>
       </tr>
     `;
-  }).join('') || '<tr><td colspan="6" style="text-align:center; padding:15px;">Không có dữ liệu tài khoản</td></tr>';
+  }).join('') || '<tr><td colspan="7" style="text-align:center; padding:15px;">Không có dữ liệu tài khoản</td></tr>';
 }
 
 /** HÀM LƯU TÀI KHOẢN (THÊM HOẶC CẬP NHẬT) */
