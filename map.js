@@ -145,29 +145,43 @@ function getDistanceAlongRoute(targetPt, pathPts) {
   return bestDist;
 }
 
+/**
+ * HÀM XÂY DỰNG TUYẾN BACKBONE THEO THỨ TỰ CỨNG (thu_tu) VÀ SO SÁNH KHOẢNG CÁCH
+ */
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
-  var allPts = globalDataPoints.filter(pt => (tuyenVal === 'ALL' || pt.idTuyen == tuyenVal) && (tramVal === 'ALL' || pt.idTram == tramVal) && (doanVal === 'ALL' || pt.idDoanCap == doanVal));
+  // 1. Lọc các điểm thuộc tuyến, trạm và đoạn được chọn
+  var allPts = globalDataPoints.filter(pt => {
+    let matchTuyen = (tuyenVal === 'ALL' || pt.idTuyen == tuyenVal);
+    let matchTram = (tramVal === 'ALL' || pt.idTram == tramVal);
+    let matchDoan = (doanVal === 'ALL' || pt.idDoanCap == doanVal || (pt.doanDungChung && pt.doanDungChung.includes(String(doanVal))));
+    return matchTuyen && matchTram && matchDoan;
+  });
+
   if (allPts.length === 0) return [];
 
-  // Đảm bảo luôn có điểm Gốc Trạm TNN (STT nhỏ nhất để luôn đứng đầu)
+  // Đảm bảo luôn có điểm Gốc Trạm TNN ở đầu tiên
   var basePt = allPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
   if (!basePt) {
-    basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, lyTrinh: "0+000", idTuyen: tuyenVal, stt: -9999, loai: "Trạm", idLoaiDiem: 0, duTru: 0 };
+    basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, lyTrinh: "0+000", idTuyen: tuyenVal, thu_tu: -9999, loai: "Trạm", idLoaiDiem: 0, duTru: 0 };
     allPts.unshift(basePt);
   }
 
   // =========================================================
-  // THUẬT TOÁN 1: SẮP XẾP THEO STT CỨNG (GIẢI PHÁP MỚI)
+  // THUẬT TOÁN 1: SẮP XẾP THEO THỨ TỰ CỨNG (thu_tu từ Database)
   // =========================================================
-  let sortedBySTT = [...allPts].sort((a, b) => {
-    // Sắp xếp tăng dần theo STT
-    if (a.stt !== b.stt) return a.stt - b.stt;
-    // Nếu vô tình 2 điểm trùng STT, xếp tạm theo bảng chữ cái Tên để tránh nhảy vị trí ngẫu nhiên
+  let sortedByThuTu = [...allPts].sort((a, b) => {
+    if (a.id === 'TNN_BASE') return -1;
+    if (b.id === 'TNN_BASE') return 1;
+
+    let thuTuA = a.thu_tu !== undefined && a.thu_tu !== null ? Number(a.thu_tu) : 9999;
+    let thuTuB = b.thu_tu !== undefined && b.thu_tu !== null ? Number(b.thu_tu) : 9999;
+
+    if (thuTuA !== thuTuB) return thuTuA - thuTuB;
     return (a.ten || '').localeCompare(b.ten || '');
   });
 
   // =========================================================
-  // THUẬT TOÁN 2: NEAREST NEIGHBOR CŨ (ĐỂ CHẠY NGẦM SO SÁNH)
+  // THUẬT TOÁN 2: NEAREST NEIGHBOR (KHOẢNG CÁCH KHÔNG GIAN CŨ)
   // =========================================================
   let oldSorted = [basePt];
   let remaining = allPts.filter(p => p !== basePt);
@@ -183,30 +197,31 @@ function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   }
 
   // =========================================================
-  // SO SÁNH 2 KẾT QUẢ VÀ IN RA BẢNG CONSOLE ĐỂ BẠN KIỂM TRA
+  // SO SÁNH 2 KẾT QUẢ VÀ IN RA BẢNG CONSOLE ĐỂ KIỂM TRA
   // =========================================================
   let isDifferent = false;
   let comparisonData = [];
-  for (let i = 0; i < sortedBySTT.length; i++) {
-    if (sortedBySTT[i].id !== oldSorted[i].id) isDifferent = true;
+  for (let i = 0; i < sortedByThuTu.length; i++) {
+    let tA = sortedByThuTu[i].thu_tu !== undefined ? sortedByThuTu[i].thu_tu : 'N/A';
+    if (sortedByThuTu[i].id !== oldSorted[i].id) isDifferent = true;
     comparisonData.push({
-      "Vị trí (Index)": i,
-      "Theo STT (MỚI)": `[STT: ${sortedBySTT[i].stt}] ${sortedBySTT[i].ten}`,
-      "Theo Khoảng cách (CŨ)": `[STT: ${oldSorted[i].stt}] ${oldSorted[i].ten}`,
-      "Trùng khớp?": sortedBySTT[i].id === oldSorted[i].id ? "✅ Đúng" : "❌ Lệch"
+      "Vị trí": i,
+      "Theo thu_tu Cứng (MỚI)": `[Thứ tự: ${tA}] ${sortedByThuTu[i].ten}`,
+      "Theo Khoảng cách (CŨ)": `[Thứ tự: ${oldSorted[i].thu_tu || 'N/A'}] ${oldSorted[i].ten}`,
+      "Trùng khớp?": sortedByThuTu[i].id === oldSorted[i].id ? "✅ Khớp" : "❌ Lệch"
     });
   }
 
-  console.log(`%c--- KẾT QUẢ TÍNH TOÁN TUYẾN: ${tuyenVal} ---`, "color: #0d6efd; font-weight: bold; font-size: 14px;");
+  console.log(`%c--- SO SÁNH THỨ TỰ TUYẾN/ĐOẠN (Đoạn: ${doanVal}) ---`, "color: #0d6efd; font-weight: bold; font-size: 14px;");
   if (isDifferent) {
-    console.warn("⚠️ CẢNH BÁO: Đã có sự sai lệch thứ tự điểm giữa Thuật toán Cũ và Mới. Chi tiết xem bảng dưới:");
+    console.warn("⚠️ Có sự sai lệch thứ tự giữa `thu_tu` trong CSDL và thuật toán Khoảng cách. Chi tiết:");
     console.table(comparisonData);
   } else {
-    console.log("%c✅ Tuyệt vời! Cả 2 thuật toán xếp STT cứng và Khoảng cách đều cho ra một lộ trình giống hệt nhau.", "color: #198754; font-weight: bold;");
+    console.log("%c✅ Tuyệt vời! Thứ tự `thu_tu` trong CSDL khớp hoàn toàn với thuật toán khoảng cách không gian.", "color: #198754; font-weight: bold;");
   }
 
-  // TRẢ VỀ DỮ LIỆU ĐỂ VẼ LÊN BẢN ĐỒ THEO CHUẨN STT CỨNG (GIẢI PHÁP 2)
-  return sortedBySTT;
+  // TRẢ VỀ MẢNG ĐÃ ĐƯỢC SẮP XẾP CHUẨN THEO THỨ TỰ CỨNG ĐỂ VẼ BẢN ĐỒ
+  return sortedByThuTu;
 }
 
 function precalculateRouteDataForPoints(pts, backbonePts) {
