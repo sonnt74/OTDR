@@ -432,11 +432,43 @@ function mouMoModalDiemChiTiet(action, id, lat, lng) {
 
   var loaiSelect = document.getElementById('diemLoaiSelect');
   if (loaiSelect) {
-    loaiSelect.innerHTML = '';
-    var loaiList = window.rawLoaiDiemList || [{ id_loaidiem: 1, loai: 'Cột' }, { id_loaidiem: 2, loai: 'Bể' }, { id_loaidiem: 3, loai: 'Mốc' }, { id_loaidiem: 4, loai: 'Măng xông' }];
-    loaiList.forEach(l => {
-      loaiSelect.innerHTML += `<option value="${l.id_loaidiem || l.id}">${l.loai || l.ten_loai}</option>`;
-    });
+    loaiSelect.innerHTML = '<option value="">-- Đang tải danh mục... --</option>';
+    
+    // Kiểm tra mảng toàn cục đã được nạp từ data.js hay chưa
+    var loaiList = window.rawLoaiDiemList || [];
+    
+    if (loaiList.length > 0) {
+      loaiSelect.innerHTML = '';
+      loaiList.forEach(l => {
+        // Chuẩn hóa tên các cột khóa chính và tên hiển thị từ bảng loai_diem
+        var lId = l.id_loaidiem !== undefined ? l.id_loaidiem : (l.id !== undefined ? l.id : 1);
+        var lName = l.loai !== undefined ? l.loai : (l.ten_loai !== undefined ? l.ten_loai : (l.ten || 'Điểm'));
+        loaiSelect.innerHTML += `<option value="${lId}">${lName}</option>`;
+      });
+      
+      // Nếu đang ở chế độ sửa, tự động chọn đúng loại điểm cũ của điểm đó
+      if (action === 'EDIT' && typeof ptObj !== 'undefined' && ptObj) {
+        loaiSelect.value = ptObj.idLoaiDiem || ptObj.id_loaidiem || 1;
+      }
+    } else {
+      // Trường hợp dữ liệu chưa kịp đồng bộ khi khởi động, truy vấn trực tiếp bảng loai_diem từ Supabase
+      supabaseClient.from('loai_diem').select('*').then(function(res) {
+        if (!res.error && res.data && res.data.length > 0) {
+          window.rawLoaiDiemList = res.data; // Lưu lại dùng chung cho lần sau
+          loaiSelect.innerHTML = '';
+          res.data.forEach(l => {
+            var lId = l.id_loaidiem !== undefined ? l.id_loaidiem : (l.id !== undefined ? l.id : 1);
+            var lName = l.loai !== undefined ? l.loai : (l.ten_loai !== undefined ? l.ten_loai : (l.ten || 'Điểm'));
+            loaiSelect.innerHTML += `<option value="${lId}">${lName}</option>`;
+          });
+          if (action === 'EDIT' && typeof ptObj !== 'undefined' && ptObj) {
+            loaiSelect.value = ptObj.idLoaiDiem || ptObj.id_loaidiem || 1;
+          }
+        } else {
+          loaiSelect.innerHTML = '<option value="">Không tải được danh mục loại điểm</option>';
+        }
+      });
+    }
   }
 
   var selectTuyen = document.getElementById('selectTuyen');
