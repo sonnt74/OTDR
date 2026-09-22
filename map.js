@@ -1,13 +1,12 @@
-// map.js - Quản lý bản đồ Leaflet, định vị GPS, đo khoảng cách và vẽ tuyến cáp quang
+// map.js - Khởi tạo bản đồ Leaflet, sự kiện bản đồ, tuyến cáp và form CRUD
 
 var moveEndDebounceTimer = null;
 
 /**
- * 1. KHỞI TẠO BẢN ĐỒ LEAFLET (ĐÃ TỐI ƯU KIỂM TRA KÍCH THƯỚC KHUNG NHÌN)
+ * 1. KHỞI TẠO BẢN ĐỒ LEAFLET
  */
 function khoiTaoBanDoLeaflet() {
   if (map) {
-    // Nếu bản đồ đã tồn tại, chỉ cần gọi lệnh làm mới kích thước
     setTimeout(() => { if (map) map.invalidateSize(); }, 100);
     return;
   }
@@ -57,7 +56,6 @@ function khoiTaoBanDoLeaflet() {
   
   map.on('click', e => { if (isMeasuring) { measurePoints.push(e.latlng); redrawMeasureLayer(); } });
 
-  // Ép làm mới kích thước bản đồ sau khi khởi tạo thành công
   setTimeout(() => {
     if (map) map.invalidateSize();
   }, 250);
@@ -255,7 +253,7 @@ function getPointsCuaTuyenHienTai() {
  * 4. VẼ TUYẾN CÁP VÀ ĐIỂM HẠ TẦNG LÊN BẢN ĐỒ
  */
 function veLaiTuyenAB() {
-  if (!map) khoiTaoBanDoLeaflet(); // Tự động khởi tạo nếu chưa có
+  if (!map) khoiTaoBanDoLeaflet();
   if (!map) return;
 
   markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
