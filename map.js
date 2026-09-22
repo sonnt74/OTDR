@@ -532,16 +532,7 @@ window.copyToClipboardTNN = function(text) {
   });
 };
 /**
- * HÀM TỰ ĐỘNG ĐÁNH LẠI STT THEO ĐOẠN TUYẾN, CÓ KIỂM TRA LỊCH SỬ ĐÃ THỰC HIỆN
- */
-/**
- * HÀM TỰ ĐỘNG ĐÁNH LẠI STT THEO ĐOẠN TUYẾN, CÓ KIỂM TRA LỊCH SỬ ĐÃ THỰC HIỆN
- */
-/**
- * HÀM TỰ ĐỘNG ĐÁNH LẠI STT THEO ĐOẠN TUYẾN VÀ LƯU VÀO BẢNG doan_cap_diem
- */
-/**
- * HÀM TỰ ĐỘNG ĐÁNH LẠI THỨ TỰ (thu_tu) VÀ UPSERT VÀO BẢNG doan_cap_diem
+ * HÀM TỰ ĐỘNG ĐÁNH LẠI THỨ TỰ (thu_tu) VÀ UPSERT AN TOÀN VÀO BẢNG doan_cap_diem
  */
 window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   var selectTuyen = document.getElementById('selectTuyen');
@@ -563,7 +554,7 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn tự động gán lại thứ tự (thu_tu) cho các điểm thuộc đoạn cáp này theo khoảng cách thực tế không?`, 'success');
   if (!isConfirmed) return;
 
-  showLoading("Đang tính toán thứ tự không gian và cập nhật CSDL...");
+  showLoading("Đang chuẩn bị dữ liệu và tính toán không gian...");
 
   try {
     // 1. Lấy danh sách điểm đã sắp xếp theo khoảng cách thực tế
@@ -575,13 +566,30 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
       return;
     }
 
+    // Lọc bỏ điểm gốc Trạm TNN_BASE ra khỏi danh sách cần gán thứ tự
+    let validPts = backbonePts.filter(pt => pt.id !== 'TNN_BASE');
+
+    // 2. BƯỚC AN TOÀN: Đưa toàn bộ các điểm về giá trị tạm thời (số âm) để tránh xung đột Unique Constraint
+    showLoading("Đang làm sạch thứ tự cũ...");
+    for (let i = 0; i < validPts.length; i++) {
+      let pt = validPts[i];
+      await supabaseClient
+        .from('doan_cap_diem')
+        .upsert({
+          id_doan_cap: Number(doanVal),
+          id_diem: Number(pt.id),
+          thu_tu: -(i + 5000) // Gán số âm tạm thời
+        }, {
+          onConflict: 'id_doan_cap,id_diem'
+        });
+    }
+
+    // 3. BƯỚC CHÍNH THỨC: Cập nhật lại số thứ tự chuẩn xác tăng dần từ 1, 2, 3...
+    showLoading("Đang cập nhật thứ tự chính xác...");
     let count = 0;
 
-    // 2. Duyệt qua từng điểm và thực hiện Upsert vào bảng doan_cap_diem
-    for (let i = 0; i < backbonePts.length; i++) {
-      let pt = backbonePts[i];
-      if (pt.id === 'TNN_BASE') continue; // Bỏ qua điểm gốc trạm
-
+    for (let i = 0; i < validPts.length; i++) {
+      let pt = validPts[i];
       let thuTuMoi = count + 1;
       count++;
 
@@ -589,29 +597,26 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
       var localPt = globalDataPoints.find(p => String(p.id) === String(pt.id));
       if (localPt) localPt.stt = thuTuMoi;
 
-      if (typeof supabaseClient !== 'undefined') {
-        // Dùng upsert: Nếu đã có liên kết giữa đoạn và điểm thì cập nhật thu_tu, nếu chưa có (ví dụ măng xông mới) thì tự động chèn mới
-        let { error } = await supabaseClient
-          .from('doan_cap_diem')
-          .upsert({
-            id_doan_cap: Number(doanVal),
-            id_diem: Number(pt.id),
-            thu_tu: thuTuMoi
-          }, {
-            onConflict: 'id_doan_cap,id_diem'
-          });
+      let { error } = await supabaseClient
+        .from('doan_cap_diem')
+        .upsert({
+          id_doan_cap: Number(doanVal),
+          id_diem: Number(pt.id),
+          thu_tu: thuTuMoi
+        }, {
+          onConflict: 'id_doan_cap,id_diem'
+        });
 
-        if (error) {
-          console.error(`Lỗi cập nhật thứ tự điểm ID ${pt.id}:`, error.message);
-          throw new Error(`Không thể cập nhật điểm ${pt.ten}: ${error.message}`);
-        }
+      if (error) {
+        console.error(`Lỗi cập nhật thứ tự điểm ID ${pt.id}:`, error.message);
+        throw new Error(`Không thể cập nhật điểm ${pt.ten}: ${error.message}`);
       }
     }
 
     hideLoading();
     showToast(`✅ Đã đồng bộ và cập nhật thành công thứ tự cho ${count} điểm!`, "success");
 
-    // 3. Vẽ lại bản đồ để hiển thị thứ tự mới chính xác
+    // 4. Vẽ lại bản đồ để áp dụng trật tự mới chính xác trên giao diện[cite: 4]
     if (typeof veLaiTuyenAB === 'function') {
       veLaiTuyenAB();
     }
