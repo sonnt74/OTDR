@@ -169,10 +169,21 @@ function getFilteredTuyenList() {
 
 // Hàm bổ trợ cung cấp dữ liệu thống nhất cho Bản đồ / Bảng điều khiển
 function getMapDataFiltered() {
+  var access = getRoleAccess();
+  
+  // Lấy danh sách đã được lọc chặt chẽ qua bộ lọc chung của hệ thống
+  var trams = getFilteredTramList();
+  var doans = getFilteredDoanList();
+  var tuyens = getFilteredTuyenList();
+
+  console.log("🗺️ [Bản đồ GIS] Quyền hiện tại:", access.isSys ? "SYS" : access.isDai ? "ĐẠI" : access.isTram ? "TRẠM" : "NHÂN VIÊN",
+              "| Số trạm hiển thị:", trams.length, 
+              "| Số đoạn tuyến hiển thị:", doans.length);
+
   return {
-    tramList: getFilteredTramList(),
-    doanList: getFilteredDoanList(),
-    tuyenList: getFilteredTuyenList()
+    tramList: trams,
+    doanList: doans,
+    tuyenList: tuyens
   };
 }
 
