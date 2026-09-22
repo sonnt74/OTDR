@@ -198,25 +198,25 @@ function renderMasterAccountTable() {
   
   var addBtn = document.querySelector('#tab-accounts button.btn-success');
   if (addBtn) {
-    // Sys, Đài, Trạm đều được phép thêm user trong phạm vi của mình
     addBtn.style.display = access.isMember ? 'none' : 'inline-block';
   }
 
   tbody.innerHTML = users.map(u => {
     var accName = u.account || 'Tài khoản';
+    var tenAcc = u.ten_account || '(Chưa cập nhật)';
+    var soDt = u.so_dt || '(Chưa có)';
     
-    // Quyền sửa/xóa user: Sys toàn quyền, Đài sửa user trong đài, Trạm sửa user trong trạm mình
     var canModify = access.isSys || 
                     (access.isDai && String(u.id_dai) === access.idDai) || 
                     (access.isTram && String(u.id_tram) === access.idTram);
 
     return `
       <tr>
-        <td><b>${accName}</b></td>
+        <td><b>${accName}</b><br><small style="color:#666;">👤 ${tenAcc}</small></td>
+        <td>📞 ${soDt}</td>
         <td><span style="background:#0ea5e9; color:#fff; padding:2px 6px; border-radius:4px; font-size:11px;">${u.role || 'nhan_vien'}</span></td>
         <td>🏢 ${u.ten_dai || getDaiName(u.id_dai)}</td>
         <td>📡 ${u.ten_tram || getTramName(u.id_tram)}</td>
-        <td>${u.can_edit_map ? '✅ Có' : '❌ Không'}</td>
         <td>
           ${canModify ? `<button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien('${accName}')">✏️ Sửa</button>` : ''}
           ${(access.isSys || (access.isDai && canModify)) ? `<button class="btn-small del" onclick="deleteAdminRecord('tai_khoan', '${accName}')">🗑️ Xóa</button>` : ''}
