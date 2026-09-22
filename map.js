@@ -532,7 +532,7 @@ window.copyToClipboardTNN = function(text) {
   });
 };
 /**
- * HÀM TỰ ĐỘNG ĐÁNH LẠI THỨ TỰ (thu_tu) VÀ UPSERT AN TOÀN VÀO BẢNG doan_cap_diem
+ * HÀM TỰ ĐỘNG CHUẨN HÓA, BỔ SUNG MĂNG XÔNG VÀ GÁN THỨ TỰ (thu_tu) VÀO BẢNG doan_cap_diem
  */
 window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   var selectTuyen = document.getElementById('selectTuyen');
@@ -541,93 +541,79 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
   var doanVal = selectDoanCap ? selectDoanCap.value : 'ALL';
 
-  if (!tuyenVal || tuyenVal === 'ALL') {
-    showToast("⚠️ Vui lòng chọn Tuyến cáp trước khi đồng bộ thứ tự!", "error");
+  if (!tuyenVal || tuyenVal === 'ALL' || !doanVal || doanVal === 'ALL') {
+    showToast("⚠️ Vui lòng chọn đầy đủ Tuyến và Đoạn cáp trước khi đồng bộ!", "error");
     return;
   }
 
-  if (!doanVal || doanVal === 'ALL') {
-    showToast("⚠️ Vui lòng chọn một Đoạn cáp cụ thể để đồng bộ!", "error");
-    return;
-  }
-
-  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn tự động gán lại thứ tự (thu_tu) cho các điểm thuộc đoạn cáp này theo khoảng cách thực tế không?`, 'success');
+  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn chuẩn hóa, đồng bộ măng xông và gán lại thứ tự (thu_tu) cho toàn bộ điểm thuộc đoạn cáp này theo khoảng cách thực tế không?`, 'success');
   if (!isConfirmed) return;
 
-  showLoading("Đang chuẩn bị dữ liệu và tính toán không gian...");
+  showLoading("Đang quét dữ liệu, tính toán trật tự không gian và cập nhật CSDL...");
 
   try {
-    // 1. Lấy danh sách điểm đã sắp xếp theo khoảng cách thực tế
-    var backbonePts = getMasterRouteBackbone(tuyenVal, 'ALL', doanVal);
+    // 1. Lấy toàn bộ điểm thuộc đoạn (bao gồm cột, bể, mốc và măng xông)
+    var allPts = globalDataPoints.filter(pt => {
+      let matchTuyen = (tuyenVal === 'ALL' || pt.idTuyen == tuyenVal);
+      let matchDoan = (doanVal === 'ALL' || pt.idDoanCap == doanVal || (pt.doanDungChung && pt.doanDungChung.includes(String(doanVal))));
+      return matchTuyen && matchDoan;
+    });
     
-    if (!backbonePts || backbonePts.length <= 1) {
-      hideLoading();
-      showToast("⚠️ Không tìm thấy điểm nào thuộc phạm vi đoạn cáp này để sắp xếp!", "error");
-      return;
+    var basePt = allPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
+    if (!basePt) {
+      basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945 };
+      allPts.unshift(basePt);
     }
 
-    // Lọc bỏ điểm gốc Trạm TNN_BASE ra khỏi danh sách cần gán thứ tự
-    let validPts = backbonePts.filter(pt => pt.id !== 'TNN_BASE');
-
-    // 2. BƯỚC AN TOÀN: Đưa toàn bộ các điểm về giá trị tạm thời (số âm) để tránh xung đột Unique Constraint
-    showLoading("Đang làm sạch thứ tự cũ...");
-    for (let i = 0; i < validPts.length; i++) {
-      let pt = validPts[i];
-      await supabaseClient
-        .from('doan_cap_diem')
-        .upsert({
-          id_doan_cap: Number(doanVal),
-          id_diem: Number(pt.id),
-          thu_tu: -(i + 5000) // Gán số âm tạm thời
-        }, {
-          onConflict: 'id_doan_cap,id_diem'
-        });
-    }
-
-    // 3. BƯỚC CHÍNH THỨC: Cập nhật lại số thứ tự chuẩn xác tăng dần từ 1, 2, 3...
-    showLoading("Đang cập nhật thứ tự chính xác...");
-    let count = 0;
-
-    for (let i = 0; i < validPts.length; i++) {
-      let pt = validPts[i];
-      let thuTuMoi = count + 1;
-      count++;
-
-      pt.stt = thuTuMoi;
-      var localPt = globalDataPoints.find(p => String(p.id) === String(pt.id));
-      if (localPt) localPt.stt = thuTuMoi;
-
-      let { error } = await supabaseClient
-        .from('doan_cap_diem')
-        .upsert({
-          id_doan_cap: Number(doanVal),
-          id_diem: Number(pt.id),
-          thu_tu: thuTuMoi
-        }, {
-          onConflict: 'id_doan_cap,id_diem'
-        });
-
-      if (error) {
-        console.error(`Lỗi cập nhật thứ tự điểm ID ${pt.id}:`, error.message);
-        throw new Error(`Không thể cập nhật điểm ${pt.ten}: ${error.message}`);
+    // 2. Chạy thuật toán Nearest Neighbor sắp xếp chuẩn theo khoảng cách không gian thực tế
+    let sortedPath = [basePt];
+    let remaining = allPts.filter(p => p !== basePt);
+    while (remaining.length > 0) {
+      let current = sortedPath[sortedPath.length - 1];
+      let nearestIdx = 0, minDist = Infinity;
+      for (let i = 0; i < remaining.length; i++) {
+        let dist = calculateHaversine(current.lat, current.lng, remaining[i].lat, remaining[i].lng);
+        if (dist < minDist) { minDist = dist; nearestIdx = i; }
       }
+      sortedPath.push(remaining[nearestIdx]);
+      remaining.splice(nearestIdx, 1);
+    }
+
+    let validPts = sortedPath.filter(pt => pt.id !== 'TNN_BASE');
+
+    // 3. Bước an toàn: Gán số âm tạm thời để tránh xung đột Unique Constraint trên CSDL
+    for (let i = 0; i < validPts.length; i++) {
+      await supabaseClient.from('doan_cap_diem').upsert({
+        id_doan_cap: Number(doanVal),
+        id_diem: Number(validPts[i].id),
+        thu_tu: -(i + 5000)
+      }, { onConflict: 'id_doan_cap,id_diem' });
+    }
+
+    // 4. Bước chính thức: Upsert giá trị số thứ tự dương tăng dần (1, 2, 3...) cho tất cả điểm, bao gồm măng xông mới
+    for (let i = 0; i < validPts.length; i++) {
+      let pt = validPts[i];
+      let thuTuMoi = i + 1;
+      pt.thu_tu = thuTuMoi;
+
+      let { error } = await supabaseClient.from('doan_cap_diem').upsert({
+        id_doan_cap: Number(doanVal),
+        id_diem: Number(pt.id),
+        thu_tu: thuTuMoi
+      }, { onConflict: 'id_doan_cap,id_diem' });
+
+      if (error) throw new Error(error.message);
     }
 
     hideLoading();
-    showToast(`✅ Đã đồng bộ và cập nhật thành công thứ tự cho ${count} điểm!`, "success");
+    showToast(`✅ Đã đồng bộ thành công ${validPts.length} điểm (bao gồm măng xông) vào bảng đoạn tuyến!`, "success");
 
-    // 4. Vẽ lại bản đồ để áp dụng trật tự mới chính xác trên giao diện[cite: 4]
     if (typeof veLaiTuyenAB === 'function') {
       veLaiTuyenAB();
     }
 
-    if (typeof ghiNhatKyThaoTac === 'function') {
-      await ghiNhatKyThaoTac("TU_DONG_GAN_THU_TU", `Đánh lại thu_tu theo đoạn cáp ID: ${doanVal} (${count} điểm)`);
-    }
-
   } catch (err) {
     hideLoading();
-    showToast("❌ Lỗi đồng bộ thứ tự: " + err.message, "error");
-    console.error("Chi tiết lỗi:", err);
+    showToast("❌ Lỗi đồng bộ: " + err.message, "error");
   }
 };
