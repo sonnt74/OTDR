@@ -409,27 +409,25 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
     }
   } 
   else if (action === 'EDIT') {
-    // Bước 1: Nhập tên mới
-    let newTen = prompt(`Nhập tên mới cho điểm [${ten}]:`, ten);
+    // Sử dụng hộp thoại một dòng chuyên nghiệp thay vì prompt cũ
+    let newTen = await showSingleInputDialog(`✏️ Nhập tên mới cho điểm hạ tầng [${ten}]:`, ten);
     
-    if (newTen && newTen.trim() !== '' && newTen.trim() !== ten) {
-      // Bước 2: XÁC THỰC THÊM 1 LẦN NỮA
-      let isConfirmed = await showConfirmDialog(`Xác nhận đổi tên điểm thành:<br><b style="color:#0d6efd;">${newTen.trim()}</b>?`, 'success');
+    if (newTen !== null && newTen !== '' && newTen !== ten) {
+      let isConfirmed = await showConfirmDialog(`Xác nhận đổi tên điểm thành:<br><b style="color:#0d6efd;">${newTen}</b>?`, 'success');
       if (!isConfirmed) return;
 
       showLoading("Đang cập nhật tên...");
       try {
-        const { error } = await supabaseClient.from('diem_ha_tang').update({ ten: newTen.trim() }).eq('id_diem', id);
+        const { error } = await supabaseClient.from('diem_ha_tang').update({ ten: newTen }).eq('id_diem', id);
         if (error) throw error;
         
         let localPt = globalDataPoints.find(p => String(p.id) === String(id));
-        if (localPt) localPt.ten = newTen.trim();
+        if (localPt) localPt.ten = newTen;
         
-        if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("SUA_TEN_DIEM", `Kỹ sư đổi tên điểm từ [${ten}] thành [${newTen.trim()}]`);
+        if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("SUA_TEN_DIEM", `Kỹ sư đổi tên điểm từ [${ten}] thành [${newTen}]`);
         showToast("✅ Cập nhật tên điểm thành công!", "success");
         
         veLaiTuyenAB();
-        // Bước 3: Đóng popup tự động khi vẽ lại và Zoom sát vào điểm vừa sửa
         map.setView([lat, lng], 19, { animate: true });
       } catch (err) {
         showToast("❌ Lỗi cập nhật tên: " + err.message, "error");
@@ -447,7 +445,7 @@ window.suaGhiChu = async function(id, oldNote, lat, lng) {
   let currentNote = (oldNote === 'undefined' || oldNote === 'null') ? '' : oldNote;
   
   // Gọi hộp thoại nhập liệu nhiều dòng chuyên nghiệp
-  let newNote = await showTextareaDialog(`📝 Cập nhật thông tin ghi chú & suy hao Măng xông:`, currentNote);
+  let newNote = await showTextareaDialog(`📝 Cập nhật thông tin ghi chú Măng xông:`, currentNote);
   
   if (newNote !== null && newNote !== currentNote) { 
     let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu nội dung ghi chú này không?`, 'success');
