@@ -345,7 +345,7 @@ function veLaiTuyenAB() {
     bounds.push([mx.lat, mx.lng]);
     var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
     
-    var ghiChuBtn = `<button class="btn-small" style="background:#198754; color:white;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}')">📝 Ghi chú</button>`;
+    var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px; color:white;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}', ${mx.lat}, ${mx.lng})">📝 Ghi chú</button>`;
     
     // Giao diện Popup chuẩn hóa cho Măng xông
     var popupHtml = `
@@ -377,70 +377,83 @@ function isMangXong(pt) {
 // CÁC HÀM XỬ LÝ SỰ KIỆN NÚT BẤM TRÊN POPUP BẢN ĐỒ (SỬA TÊN, XÓA, GHI CHÚ)
 // ==========================================================================
 
+// ==========================================================================
+// CÁC HÀM XỬ LÝ SỰ KIỆN NÚT BẤM TRÊN POPUP BẢN ĐỒ (ĐÃ THÊM CONFIRM & ZOOM)
+// ==========================================================================
+
 // 1. Hàm xử lý Sửa tên và Xóa đối tượng hạ tầng
 window.moFormCrud = async function(action, id, ten, lat, lng) {
   if (action === 'DELETE') {
-    // Gọi hộp thoại cảnh báo bảo mật 2 lớp
+    // Xác thực xóa (Đã có hộp thoại đỏ cảnh báo)
     let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn điểm <b>${ten}</b> khỏi tuyến không?`, 'danger');
     
     if (isConfirmed) {
       showLoading("Đang xóa điểm hạ tầng...");
       try {
-        // Xóa trên CSDL Supabase
         const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id);
         if (error) throw error;
         
-        // Xóa trên bộ nhớ tạm của trình duyệt và vẽ lại
         globalDataPoints = globalDataPoints.filter(p => String(p.id) !== String(id));
         if (typeof AppStore !== 'undefined') AppStore.setState({ dataPoints: globalDataPoints });
         
-        await ghiNhatKyThaoTac("XOA_DIEM", `Kỹ sư đã xóa điểm [${ten}] ID: ${id}`);
-        showToast("Đã xóa điểm thành công!", "success");
+        if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("XOA_DIEM", `Kỹ sư đã xóa điểm [${ten}] ID: ${id}`);
+        showToast("✅ Đã xóa điểm hạ tầng thành công!", "success");
+        
         veLaiTuyenAB();
+        // Zoom lại vị trí vừa xóa để người dùng thấy điểm đã biến mất
+        map.setView([lat, lng], 19, { animate: true });
       } catch (err) {
-        showToast("Lỗi xóa điểm: " + err.message, "error");
+        showToast("❌ Lỗi xóa điểm: " + err.message, "error");
       }
       hideLoading();
     }
   } 
   else if (action === 'EDIT') {
-    // Hiển thị khung nhập liệu nhanh
+    // Bước 1: Nhập tên mới
     let newTen = prompt(`Nhập tên mới cho điểm [${ten}]:`, ten);
     
-    if (newTen && newTen.trim() !== '' && newTen !== ten) {
+    if (newTen && newTen.trim() !== '' && newTen.trim() !== ten) {
+      // Bước 2: XÁC THỰC THÊM 1 LẦN NỮA
+      let isConfirmed = await showConfirmDialog(`Xác nhận đổi tên điểm thành:<br><b style="color:#0d6efd;">${newTen.trim()}</b>?`, 'success');
+      if (!isConfirmed) return;
+
       showLoading("Đang cập nhật tên...");
       try {
-        // Cập nhật lên CSDL Supabase
         const { error } = await supabaseClient.from('diem_ha_tang').update({ ten: newTen.trim() }).eq('id_diem', id);
         if (error) throw error;
         
-        // Cập nhật bộ nhớ tạm và vẽ lại
         let localPt = globalDataPoints.find(p => String(p.id) === String(id));
         if (localPt) localPt.ten = newTen.trim();
         
-        await ghiNhatKyThaoTac("SUA_TEN_DIEM", `Kỹ sư đổi tên điểm từ [${ten}] thành [${newTen.trim()}]`);
-        showToast("Cập nhật tên thành công!", "success");
+        if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("SUA_TEN_DIEM", `Kỹ sư đổi tên điểm từ [${ten}] thành [${newTen.trim()}]`);
+        showToast("✅ Cập nhật tên điểm thành công!", "success");
+        
         veLaiTuyenAB();
+        // Bước 3: Đóng popup tự động khi vẽ lại và Zoom sát vào điểm vừa sửa
+        map.setView([lat, lng], 19, { animate: true });
       } catch (err) {
-        showToast("Lỗi cập nhật tên: " + err.message, "error");
+        showToast("❌ Lỗi cập nhật tên: " + err.message, "error");
       }
       hideLoading();
     }
   }
   else if (action === 'ADD') {
-    // Dự phòng cho sự kiện click chuột phải thêm điểm (đã có ở mốc OK2)
     showToast("Tính năng thêm điểm mới trên bản đồ đang được hoàn thiện.", "info");
   }
 };
 
-// 2. Hàm xử lý Ghi chú riêng cho Măng xông
-window.suaGhiChu = async function(id, oldNote) {
-  // Xử lý chuỗi 'undefined' nếu măng xông chưa có ghi chú
+// 2. Hàm xử lý Ghi chú riêng cho Măng xông (Đã bổ sung lat, lng)
+window.suaGhiChu = async function(id, oldNote, lat, lng) {
   let currentNote = (oldNote === 'undefined' || oldNote === 'null') ? '' : oldNote;
   
+  // Bước 1: Nhập nội dung
   let newNote = prompt(`Nhập ghi chú hoặc thông tin suy hao cho Măng xông này:`, currentNote);
   
-  if (newNote !== null) { // Nếu người dùng không bấm Hủy
+  if (newNote !== null && newNote.trim() !== currentNote) { 
+    // Bước 2: XÁC THỰC THÊM 1 LẦN NỮA
+    let isConfirmed = await showConfirmDialog(`Bạn muốn lưu nội dung ghi chú mới này chứ?`, 'success');
+    if (!isConfirmed) return;
+
     showLoading("Đang lưu ghi chú...");
     try {
       const { error } = await supabaseClient.from('diem_ha_tang').update({ ghi_chu: newNote.trim() }).eq('id_diem', id);
@@ -449,12 +462,24 @@ window.suaGhiChu = async function(id, oldNote) {
       let localPt = globalDataPoints.find(p => String(p.id) === String(id));
       if (localPt) localPt.ghiChu = newNote.trim();
       
-      await ghiNhatKyThaoTac("SUA_GHI_CHU", `Cập nhật ghi chú cho MX ID: ${id}`);
-      showToast("Lưu ghi chú thành công!", "success");
+      if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("SUA_GHI_CHU", `Cập nhật ghi chú cho MX ID: ${id}`);
+      showToast("✅ Lưu thông tin ghi chú thành công!", "success");
+      
       veLaiTuyenAB();
+      // Bước 3: Zoom focus sát vào đúng măng xông vừa sửa
+      map.setView([lat, lng], 19, { animate: true });
     } catch (err) {
-      showToast("Lỗi lưu ghi chú: " + err.message, "error");
+      showToast("❌ Lỗi lưu ghi chú: " + err.message, "error");
     }
     hideLoading();
   }
+};
+
+// Hàm tiện ích: Sao chép nội dung vào bộ nhớ tạm (Dành cho nút Tọa độ)
+window.copyToClipboardTNN = function(text) {
+  navigator.clipboard.writeText(text).then(function() {
+    showToast("📋 Đã sao chép tọa độ: " + text, "success");
+  }).catch(function(err) {
+    console.error('Lỗi copy: ', err);
+  });
 };
