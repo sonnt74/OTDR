@@ -865,3 +865,51 @@ function getAuthorizedDataForMap() {
     tuyens: authorizedTuyenList
   };
 }
+// ==========================================================================
+// BỘ HÀM CUNG CẤP DỮ LIỆU THỐNG NHẤT (SINGLE SOURCE OF TRUTH CHO TOÀN HỆ THỐNG)
+// ==========================================================================
+
+/** Lấy danh sách Trạm đã được tự động lọc theo đúng phân quyền đăng nhập */
+function getUnifiedTramList() {
+  var access = getRoleAccess();
+  var rawList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
+
+  if (access.isSys) return rawList;
+  if (access.isDai) {
+    return rawList.filter(t => String(t.id_dai || t.dai_id) === access.idDai);
+  }
+  if (access.isTram || access.isMember) {
+    return rawList.filter(t => String(t.id_tram || t.id) === access.idTram);
+  }
+  return [];
+}
+
+/** Lấy danh sách Đoạn tuyến đã được tự động lọc theo đúng phân quyền đăng nhập */
+function getUnifiedDoanList() {
+  var access = getRoleAccess();
+  var rawList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
+
+  if (access.isSys) return rawList;
+  if (access.isDai) {
+    var tramIdsInDai = getUnifiedTramList().map(t => String(t.id_tram || t.id));
+    return rawList.filter(d => tramIdsInDai.includes(String(d.id_tram || d.tram_id)));
+  }
+  if (access.isTram || access.isMember) {
+    // Nhân viên và Admin trạm chỉ lấy đúng đoạn tuyến thuộc trạm của mình
+    return rawList.filter(d => String(d.id_tram || d.tram_id) === access.idTram);
+  }
+  return [];
+}
+
+/** Lấy danh sách Tuyến cáp đã được tự động lọc dựa trên Đoạn tuyến hợp lệ */
+function getUnifiedTuyenList() {
+  var access = getRoleAccess();
+  var rawList = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
+
+  if (access.isSys) return rawList;
+
+  var validDoans = getUnifiedDoanList();
+  var validTuyenIds = validDoans.map(d => String(d.id_tuyen || d.tuyen_id || d.id_tuyen_cap));
+
+  return rawList.filter(t => validTuyenIds.includes(String(t.id_tuyen_cap || t.id_tuyen || t.id)));
+}
