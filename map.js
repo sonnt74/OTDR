@@ -1,12 +1,16 @@
-// map.js - Khởi tạo bản đồ Leaflet, lắng nghe sự kiện di chuyển và vẽ tuyến cáp quang[cite: 4]
+// map.js - Khởi tạo bản đồ Leaflet, lắng nghe sự kiện di chuyển và vẽ tuyến cáp quang
 
 var moveEndDebounceTimer = null;
 
 /**
- * 1. KHỞI TẠO BẢN ĐỒ LEAFLET
+ * 1. KHỞI TẠO BẢN ĐỒ LEAFLET (ĐÃ BỔ SUNG CHỐT AN TOÀN)
  */
 function khoiTaoBanDoLeaflet() {
-  if (map) return;
+  if (map) return; // Nếu bản đồ đã được tạo rồi thì bỏ qua
+  
+  var mapContainer = document.getElementById('map');
+  if (!mapContainer) return;
+
   var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19 });
   var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 19 });
   
@@ -16,7 +20,7 @@ function khoiTaoBanDoLeaflet() {
     maxZoom: 21, 
     layers: [osmLayer],
     zoomControl: true,           
-    attributionControl: false   // Tắt liên kết bản quyền Leaflet ở góc dưới bên phải[cite: 4]
+    attributionControl: false   
   });
 
   polylinesLayer.addTo(map); 
@@ -31,7 +35,6 @@ function khoiTaoBanDoLeaflet() {
     { position: 'topright' }
   ).addTo(map);
 
-  // Sự kiện tự động nạp điểm theo vùng xem khi kéo/zoom bản đồ[cite: 4]
   map.on('moveend', function() {
     clearTimeout(moveEndDebounceTimer);
     moveEndDebounceTimer = setTimeout(function() {
@@ -243,7 +246,9 @@ function getPointsCuaTuyenHienTai() {
  * 4. VẼ TUYẾN CÁP VÀ ĐIỂM HẠ TẦNG LÊN BẢN ĐỒ
  */
 function veLaiTuyenAB() {
+  if (!map) khoiTaoBanDoLeaflet(); // Tự động khởi tạo nếu bản đồ chưa có
   if (!map) return;
+
   markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
   
   var selectTuyen = document.getElementById('selectTuyen');
@@ -326,7 +331,6 @@ function veLaiTuyenAB() {
     markersLayer.addLayer(marker);
   });
 
-  // Vẽ các Măng Xông với phân quyền Ghi chú động (Nhân viên chỉ xem)
   var mxList = backbone.filter(p => isMangXong(p));
   mxList.forEach(mx => {
     bounds.push([mx.lat, mx.lng]);
@@ -428,7 +432,6 @@ function mouMoModalDiemChiTiet(action, id, lat, lng) {
   document.getElementById('diemLatInput').value = lat;
   document.getElementById('diemLngInput').value = lng;
 
-  // Đổ dữ liệu Loại điểm động chuẩn xác từ window.rawLoaiDiemList
   var loaiSelect = document.getElementById('diemLoaiSelect');
   if (loaiSelect) {
     loaiSelect.innerHTML = '';
@@ -597,4 +600,3 @@ window.copyToClipboardTNN = function(text) {
     console.error('Lỗi copy: ', err);
   });
 };
-```[cite: 4]
