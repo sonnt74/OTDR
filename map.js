@@ -242,6 +242,14 @@ function getPointsCuaTuyenHienTai() {
 /**
  * 4. VẼ TUYẾN CÁP VÀ ĐIỂM HẠ TẦNG LÊN BẢN ĐỒ
  */
+// Hàm tiện ích: Sao chép nội dung vào bộ nhớ tạm
+window.copyToClipboardTNN = function(text) {
+  navigator.clipboard.writeText(text).then(function() {
+    if (typeof showToast === 'function') showToast("📋 Đã sao chép tọa độ: " + text, "success");
+  }).catch(function(err) {
+    console.error('Lỗi copy: ', err);
+  });
+};
 function veLaiTuyenAB() {
   if (!map) return;
   markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
@@ -261,7 +269,24 @@ function veLaiTuyenAB() {
   var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
 
   function taoNutHanhDong(id, ten, lat, lng) {
-    return isDraggable ? `<hr style="margin:4px 0;"><button class="btn-small" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa Tên</button><button class="btn-small del" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>` : '';
+    // 1. Nút quản trị (Chỉ hiện khi có quyền isDraggable)
+    var btnAdmin = isDraggable ? 
+      `<button class="btn-small btn-success" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa Tên</button>
+       <button class="btn-small del" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>` : '';
+    
+    // 2. Nút tiện ích (Luôn hiện cho tất cả mọi người)
+    var btnTienIch = `
+      <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="btn-small" style="background:#0dcaf0; color:black; text-decoration:none;">🗺️ Chỉ đường</a>
+      <button class="btn-small" style="background:#6c757d; color:white;" onclick="copyToClipboardTNN('${lat.toFixed(6)}, ${lng.toFixed(6)}')">📋 Tọa độ</button>
+    `;
+
+    // 3. Gom nhóm bằng Flexbox
+    return `
+      <hr style="margin:6px 0; border:0; border-top:1px dashed #ccc;">
+      <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:4px;">
+        ${btnAdmin}
+        ${btnTienIch}
+      </div>`;
   }
 
   async function handleDragEnd(e, ptObj) {
@@ -292,23 +317,46 @@ function veLaiTuyenAB() {
     }
   }
 
+  // Vẽ các điểm thông thường (Bể, Cột, Mốc)
   pts.forEach((pt, index) => {
     bounds.push([pt.lat, pt.lng]);
     var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : '<div class="standard-marker"></div>';
     var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
     
-    var popupHtml = `<b>${pt.ten}</b><br>Loại: ${pt.loai}<br>📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b><br>📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText}</b>` + taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng);
+    // Giao diện Popup chuẩn hóa cho điểm thường
+    var popupHtml = `
+      <div style="font-size: 12px; line-height: 1.6;">
+        <b style="font-size: 14px; color: #0d6efd;">${pt.ten}</b><br>
+        Loại: <b>${pt.loai}</b><br>
+        📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}</span><br>
+        📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b><br>
+        📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText}</b>
+      </div>
+    ` + taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng);
+    
     marker.bindPopup(popupHtml);
     marker.on('dragend', e => handleDragEnd(e, pt));
     markersLayer.addLayer(marker);
   });
 
+  // Vẽ các Măng Xông
   var mxList = backbone.filter(p => isMangXong(p));
   mxList.forEach(mx => {
     bounds.push([mx.lat, mx.lng]);
     var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
-    var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}')">📝 Ghi chú</button>`;
-    var popupHtml = `<b>${mx.ten}</b><br>📍 Lý trình QL: <b>${mx.calculatedLyTrinhText}</b><br>📏 Cự ly từ Trạm A: <b>${mx.distanceFromAText}</b><br>` + taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng) + ghiChuBtn;
+    
+    var ghiChuBtn = `<button class="btn-small" style="background:#198754; color:white;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}')">📝 Ghi chú</button>`;
+    
+    // Giao diện Popup chuẩn hóa cho Măng xông
+    var popupHtml = `
+      <div style="font-size: 12px; line-height: 1.6;">
+        <b style="font-size: 14px; color: #198754;">${mx.ten}</b><br>
+        📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${mx.lat.toFixed(6)}, ${mx.lng.toFixed(6)}</span><br>
+        📍 Lý trình QL: <b>${mx.calculatedLyTrinhText}</b><br>
+        📏 Cự ly từ Trạm A: <b>${mx.distanceFromAText}</b><br>
+      </div>
+      <div style="margin-top:4px;">${ghiChuBtn}</div>
+    ` + taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng);
 
     mxMarker.bindPopup(popupHtml);
     mxMarker.on('dragend', e => handleDragEnd(e, mx));
