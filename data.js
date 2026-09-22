@@ -114,10 +114,9 @@ async function taiDuLieuSupabase(forceRefresh = false) {
   } catch (err) {
     console.warn("Đang sử dụng dữ liệu danh mục Offline:", err.message);
   } finally {
-    isSyncingMaster = false; // MỞ CỔNG: Kết thúc khởi tạo danh mục
+    isSyncingMaster = false; 
     hideLoading();
     if (typeof map !== 'undefined' && map) map.invalidateSize();
-    // Đã loại bỏ lời gọi taiDiemTheoTuyen thừa ở đây để tránh xung đột luồng
   }
 }
 
@@ -182,7 +181,7 @@ async function taiDiemTheoVungXem() {
 }
 
 /**
- * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP (SỬ DỤNG VIEW)
+ * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP (CÓ HẸN GIỜ CHỐNG TREO)
  */
 async function taiDiemTheoTuyen(idTuyen) {
   if (!idTuyen || idTuyen === 'ALL' || idTuyen === 'undefined') {
@@ -190,6 +189,11 @@ async function taiDiemTheoTuyen(idTuyen) {
     return;
   }
   showLoading("Đang nạp dữ liệu tuyến cáp...");
+
+  // Cơ chế an toàn: Tự động ẩn loading sau tối đa 8 giây nếu kết nối bị treo
+  var safetyTimer = setTimeout(function() {
+    hideLoading();
+  }, 8000);
 
   try {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
@@ -240,6 +244,7 @@ async function taiDiemTheoTuyen(idTuyen) {
       }
     }
   } finally {
+    clearTimeout(safetyTimer);
     AppStore.setState({ dataPoints: globalDataPoints });
     capNhatComboDiemA();
     hideLoading();
@@ -714,3 +719,4 @@ function toggleGISPanel() {
     panel.classList.toggle('collapsed');
   }
 }
+```[cite: 4, 7]
