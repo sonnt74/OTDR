@@ -516,3 +516,95 @@ window.copyToClipboardTNN = function(text) {
     console.error('Lỗi copy: ', err);
   });
 };
+/**
+ * HÀM TỰ ĐỘNG ĐÁNH LẠI STT THEO ĐOẠN TUYẾN, CÓ KIỂM TRA LỊCH SỬ ĐÃ THỰC HIỆN
+ */
+async function tuDongCapNhatSTTTheoKhoangCach() {
+  var selectTuyen = document.getElementById('selectTuyen');
+  var selectDoanCap = document.getElementById('selectDoanCap');
+  
+  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
+  var doanVal = selectDoanCap ? selectDoanCap.value : 'ALL';
+
+  if (!tuyenVal || tuyenVal === 'ALL') {
+    showToast("⚠️ Vui lòng chọn Tuyến cáp trước khi đồng bộ STT!", "error");
+    return;
+  }
+
+  if (!doanVal || doanVal === 'ALL') {
+    showToast("⚠️ Vui lòng chọn một Đoạn cáp cụ thể để đồng bộ!", "error");
+    return;
+  }
+
+  // KIỂM TRA LỊCH SỬ: Xem đoạn tuyến này đã được đồng bộ trong phiên làm việc chưa
+  let processedSegments = JSON.parse(sessionStorage.getItem('synced_doan_stt') || '[]');
+  if (processedSegments.includes(String(doanVal))) {
+    let reRun = await showConfirmDialog(`ℹ️ <b>Thông báo:</b> Đoạn tuyến này đã được thực hiện đồng bộ STT trước đó rồi!<br><br>Bạn có chắc chắn muốn chạy lại không?`, 'info');
+    if (!reRun) return;
+  }
+
+  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn tự động gán lại STT cho các điểm thuộc đoạn cáp này theo khoảng cách thực tế không?`, 'success');
+  if (!isConfirmed) return;
+
+  showLoading("Đang tính toán thứ tự không gian và cập nhật STT...");
+
+  try {
+    // 1. Lấy danh sách điểm theo tuyến và đoạn được chọn
+    var backbonePts = getMasterRouteBackbone(tuyenVal, 'ALL', doanVal);
+    
+    if (!backbonePts || backbonePts.length <= 1) {
+      hideLoading();
+      showToast("⚠️ Không tìm thấy điểm nào thuộc phạm vi đoạn cáp này để sắp xếp!", "error");
+      return;
+    }
+
+    // 2. Duyệt và gán STT mới tăng dần theo khoảng cách
+    let updatePromises = [];
+    let count = 0;
+
+    for (let i = 0; i < backbonePts.length; i++) {
+      let pt = backbonePts[i];
+      if (pt.id === 'TNN_BASE') continue; // Bỏ qua trạm gốc
+
+      let sttMoi = count + 1;
+      count++;
+
+      pt.stt = sttMoi;
+      var localPt = globalDataPoints.find(p => String(p.id) === String(pt.id));
+      if (localPt) localPt.stt = sttMoi;
+
+      if (typeof supabaseClient !== 'undefined') {
+        let promise = supabaseClient
+          .from('diem_ha_tang')
+          .update({ stt: sttMoi })
+          .eq('id_diem', pt.id);
+        updatePromises.push(promise);
+      }
+    }
+
+    // 3. Thực thi cập nhật đồng loạt lên Supabase[cite: 4]
+    await Promise.all(updatePromises);
+
+    // GHI NHẬN LỊCH SỬ: Lưu đoạn tuyến này vào bộ nhớ tạm là đã thực hiện
+    if (!processedSegments.includes(String(doanVal))) {
+      processedSegments.push(String(doanVal));
+      sessionStorage.setItem('synced_doan_stt', JSON.stringify(processedSegments));
+    }
+
+    hideLoading();
+    showToast(`✅ Đã đồng bộ thành công STT cho ${count} điểm của đoạn tuyến!`, "success");
+
+    if (typeof veLaiTuyenAB === 'function') {
+      veLaiTuyenAB();
+    }
+
+    if (typeof ghiNhatKyThaoTac === 'function') {
+      await ghiNhatKyThaoTac("TU_DONG_GAN_STT", `Đánh lại STT theo đoạn cáp ID: ${doanVal} (${count} điểm)`);
+    }
+
+  } catch (err) {
+    hideLoading();
+    showToast("❌ Lỗi đồng bộ STT: " + err.message, "error");
+    console.error("Lỗi gán STT tự động:", err);
+  }
+}
