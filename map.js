@@ -373,3 +373,88 @@ function isMangXong(pt) {
   var name = (pt.loai || '').toUpperCase();
   return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
 }
+// ==========================================================================
+// CÁC HÀM XỬ LÝ SỰ KIỆN NÚT BẤM TRÊN POPUP BẢN ĐỒ (SỬA TÊN, XÓA, GHI CHÚ)
+// ==========================================================================
+
+// 1. Hàm xử lý Sửa tên và Xóa đối tượng hạ tầng
+window.moFormCrud = async function(action, id, ten, lat, lng) {
+  if (action === 'DELETE') {
+    // Gọi hộp thoại cảnh báo bảo mật 2 lớp
+    let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn điểm <b>${ten}</b> khỏi tuyến không?`, 'danger');
+    
+    if (isConfirmed) {
+      showLoading("Đang xóa điểm hạ tầng...");
+      try {
+        // Xóa trên CSDL Supabase
+        const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id);
+        if (error) throw error;
+        
+        // Xóa trên bộ nhớ tạm của trình duyệt và vẽ lại
+        globalDataPoints = globalDataPoints.filter(p => String(p.id) !== String(id));
+        if (typeof AppStore !== 'undefined') AppStore.setState({ dataPoints: globalDataPoints });
+        
+        await ghiNhatKyThaoTac("XOA_DIEM", `Kỹ sư đã xóa điểm [${ten}] ID: ${id}`);
+        showToast("Đã xóa điểm thành công!", "success");
+        veLaiTuyenAB();
+      } catch (err) {
+        showToast("Lỗi xóa điểm: " + err.message, "error");
+      }
+      hideLoading();
+    }
+  } 
+  else if (action === 'EDIT') {
+    // Hiển thị khung nhập liệu nhanh
+    let newTen = prompt(`Nhập tên mới cho điểm [${ten}]:`, ten);
+    
+    if (newTen && newTen.trim() !== '' && newTen !== ten) {
+      showLoading("Đang cập nhật tên...");
+      try {
+        // Cập nhật lên CSDL Supabase
+        const { error } = await supabaseClient.from('diem_ha_tang').update({ ten: newTen.trim() }).eq('id_diem', id);
+        if (error) throw error;
+        
+        // Cập nhật bộ nhớ tạm và vẽ lại
+        let localPt = globalDataPoints.find(p => String(p.id) === String(id));
+        if (localPt) localPt.ten = newTen.trim();
+        
+        await ghiNhatKyThaoTac("SUA_TEN_DIEM", `Kỹ sư đổi tên điểm từ [${ten}] thành [${newTen.trim()}]`);
+        showToast("Cập nhật tên thành công!", "success");
+        veLaiTuyenAB();
+      } catch (err) {
+        showToast("Lỗi cập nhật tên: " + err.message, "error");
+      }
+      hideLoading();
+    }
+  }
+  else if (action === 'ADD') {
+    // Dự phòng cho sự kiện click chuột phải thêm điểm (đã có ở mốc OK2)
+    showToast("Tính năng thêm điểm mới trên bản đồ đang được hoàn thiện.", "info");
+  }
+};
+
+// 2. Hàm xử lý Ghi chú riêng cho Măng xông
+window.suaGhiChu = async function(id, oldNote) {
+  // Xử lý chuỗi 'undefined' nếu măng xông chưa có ghi chú
+  let currentNote = (oldNote === 'undefined' || oldNote === 'null') ? '' : oldNote;
+  
+  let newNote = prompt(`Nhập ghi chú hoặc thông tin suy hao cho Măng xông này:`, currentNote);
+  
+  if (newNote !== null) { // Nếu người dùng không bấm Hủy
+    showLoading("Đang lưu ghi chú...");
+    try {
+      const { error } = await supabaseClient.from('diem_ha_tang').update({ ghi_chu: newNote.trim() }).eq('id_diem', id);
+      if (error) throw error;
+      
+      let localPt = globalDataPoints.find(p => String(p.id) === String(id));
+      if (localPt) localPt.ghiChu = newNote.trim();
+      
+      await ghiNhatKyThaoTac("SUA_GHI_CHU", `Cập nhật ghi chú cho MX ID: ${id}`);
+      showToast("Lưu ghi chú thành công!", "success");
+      veLaiTuyenAB();
+    } catch (err) {
+      showToast("Lỗi lưu ghi chú: " + err.message, "error");
+    }
+    hideLoading();
+  }
+};
