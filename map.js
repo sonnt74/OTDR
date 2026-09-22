@@ -149,27 +149,64 @@ function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   var allPts = globalDataPoints.filter(pt => (tuyenVal === 'ALL' || pt.idTuyen == tuyenVal) && (tramVal === 'ALL' || pt.idTram == tramVal) && (doanVal === 'ALL' || pt.idDoanCap == doanVal));
   if (allPts.length === 0) return [];
 
+  // Đảm bảo luôn có điểm Gốc Trạm TNN (STT nhỏ nhất để luôn đứng đầu)
   var basePt = allPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
   if (!basePt) {
     basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, lyTrinh: "0+000", idTuyen: tuyenVal, stt: -9999, loai: "Trạm", idLoaiDiem: 0, duTru: 0 };
     allPts.unshift(basePt);
   }
 
-  let sorted = [basePt];
-  let remaining = allPts.filter(p => p !== basePt);
+  // =========================================================
+  // THUẬT TOÁN 1: SẮP XẾP THEO STT CỨNG (GIẢI PHÁP MỚI)
+  // =========================================================
+  let sortedBySTT = [...allPts].sort((a, b) => {
+    // Sắp xếp tăng dần theo STT
+    if (a.stt !== b.stt) return a.stt - b.stt;
+    // Nếu vô tình 2 điểm trùng STT, xếp tạm theo bảng chữ cái Tên để tránh nhảy vị trí ngẫu nhiên
+    return (a.ten || '').localeCompare(b.ten || '');
+  });
 
+  // =========================================================
+  // THUẬT TOÁN 2: NEAREST NEIGHBOR CŨ (ĐỂ CHẠY NGẦM SO SÁNH)
+  // =========================================================
+  let oldSorted = [basePt];
+  let remaining = allPts.filter(p => p !== basePt);
   while (remaining.length > 0) {
-    let current = sorted[sorted.length - 1];
+    let current = oldSorted[oldSorted.length - 1];
     let nearestIdx = 0, minDist = Infinity;
     for (let i = 0; i < remaining.length; i++) {
       let dist = calculateHaversine(current.lat, current.lng, remaining[i].lat, remaining[i].lng);
       if (dist < minDist) { minDist = dist; nearestIdx = i; }
     }
-    sorted.push(remaining[nearestIdx]);
+    oldSorted.push(remaining[nearestIdx]);
     remaining.splice(nearestIdx, 1);
   }
 
-  return sorted;
+  // =========================================================
+  // SO SÁNH 2 KẾT QUẢ VÀ IN RA BẢNG CONSOLE ĐỂ BẠN KIỂM TRA
+  // =========================================================
+  let isDifferent = false;
+  let comparisonData = [];
+  for (let i = 0; i < sortedBySTT.length; i++) {
+    if (sortedBySTT[i].id !== oldSorted[i].id) isDifferent = true;
+    comparisonData.push({
+      "Vị trí (Index)": i,
+      "Theo STT (MỚI)": `[STT: ${sortedBySTT[i].stt}] ${sortedBySTT[i].ten}`,
+      "Theo Khoảng cách (CŨ)": `[STT: ${oldSorted[i].stt}] ${oldSorted[i].ten}`,
+      "Trùng khớp?": sortedBySTT[i].id === oldSorted[i].id ? "✅ Đúng" : "❌ Lệch"
+    });
+  }
+
+  console.log(`%c--- KẾT QUẢ TÍNH TOÁN TUYẾN: ${tuyenVal} ---`, "color: #0d6efd; font-weight: bold; font-size: 14px;");
+  if (isDifferent) {
+    console.warn("⚠️ CẢNH BÁO: Đã có sự sai lệch thứ tự điểm giữa Thuật toán Cũ và Mới. Chi tiết xem bảng dưới:");
+    console.table(comparisonData);
+  } else {
+    console.log("%c✅ Tuyệt vời! Cả 2 thuật toán xếp STT cứng và Khoảng cách đều cho ra một lộ trình giống hệt nhau.", "color: #198754; font-weight: bold;");
+  }
+
+  // TRẢ VỀ DỮ LIỆU ĐỂ VẼ LÊN BẢN ĐỒ THEO CHUẨN STT CỨNG (GIẢI PHÁP 2)
+  return sortedBySTT;
 }
 
 function precalculateRouteDataForPoints(pts, backbonePts) {
