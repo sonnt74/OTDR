@@ -75,7 +75,7 @@ function toggleMeasureTool() {
   var btn = document.getElementById('measure-btn');
   if (isMeasuring) {
     btn.style.background = '#0d6efd'; btn.style.color = 'white'; measurePoints = []; measureLayer.clearLayers();
-    showToast("Đã BẬT đo khoảng cách. Click các điểm trên bản đồ.","info");
+    showToast("Đã BẬT đo khoảng cách. Click các điểm trên bản đồ.", "info");
   } else {
     btn.style.background = 'white'; btn.style.color = 'black'; measureLayer.clearLayers(); measurePoints = [];
     showToast("Đã TẮT đo khoảng cách.");
@@ -326,7 +326,7 @@ function veLaiTuyenAB() {
     markersLayer.addLayer(marker);
   });
 
-  // Vẽ các Măng Xông với phân quyền Ghi chú (Nhân viên chỉ được xem)
+  // Vẽ các Măng Xông với phân quyền Ghi chú động (Nhân viên chỉ xem)
   var mxList = backbone.filter(p => isMangXong(p));
   mxList.forEach(mx => {
     bounds.push([mx.lat, mx.lng]);
@@ -412,11 +412,9 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
     hideLoading();
   } 
   else if (action === 'EDIT') {
-    // Mở form chi tiết để sửa đầy đủ các trường
     mouMoModalDiemChiTiet('EDIT', id, lat, lng);
   }
   else if (action === 'ADD') {
-    // Mở form chi tiết để thêm mới điểm
     mouMoModalDiemChiTiet('ADD', null, lat, lng);
   }
 };
@@ -430,43 +428,19 @@ function mouMoModalDiemChiTiet(action, id, lat, lng) {
   document.getElementById('diemLatInput').value = lat;
   document.getElementById('diemLngInput').value = lng;
 
+  // Đổ dữ liệu Loại điểm động chuẩn xác từ window.rawLoaiDiemList
   var loaiSelect = document.getElementById('diemLoaiSelect');
   if (loaiSelect) {
-    loaiSelect.innerHTML = '<option value="">-- Đang tải danh mục... --</option>';
-    
-    // Kiểm tra mảng toàn cục đã được nạp từ data.js hay chưa
+    loaiSelect.innerHTML = '';
     var loaiList = window.rawLoaiDiemList || [];
     
-    if (loaiList.length > 0) {
-      loaiSelect.innerHTML = '';
-      loaiList.forEach(l => {
-        // Chuẩn hóa tên các cột khóa chính và tên hiển thị từ bảng loai_diem
-        var lId = l.id_loaidiem !== undefined ? l.id_loaidiem : (l.id !== undefined ? l.id : 1);
-        var lName = l.loai !== undefined ? l.loai : (l.ten_loai !== undefined ? l.ten_loai : (l.ten || 'Điểm'));
-        loaiSelect.innerHTML += `<option value="${lId}">${lName}</option>`;
-      });
-      
-      // Nếu đang ở chế độ sửa, tự động chọn đúng loại điểm cũ của điểm đó
-      if (action === 'EDIT' && typeof ptObj !== 'undefined' && ptObj) {
-        loaiSelect.value = ptObj.idLoaiDiem || ptObj.id_loaidiem || 1;
-      }
+    if (loaiList.length === 0) {
+      loaiSelect.innerHTML = '<option value="1">Cột</option><option value="2">Bể</option><option value="3">Mốc</option><option value="4">Măng xông</option>';
     } else {
-      // Trường hợp dữ liệu chưa kịp đồng bộ khi khởi động, truy vấn trực tiếp bảng loai_diem từ Supabase
-      supabaseClient.from('loai_diem').select('*').then(function(res) {
-        if (!res.error && res.data && res.data.length > 0) {
-          window.rawLoaiDiemList = res.data; // Lưu lại dùng chung cho lần sau
-          loaiSelect.innerHTML = '';
-          res.data.forEach(l => {
-            var lId = l.id_loaidiem !== undefined ? l.id_loaidiem : (l.id !== undefined ? l.id : 1);
-            var lName = l.loai !== undefined ? l.loai : (l.ten_loai !== undefined ? l.ten_loai : (l.ten || 'Điểm'));
-            loaiSelect.innerHTML += `<option value="${lId}">${lName}</option>`;
-          });
-          if (action === 'EDIT' && typeof ptObj !== 'undefined' && ptObj) {
-            loaiSelect.value = ptObj.idLoaiDiem || ptObj.id_loaidiem || 1;
-          }
-        } else {
-          loaiSelect.innerHTML = '<option value="">Không tải được danh mục loại điểm</option>';
-        }
+      loaiList.forEach(l => {
+        var lId = l.id_loaidiem !== undefined ? l.id_loaidiem : (l.id !== undefined ? l.id : 1);
+        var lName = l.loai !== undefined ? l.loai : (l.ten_loai !== undefined ? l.ten_loai : 'Điểm');
+        loaiSelect.innerHTML += `<option value="${lId}">${lName}</option>`;
       });
     }
   }
@@ -507,7 +481,7 @@ function mouMoModalDiemChiTiet(action, id, lat, lng) {
     var ptObj = globalDataPoints.find(p => String(p.id) === String(id));
     if (ptObj) {
       document.getElementById('diemTen').value = ptObj.ten || '';
-      if (loaiSelect) loaiSelect.value = ptObj.idLoaiDiem || 1;
+      if (loaiSelect) loaiSelect.value = String(ptObj.idLoaiDiem !== undefined ? ptObj.idLoaiDiem : 1);
       if (doanSelect) doanSelect.value = ptObj.idDoanCap || '';
       document.getElementById('diemLyTrinh').value = ptObj.lyTrinh || '';
       document.getElementById('diemDuTru').value = ptObj.duTru || 0;
@@ -623,3 +597,4 @@ window.copyToClipboardTNN = function(text) {
     console.error('Lỗi copy: ', err);
   });
 };
+```[cite: 4]
