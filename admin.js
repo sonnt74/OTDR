@@ -217,7 +217,7 @@ function renderMasterAccountTable() {
   
   var addBtn = document.querySelector('#tab-accounts button.btn-success');
   if (addBtn) {
-    // Nhân viên (member hoặc nhan_vien) không được phép thêm tài khoản mới
+    // Nhân viên không được thấy nút thêm tài khoản
     addBtn.style.display = access.isMember ? 'none' : 'inline-block';
   }
 
@@ -225,6 +225,7 @@ function renderMasterAccountTable() {
     var accName = u.account || 'Tài khoản';
     var tenAcc = u.ten_account ? u.ten_account : '<span style="color:#999; font-style:italic;">Chưa cập nhật</span>';
     var soDt = u.so_dt ? u.so_dt : '<span style="color:#999; font-style:italic;">Chưa có</span>';
+    var roleVal = u.role || 'nhan_vien';
     
     var canModify = access.isSys || 
                     (access.isDai && String(u.id_dai) === access.idDai) || 
@@ -235,7 +236,7 @@ function renderMasterAccountTable() {
         <td><b>${accName}</b></td>
         <td>👤 ${tenAcc}</td>
         <td>📞 ${soDt}</td>
-        <td><span style="background:#0ea5e9; color:#fff; padding:2px 6px; border-radius:4px; font-size:11px;">${u.role || 'nhan_vien'}</span></td>
+        <td><span style="background:#0ea5e9; color:#fff; padding:2px 6px; border-radius:4px; font-size:11px;">${roleVal}</span></td>
         <td>🏢 ${u.ten_dai || getDaiName(u.id_dai)}</td>
         <td>📡 ${u.ten_tram || getTramName(u.id_tram)}</td>
         <td>
