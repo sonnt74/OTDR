@@ -344,6 +344,7 @@ function chuanBiFormThemThanhVien(accToEdit) {
 
   var access = getRoleAccess();
 
+  // Load danh sách vai trò theo quyền
   if (roleSelect) {
     let roleHtml = `<option value="nhan_vien">Nhân viên</option>`;
     if (access.isSys) {
@@ -358,7 +359,8 @@ function chuanBiFormThemThanhVien(accToEdit) {
     roleSelect.innerHTML = roleHtml;
   }
 
-  var daiList = getFilteredDaiList();
+  // Load danh sách Đài
+  var daiList = (typeof getFilteredDaiList === 'function') ? getFilteredDaiList() : rawDaiList;
   if (daiSelect) {
     daiSelect.innerHTML = '<option value="">-- Chọn Đài --</option>';
     daiList.forEach(d => { 
@@ -372,7 +374,8 @@ function chuanBiFormThemThanhVien(accToEdit) {
     }
   }
 
-  var tramList = getFilteredTramList();
+  // Load danh sách Trạm
+  var tramList = (typeof getFilteredTramList === 'function') ? getFilteredTramList() : rawTramList;
   if (tramSelect) {
     tramSelect.innerHTML = '<option value="">-- Chọn Trạm --</option>';
     tramList.forEach(t => { 
@@ -386,15 +389,17 @@ function chuanBiFormThemThanhVien(accToEdit) {
     }
   }
 
+  // KIỂM TRA: NẾU LÀ CHẾ ĐỘ SỬA -> LOAD DỮ LIỆU LÊN FORM
   if (accToEdit && accountInput) {
     accountInput.value = accToEdit; 
-    accountInput.readOnly = true; 
+    accountInput.readOnly = true; // Khóa tên tài khoản không cho sửa
     accountInput.style.backgroundColor = "#e2e8f0";
-    if (passInput) passInput.value = '';
+    if (passInput) passInput.value = ''; // Để trống mật khẩu, nếu không nhập gì thì giữ mk cũ
 
     var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
     var uObj = users.find(u => u.account === accToEdit);
     
+    // Nạp chính xác dữ liệu của user vào Form
     if (uObj) {
       if (tenAccountInput) tenAccountInput.value = uObj.ten_account || '';
       if (soDtInput) soDtInput.value = uObj.so_dt || '';
@@ -404,6 +409,7 @@ function chuanBiFormThemThanhVien(accToEdit) {
       if (tramSelect) tramSelect.value = uObj.id_tram || (access.isTram ? access.idTram : '');
     }
   } else {
+    // KIỂM TRA: NẾU LÀ THÊM MỚI -> LÀM TRỐNG FORM
     if (accountInput) { 
       accountInput.value = ''; 
       accountInput.readOnly = false; 
@@ -505,33 +511,46 @@ function moFormThemDoan(id) {
 
 async function saveAccountAction() {
   var accountInput = document.getElementById('newMemberAccount');
+  var isEditing = accountInput ? accountInput.readOnly : false;
+  
+  // Thu thập dữ liệu từ Form
   var accVal = accountInput ? accountInput.value.trim() : '';
   var tenAccVal = document.getElementById('newMemberTenAccount').value.trim();
   var soDtVal = document.getElementById('newMemberSoDT').value.trim();
   var password = document.getElementById('newMemberPass').value.trim();
+  var selectedRole = document.getElementById('newMemberRole').value;
+  var selectedDai = document.getElementById('newMemberDai').value;
+  var selectedTram = document.getElementById('newMemberTram').value;
   var access = getRoleAccess();
   
-  if (!accVal) { 
-    if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên tài khoản!", "error");
-    return; 
+  // KHỐNG CHẾ NHẬP LIỆU: Bật cảnh báo và dừng lưu nếu thiếu bất kỳ trường nào
+  if (!accVal) { showToast("⚠️ Vui lòng nhập Tên tài khoản!", "error"); return; }
+  if (!tenAccVal) { showToast("⚠️ Vui lòng nhập Họ và tên!", "error"); return; }
+  if (!soDtVal) { showToast("⚠️ Vui lòng nhập Số điện thoại!", "error"); return; }
+  
+  // Mật khẩu bắt buộc nhập khi thêm mới. Khi sửa, nếu để trống thì giữ nguyên mật khẩu cũ
+  if (!isEditing && !password) { 
+    showToast("⚠️ Vui lòng khởi tạo Mật khẩu cho tài khoản mới!", "error"); return; 
+  }
+  
+  // Khống chế Đài/Trạm (Trừ tài khoản admin hệ thống tối cao)
+  if (selectedRole !== 'admin_sys') {
+    if (!selectedDai && !access.isDai) { showToast("⚠️ Vui lòng chọn Đài viễn thông!", "error"); return; }
+    if (!selectedTram && !access.isTram) { showToast("⚠️ Vui lòng chọn Trạm viễn thông!", "error"); return; }
   }
 
+  // Xử lý kiểm tra trùng lặp tài khoản khi Thêm mới
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
   var existingUser = users.find(u => u.account === accVal);
-  var isEditing = accountInput.readOnly;
 
   if (!isEditing && existingUser) {
-    if (typeof showToast === 'function') showToast(`❌ Tên tài khoản "${accVal}" đã tồn tại! Vui lòng chọn tên khác.`, "error");
+    showToast(`❌ Tên tài khoản "${accVal}" đã tồn tại! Vui lòng chọn tên khác.`, "error");
     return;
   }
 
   let actionTitle = isEditing ? `Cập nhật thông tin tài khoản <b>${accVal}</b>` : `Thêm mới tài khoản <b>${accVal}</b>`;
   let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn ${actionTitle} không?`, 'success');
   if (!isConfirmed) return;
-
-  var selectedRole = document.getElementById('newMemberRole').value;
-  var selectedDai = document.getElementById('newMemberDai').value;
-  var selectedTram = document.getElementById('newMemberTram').value;
 
   var payload = {
     account: accVal,
@@ -558,16 +577,16 @@ async function saveAccountAction() {
       var idx = users.findIndex(u => u.account === accVal);
       if (idx >= 0) users[idx] = data[0]; else users.push(data[0]);
       window.rawUserList = users;
-      AppStore.setState({ rawUserList: users });
+      if (typeof AppStore !== 'undefined') AppStore.setState({ rawUserList: users });
     }
 
-    if (typeof showToast === 'function') showToast("✅ Lưu tài khoản thành công!", "success");
+    showToast("✅ Lưu tài khoản thành công!", "success");
     document.getElementById('addMemberModal').style.display = 'none';
     renderAllAdminTables();
     hideLoading();
   } catch (err) { 
     hideLoading();
-    if (typeof showToast === 'function') showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
+    showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
   }
 }
 
