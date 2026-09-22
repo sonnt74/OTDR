@@ -85,10 +85,9 @@ function getSafeDataList(keyNames) {
 }
 
 // ==========================================================================
-// BỘ LỌC PHÂN QUYỀN CHUẨN HÓA (ĐỒNG BỘ CHO CẢ QUẢN TRỊ VÀ BẢN ĐỒ)
+// BỘ LỌC PHÂN QUYỀN CHUẨN HÓA (DÙNG CHUNG CHO BẢNG QUẢN TRỊ VÀ BẢN ĐỒ)
 // ==========================================================================
 
-// 1. Lọc danh sách Tài khoản theo phân cấp
 function getFilteredUsers() {
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
   var access = getRoleAccess();
@@ -101,7 +100,6 @@ function getFilteredUsers() {
   if (access.isTram) {
     return users.filter(u => String(u.id_tram) === access.idTram);
   }
-  // Nhân viên chỉ thấy tài khoản của chính mình hoặc cùng trạm
   if (access.isMember) {
     return users.filter(u => {
       if (access.idTram && u.id_tram && String(u.id_tram) === String(access.idTram)) return true;
@@ -111,7 +109,6 @@ function getFilteredUsers() {
   return [];
 }
 
-// 2. Lọc danh sách Đài theo phân cấp
 function getFilteredDaiList() {
   var daiList = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
   var access = getRoleAccess();
@@ -127,7 +124,6 @@ function getFilteredDaiList() {
   return [];
 }
 
-// 3. Lọc danh sách Trạm theo phân cấp
 function getFilteredTramList() {
   var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
   var access = getRoleAccess();
@@ -138,7 +134,6 @@ function getFilteredTramList() {
   return [];
 }
 
-// 4. Lọc danh sách Đoạn tuyến theo phân cấp
 function getFilteredDoanList() {
   var doanList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
   var access = getRoleAccess();
@@ -154,7 +149,6 @@ function getFilteredDoanList() {
   return [];
 }
 
-// 5. Lọc danh sách Tuyến cáp theo phân cấp
 function getFilteredTuyenList() {
   var tuyenList = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
   var access = getRoleAccess();
@@ -167,23 +161,12 @@ function getFilteredTuyenList() {
   return tuyenList.filter(t => validTuyenIds.includes(String(t.id_tuyen_cap || t.id_tuyen || t.id)));
 }
 
-// Hàm bổ trợ cung cấp dữ liệu thống nhất cho Bản đồ / Bảng điều khiển
+// Cầu nối dữ liệu sạch cho Bản đồ / Bảng điều khiển chính
 function getMapDataFiltered() {
-  var access = getRoleAccess();
-  
-  // Lấy danh sách đã được lọc chặt chẽ qua bộ lọc chung của hệ thống
-  var trams = getFilteredTramList();
-  var doans = getFilteredDoanList();
-  var tuyens = getFilteredTuyenList();
-
-  console.log("🗺️ [Bản đồ GIS] Quyền hiện tại:", access.isSys ? "SYS" : access.isDai ? "ĐẠI" : access.isTram ? "TRẠM" : "NHÂN VIÊN",
-              "| Số trạm hiển thị:", trams.length, 
-              "| Số đoạn tuyến hiển thị:", doans.length);
-
   return {
-    tramList: trams,
-    doanList: doans,
-    tuyenList: tuyens
+    tramList: getFilteredTramList(),
+    doanList: getFilteredDoanList(),
+    tuyenList: getFilteredTuyenList()
   };
 }
 
