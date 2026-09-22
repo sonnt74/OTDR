@@ -1,11 +1,9 @@
 // ==========================================================================
-// TỆP DATA.JS - QUẢN LÝ LUỒNG DỮ LIỆU (TÍCH HỢP VIEW SUPABASE & OFFLINE)
+// TỆP DATA.JS - QUẢN LÝ LUỒNG DỮ LIỆU, PHÂN CẤP & PHÂN QUYỀN
 // ==========================================================================
 
 var autoClearMarkerTimer = null; 
 var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], rawLoaiDiemList = [], rawUserList = [];
-
-// Khóa kiểm soát luồng khởi tạo để chống load bản đồ lặp
 var isSyncingMaster = false; 
 
 /**
@@ -32,7 +30,7 @@ function getSafeStrId(item, keys) {
 }
 
 /**
- * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER
+ * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (ĐÀI, TRẠM, TUYẾN, ĐOẠN, LOẠI ĐIỂM)
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   isSyncingMaster = true; 
@@ -121,7 +119,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 }
 
 /**
- * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH (SỬ DỤNG VIEW)
+ * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH
  */
 async function taiDiemTheoVungXem() {
   if (isSyncingMaster) return; 
@@ -181,7 +179,7 @@ async function taiDiemTheoVungXem() {
 }
 
 /**
- * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP (CÓ HẸN GIỜ CHỐNG TREO)
+ * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP
  */
 async function taiDiemTheoTuyen(idTuyen) {
   if (!idTuyen || idTuyen === 'ALL' || idTuyen === 'undefined') {
@@ -190,7 +188,6 @@ async function taiDiemTheoTuyen(idTuyen) {
   }
   showLoading("Đang nạp dữ liệu tuyến cáp...");
 
-  // Cơ chế an toàn: Tự động ẩn loading sau tối đa 8 giây nếu kết nối bị treo
   var safetyTimer = setTimeout(function() {
     hideLoading();
   }, 8000);
@@ -253,7 +250,7 @@ async function taiDiemTheoTuyen(idTuyen) {
 }
 
 /**
- * 5. PHÂN QUYỀN GIAO DIỆN THEO VAI TRÒ CURRENTUSER
+ * 5. PHÂN CẤP & PHÂN QUYỀN FORM ĐIỀU KHIỂN (ĐÀI -> TRẠM -> TUYẾN -> ĐOẠN)
  */
 function xuLyPhanQuyenDoanTuyenUser() {
   var selectDai = document.getElementById('selectDai');
@@ -719,4 +716,3 @@ function toggleGISPanel() {
     panel.classList.toggle('collapsed');
   }
 }
-```[cite: 4, 7]
