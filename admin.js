@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, BẢO MẬT 2 LỚP & SỬA LỖI DATABASE CONSTRAINT
+// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, BẢO MẬT 2 LỚP & CHUẨN HÓA PHÂN QUYỀN TRẠM
 // ==========================================================================
 
 function openModal(modalId, tabId) {
@@ -61,7 +61,6 @@ function getRoleAccess() {
   var isSys = r.includes('sys') || r === 'admin_sys';
   var isDai = r.includes('dai') || r === 'admin_dai';
   var isTram = r.includes('tram') || r === 'admin_tram';
-  // Hỗ trợ cả hai tên gọi 'nhan_vien' và 'member' là cấp bậc nhân viên trạm
   var isMember = r === 'nhan_vien' || r === 'member' || (!isSys && !isDai && !isTram);
 
   return {
@@ -75,43 +74,6 @@ function getRoleAccess() {
   };
 }
 
-// Lọc danh sách tài khoản theo phân quyền nghiêm ngặt
-function getFilteredUsers() {
-  // Lấy dữ liệu thô từ Store hoặc biến toàn cục
-  var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
-  var access = getRoleAccess();
-
-  // 1. Admin hệ thống thấy tất cả
-  if (access.isSys) {
-    return users;
-  }
-
-  // 2. Admin đài thấy user trong đài hoặc các trạm thuộc đài đó
-  if (access.isDai) {
-    var tramIdsInDai = getFilteredTramList().map(t => String(t.id_tram || t.id));
-    return users.filter(u => String(u.id_dai) === access.idDai || tramIdsInDai.includes(String(u.id_tram)));
-  }
-
-  // 3. Admin trạm chỉ thấy user thuộc đúng trạm của mình
-  if (access.isTram) {
-    return users.filter(u => String(u.id_tram) === access.idTram);
-  }
-
-  // 4. Nhân viên (member hoặc nhan_vien): Chỉ được phép thấy chính mình hoặc đồng nghiệp cùng trạm
-  if (access.isMember) {
-    return users.filter(u => {
-      // Nếu có chung id_tram và id_tram không trống thì cho thấy, hoặc ít nhất phải là chính account đó
-      if (access.idTram && u.id_tram && String(u.id_tram) === String(access.idTram)) {
-        return true;
-      }
-      return u.account === access.account;
-    });
-  }
-
-  // Mặc định an toàn tuyệt đối: trả về mảng rỗng nếu không khớp quyền nào
-  return [];
-}
-
 function getSafeDataList(keyNames) {
   var state = (typeof AppStore !== 'undefined' && AppStore.getState) ? AppStore.getState() : {};
   for (var i = 0; i < keyNames.length; i++) {
@@ -123,8 +85,9 @@ function getSafeDataList(keyNames) {
 }
 
 // ==========================================================================
-// BỘ LỌC PHÂN QUYỀN
+// BỘ LỌC PHÂN QUYỀN CHUẨN HÓA (ĐỒNG BỘ CHO CẢ QUẢN TRỊ VÀ BẢN ĐỒ)
 // ==========================================================================
+
 // 1. Lọc danh sách Tài khoản theo phân cấp
 function getFilteredUsers() {
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
@@ -132,14 +95,20 @@ function getFilteredUsers() {
 
   if (access.isSys) return users;
   if (access.isDai) {
-    // Admin đài thấy user thuộc đài mình hoặc thuộc các trạm nằm trong đài mình
     var tramIdsInDai = getFilteredTramList().map(t => String(t.id_tram || t.id));
     return users.filter(u => String(u.id_dai) === access.idDai || tramIdsInDai.includes(String(u.id_tram)));
   }
   if (access.isTram) {
     return users.filter(u => String(u.id_tram) === access.idTram);
   }
-  return users.filter(u => u.account === access.account);
+  // Nhân viên chỉ thấy tài khoản của chính mình hoặc cùng trạm
+  if (access.isMember) {
+    return users.filter(u => {
+      if (access.idTram && u.id_tram && String(u.id_tram) === String(access.idTram)) return true;
+      return String(u.account).toLowerCase() === String(access.account).toLowerCase();
+    });
+  }
+  return [];
 }
 
 // 2. Lọc danh sách Đài theo phân cấp
@@ -149,7 +118,7 @@ function getFilteredDaiList() {
 
   if (access.isSys) return daiList;
   if (access.isDai) return daiList.filter(d => String(d.id_dai || d.id) === access.idDai);
-  if (access.isTram) {
+  if (access.isTram || access.isMember) {
     var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
     var myTram = tramList.find(t => String(t.id_tram || t.id) === access.idTram);
     var parentDaiId = myTram ? String(myTram.id_dai || myTram.dai_id) : null;
@@ -165,11 +134,27 @@ function getFilteredTramList() {
 
   if (access.isSys) return tramList;
   if (access.isDai) return tramList.filter(t => String(t.id_dai || t.dai_id) === access.idDai);
-  if (access.isTram) return tramList.filter(t => String(t.id_tram || t.id) === access.idTram);
-  return tramList;
+  if (access.isTram || access.isMember) return tramList.filter(t => String(t.id_tram || t.id) === access.idTram);
+  return [];
 }
 
-// 4. Lọc danh sách Tuyến cáp theo phân cấp (Admin đài/trạm chỉ thấy tuyến qua đoạn tuyến thuộc quản lý)
+// 4. Lọc danh sách Đoạn tuyến theo phân cấp
+function getFilteredDoanList() {
+  var doanList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
+  var access = getRoleAccess();
+
+  if (access.isSys) return doanList;
+  if (access.isDai) {
+    var tramIdsInDai = getFilteredTramList().map(t => String(t.id_tram || t.id));
+    return doanList.filter(d => tramIdsInDai.includes(String(d.id_tram || d.tram_id)));
+  }
+  if (access.isTram || access.isMember) {
+    return doanList.filter(d => String(d.id_tram || d.tram_id) === access.idTram);
+  }
+  return [];
+}
+
+// 5. Lọc danh sách Tuyến cáp theo phân cấp
 function getFilteredTuyenList() {
   var tuyenList = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
   var access = getRoleAccess();
@@ -182,18 +167,13 @@ function getFilteredTuyenList() {
   return tuyenList.filter(t => validTuyenIds.includes(String(t.id_tuyen_cap || t.id_tuyen || t.id)));
 }
 
-// 5. Lọc danh sách Đoạn tuyến theo phân cấp
-function getFilteredTramList() {
-  var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
-  var access = getRoleAccess();
-
-  if (access.isSys) return tramList;
-  if (access.isDai) return tramList.filter(t => String(t.id_dai || t.dai_id) === access.idDai);
-  if (access.isTram || access.isMember) {
-    // Nhân viên chỉ thấy trạm của chính mình
-    return tramList.filter(t => String(t.id_tram || t.id) === access.idTram);
-  }
-  return [];
+// Hàm bổ trợ cung cấp dữ liệu thống nhất cho Bản đồ / Bảng điều khiển
+function getMapDataFiltered() {
+  return {
+    tramList: getFilteredTramList(),
+    doanList: getFilteredDoanList(),
+    tuyenList: getFilteredTuyenList()
+  };
 }
 
 function getDaiName(idDai) {
@@ -225,7 +205,7 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
-/** 1. RENDER BẢNG TÀI KHOẢN (Cho phép admin_tram quản lý user trong trạm) */
+/** 1. RENDER BẢNG TÀI KHOẢN */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
@@ -234,7 +214,6 @@ function renderMasterAccountTable() {
   
   var addBtn = document.querySelector('#tab-accounts button.btn-success');
   if (addBtn) {
-    // Nhân viên không được thấy nút thêm tài khoản
     addBtn.style.display = access.isMember ? 'none' : 'inline-block';
   }
 
@@ -263,78 +242,6 @@ function renderMasterAccountTable() {
       </tr>
     `;
   }).join('') || '<tr><td colspan="7" style="text-align:center; padding:15px;">Không có dữ liệu tài khoản</td></tr>';
-}
-
-/** HÀM LƯU TÀI KHOẢN (THÊM HOẶC CẬP NHẬT) */
-// ==========================================================================
-// HÀM LƯU TÀI KHOẢN (THÊM / SỬA) CHUẨN XÁC VỚI KHÓA CHÍNH ACCOUNT
-// ==========================================================================
-async function saveAccountAction() {
-  var accountInput = document.getElementById('newMemberAccount');
-  var accVal = accountInput ? accountInput.value.trim() : '';
-  var password = document.getElementById('newMemberPass').value.trim();
-  var access = getRoleAccess();
-  
-  if (!accVal) { 
-    if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên tài khoản!", "error");
-    return; 
-  }
-
-  var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
-  var existingUser = users.find(u => u.account === accVal);
-  var isEditing = accountInput.readOnly;
-
-  // Kiểm tra chống trùng lặp khi tạo mới
-  if (!isEditing && existingUser) {
-    if (typeof showToast === 'function') showToast(`❌ Tên tài khoản "${accVal}" đã tồn tại! Vui lòng chọn tên khác.`, "error");
-    return;
-  }
-
-  let actionTitle = isEditing ? `Cập nhật thông tin tài khoản <b>${accVal}</b>` : `Thêm mới tài khoản <b>${accVal}</b>`;
-  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn ${actionTitle} không?`, 'success');
-  if (!isConfirmed) return;
-
-  var selectedRole = document.getElementById('newMemberRole').value;
-  var selectedDai = document.getElementById('newMemberDai').value;
-  var selectedTram = document.getElementById('newMemberTram').value;
-
-  var payload = {
-    account: accVal,
-    role: selectedRole,
-    can_edit_map: document.getElementById('newMemberCanEdit').checked,
-    id_dai: (access.isDai && !access.isSys) ? Number(access.idDai) : (selectedDai ? Number(selectedDai) : null),
-    id_tram: (access.isTram && !access.isSys && !access.isDai) ? Number(access.idTram) : (selectedTram ? Number(selectedTram) : null)
-  };
-
-  // Giữ nguyên mật khẩu cũ nếu không nhập mật khẩu mới khi sửa
-  if (password) {
-    payload.password = password;
-  } else if (existingUser && existingUser.password) {
-    payload.password = existingUser.password;
-  }
-
-  try {
-    showLoading("Đang lưu tài khoản...");
-    
-    // Sử dụng upsert: vì account đã là Khóa chính, nếu trùng account nó sẽ tự động Sửa, nếu chưa có sẽ tự động Thêm
-    var { data, error } = await supabaseClient.from('tai_khoan').upsert([payload]).select();
-    if (error) throw error;
-    
-    if (data && data.length > 0) {
-      var idx = users.findIndex(u => u.account === accVal);
-      if (idx >= 0) users[idx] = data[0]; else users.push(data[0]);
-      window.rawUserList = users;
-      AppStore.setState({ rawUserList: users });
-    }
-
-    if (typeof showToast === 'function') showToast("✅ Lưu tài khoản thành công!", "success");
-    document.getElementById('addMemberModal').style.display = 'none';
-    renderAllAdminTables();
-    hideLoading();
-  } catch (err) { 
-    hideLoading();
-    if (typeof showToast === 'function') showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
-  }
 }
 
 /** 2. BẢNG ĐÀI VIỄN THÔNG */
@@ -429,7 +336,7 @@ function renderMasterDoanTable() {
 }
 
 // ==========================================================================
-// CÁC FORM THÊM/SỬA (ĐÃ BỔ SUNG CỘT TÊN ĐOẠN CÁP TRÁNH LỖI NOT-NULL)
+// CÁC FORM THÊM / SỬA VÀ THỰC THI DỮ LIỆU
 // ==========================================================================
 function chuanBiFormThemThanhVien(accToEdit) {
   var accountInput = document.getElementById('newMemberAccount');
@@ -593,7 +500,6 @@ function moFormThemDoan(id) {
   var tramList = getFilteredTramList();
   var tramOptions = tramList.map(tr => `<option value="${tr.id_tram || tr.id}" ${String(tr.id_tram || tr.id) === String(item.id_tram || item.tram_id) ? 'selected' : ''}>${tr.ten_tram || tr.ten}</option>`).join('');
 
-  // SỬA LỖI: Bổ sung trường nhập Tên Đoạn Cáp
   document.getElementById('auxFormFields').innerHTML = `
     <div class="form-group"><label>Mã đoạn cáp:</label><input type="text" id="auxMaDoan" value="${item.ma_doancap || item.ma_doan || ''}" placeholder="VD: D01"></div>
     <div class="form-group"><label>Tên đoạn cáp:</label><input type="text" id="auxTenDoan" value="${item.ten_doan_cap || item.ten_doancap || item.ten || ''}" placeholder="VD: Đoạn từ TNN - Cột 1"></div>
@@ -603,9 +509,6 @@ function moFormThemDoan(id) {
   document.getElementById('genericAuxModal').style.display = 'flex';
 }
 
-// ==========================================================================
-// CÁC HÀM GHI/XÓA CÓ XÁC THỰC 2 LỚP BẰNG CUSTOM CONFIRM DIALOG
-// ==========================================================================
 async function saveAccountAction() {
   var accountInput = document.getElementById('newMemberAccount');
   var accVal = accountInput ? accountInput.value.trim() : '';
@@ -699,7 +602,6 @@ async function saveAuxRecord() {
     itemName = payload.ten_tuyen;
     if (!payload.ten_tuyen) { showToast("⚠️ Vui lòng nhập tên Tuyến cáp!", "error"); return; }
   } else if (tableType === 'doan_cap') {
-    // SỬA LỖI: Thu thập tên đoạn cáp để gửi lên Database
     pkCol = 'id_doan_cap';
     payload.ma_doancap = document.getElementById('auxMaDoan').value.trim();
     payload.ten_doan_cap = document.getElementById('auxTenDoan').value.trim();
@@ -711,7 +613,6 @@ async function saveAuxRecord() {
 
   if (recordId && recordId !== '') { payload[pkCol] = Number(recordId); }
 
-  // XÁC THỰC 2 LỚP TRƯỚC KHI GHI
   let isConfirmed = await showConfirmDialog(`Xác nhận lưu thay đổi cho mục:<br><b>${itemName}</b>?`, 'success');
   if (!isConfirmed) return;
 
@@ -756,7 +657,6 @@ async function saveAuxRecord() {
 }
 
 async function deleteAdminRecord(tableName, idItem) {
-  // XÁC THỰC 2 LỚP TRƯỚC KHI XÓA (Cảnh báo màu đỏ)
   let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn bản ghi <b>ID: ${idItem}</b> này khỏi hệ thống không?`, 'danger');
   if (!isConfirmed) return;
 
@@ -843,73 +743,4 @@ async function executeChangePassword() {
     hideLoading();
     showToast("❌ Lỗi đổi mật khẩu: " + err.message, "error");
   }
-}
-// ==========================================================================
-// HÀM CUNG CẤP DỮ LIỆU ĐÃ LỌC CHUẨN XÁC CHO BẢNG ĐIỀU KHIỂN VÀ BẢN ĐỒ
-// ==========================================================================
-function getAuthorizedDataForMap() {
-  var access = getRoleAccess();
-  
-  // Lấy dữ liệu đã được lọc chặt chẽ theo phân quyền cấp bậc
-  var authorizedTramList = getFilteredTramList();
-  var authorizedDoanList = getFilteredDoanList();
-  var authorizedTuyenList = getFilteredTuyenList();
-
-  console.log("🗺️ [Phân quyền Bản đồ] Cấp bậc:", access.isSys ? "SYS" : access.isDai ? "ĐẠI" : access.isTram ? "TRẠM" : "NHÂN VIÊN", 
-              "| Số trạm được xem:", authorizedTramList.length, 
-              "| Số đoạn tuyến được xem:", authorizedDoanList.length);
-
-  return {
-    trams: authorizedTramList,
-    doans: authorizedDoanList,
-    tuyens: authorizedTuyenList
-  };
-}
-// ==========================================================================
-// BỘ HÀM CUNG CẤP DỮ LIỆU THỐNG NHẤT (SINGLE SOURCE OF TRUTH CHO TOÀN HỆ THỐNG)
-// ==========================================================================
-
-/** Lấy danh sách Trạm đã được tự động lọc theo đúng phân quyền đăng nhập */
-function getUnifiedTramList() {
-  var access = getRoleAccess();
-  var rawList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
-
-  if (access.isSys) return rawList;
-  if (access.isDai) {
-    return rawList.filter(t => String(t.id_dai || t.dai_id) === access.idDai);
-  }
-  if (access.isTram || access.isMember) {
-    return rawList.filter(t => String(t.id_tram || t.id) === access.idTram);
-  }
-  return [];
-}
-
-/** Lấy danh sách Đoạn tuyến đã được tự động lọc theo đúng phân quyền đăng nhập */
-function getUnifiedDoanList() {
-  var access = getRoleAccess();
-  var rawList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
-
-  if (access.isSys) return rawList;
-  if (access.isDai) {
-    var tramIdsInDai = getUnifiedTramList().map(t => String(t.id_tram || t.id));
-    return rawList.filter(d => tramIdsInDai.includes(String(d.id_tram || d.tram_id)));
-  }
-  if (access.isTram || access.isMember) {
-    // Nhân viên và Admin trạm chỉ lấy đúng đoạn tuyến thuộc trạm của mình
-    return rawList.filter(d => String(d.id_tram || d.tram_id) === access.idTram);
-  }
-  return [];
-}
-
-/** Lấy danh sách Tuyến cáp đã được tự động lọc dựa trên Đoạn tuyến hợp lệ */
-function getUnifiedTuyenList() {
-  var access = getRoleAccess();
-  var rawList = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
-
-  if (access.isSys) return rawList;
-
-  var validDoans = getUnifiedDoanList();
-  var validTuyenIds = validDoans.map(d => String(d.id_tuyen || d.tuyen_id || d.id_tuyen_cap));
-
-  return rawList.filter(t => validTuyenIds.includes(String(t.id_tuyen_cap || t.id_tuyen || t.id)));
 }
