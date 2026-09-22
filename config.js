@@ -171,3 +171,48 @@ async function ghiNhatKyThaoTac(hanhDong, chiTiet) {
     console.error("Không thể ghi nhật ký thao tác:", err.message);
   }
 }
+// ==========================================================================
+// HỘP THOẠI NHẬP LIỆU GHI CHÚ NHIỀU DÒNG (CUSTOM TEXTAREA DIALOG)
+// ==========================================================================
+function showTextareaDialog(title, defaultValue = '') {
+  return new Promise((resolve) => {
+    let overlay = document.getElementById('custom-textarea-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'custom-textarea-overlay';
+      overlay.style.cssText = "display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.7); z-index: 9999999; justify-content: center; align-items: center; backdrop-filter: blur(3px);";
+      overlay.innerHTML = `
+        <div class="confirm-box" style="width: 90%; max-width: 420px; text-align: left; background: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 1px solid #e2e8f0;">
+          <div class="confirm-msg" id="custom-textarea-title" style="margin-bottom: 10px; font-size: 13px; color: #1e293b; font-weight: 600;"></div>
+          <textarea id="custom-textarea-input" rows="4" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; margin-bottom: 16px; box-sizing: border-box; outline: none; resize: vertical; font-family: Arial, sans-serif;" placeholder="Nhập ghi chú chi tiết, thông tin suy hao..."></textarea>
+          <div class="confirm-actions" style="display: flex; gap: 8px;">
+            <button class="btn-confirm-no" id="custom-textarea-no" style="flex: 1; padding: 8px; border-radius: 6px; background: #64748b; color: white; border: none; font-weight: bold; cursor: pointer;">Hủy bỏ</button>
+            <button class="btn-confirm-yes" id="custom-textarea-yes" style="flex: 1; padding: 8px; border-radius: 6px; background: #198754; color: white; border: none; font-weight: bold; cursor: pointer;">Lưu ghi chú</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+    
+    document.getElementById('custom-textarea-title').innerHTML = title;
+    let textareaEl = document.getElementById('custom-textarea-input');
+    textareaEl.value = defaultValue || '';
+    
+    overlay.style.display = 'flex';
+    setTimeout(() => { textareaEl.focus(); textareaEl.select(); }, 100);
+
+    let btnYes = document.getElementById('custom-textarea-yes');
+    let btnNo = document.getElementById('custom-textarea-no');
+
+    btnYes.onclick = function() {
+      let val = textareaEl.value.trim();
+      overlay.style.display = 'none';
+      resolve(val);
+    };
+
+    btnNo.onclick = function() {
+      overlay.style.display = 'none';
+      resolve(null);
+    };
+  });
+}
