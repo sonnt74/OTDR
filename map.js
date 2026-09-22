@@ -1,9 +1,11 @@
-// map.js - Khởi tạo bản đồ Leaflet, sự kiện bản đồ, tuyến cáp và form CRUD
+// ==========================================================================
+// TỆP MAP.JS - KHỞI TẠO BẢN ĐỒ, VẼ TUYẾN CÁP, CRUD ĐIỂM VÀ MĂNG XÔNG
+// ==========================================================================
 
 var moveEndDebounceTimer = null;
 
 /**
- * 1. KHỞI TẠO BẢN ĐỒ LEAFLET
+ * 1. KHỞI TẠO BẢN ĐỒ LEAFLET (ĐÃ TỐI ƯU AN TOÀN CONTAINER)
  */
 function khoiTaoBanDoLeaflet() {
   if (map) {
@@ -374,10 +376,9 @@ function isMangXong(pt) {
   return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
 }
 
-// ==========================================================================
-// CÁC HÀM XỬ LÝ SỰ KIỆN NÚT BẤM VÀ QUẢN LÝ ĐIỂM HẠ TẦNG
-// ==========================================================================
-
+/**
+ * 5. CÁC HÀM QUẢN LÝ CRUD & GHI CHÚ
+ */
 function canUserEditNote() {
   var user = (typeof getCurrentUser === 'function') ? getCurrentUser() : (window.currentUser || {});
   var role = (user.role || '').toLowerCase();
