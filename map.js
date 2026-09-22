@@ -519,7 +519,10 @@ window.copyToClipboardTNN = function(text) {
 /**
  * HÀM TỰ ĐỘNG ĐÁNH LẠI STT THEO ĐOẠN TUYẾN, CÓ KIỂM TRA LỊCH SỬ ĐÃ THỰC HIỆN
  */
-async function tuDongCapNhatSTTTheoKhoangCach() {
+/**
+ * HÀM TỰ ĐỘNG ĐÁNH LẠI STT THEO ĐOẠN TUYẾN, CÓ KIỂM TRA LỊCH SỬ ĐÃ THỰC HIỆN
+ */
+window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   var selectTuyen = document.getElementById('selectTuyen');
   var selectDoanCap = document.getElementById('selectDoanCap');
   
@@ -536,7 +539,7 @@ async function tuDongCapNhatSTTTheoKhoangCach() {
     return;
   }
 
-  // KIỂM TRA LỊCH SỬ: Xem đoạn tuyến này đã được đồng bộ trong phiên làm việc chưa
+  // 1. Kiểm tra lịch sử xem đoạn tuyến này đã được đồng bộ trong phiên làm việc chưa
   let processedSegments = JSON.parse(sessionStorage.getItem('synced_doan_stt') || '[]');
   if (processedSegments.includes(String(doanVal))) {
     let reRun = await showConfirmDialog(`ℹ️ <b>Thông báo:</b> Đoạn tuyến này đã được thực hiện đồng bộ STT trước đó rồi!<br><br>Bạn có chắc chắn muốn chạy lại không?`, 'info');
@@ -549,7 +552,7 @@ async function tuDongCapNhatSTTTheoKhoangCach() {
   showLoading("Đang tính toán thứ tự không gian và cập nhật STT...");
 
   try {
-    // 1. Lấy danh sách điểm theo tuyến và đoạn được chọn
+    // 2. Lấy danh sách điểm theo tuyến và đoạn được chọn
     var backbonePts = getMasterRouteBackbone(tuyenVal, 'ALL', doanVal);
     
     if (!backbonePts || backbonePts.length <= 1) {
@@ -558,7 +561,7 @@ async function tuDongCapNhatSTTTheoKhoangCach() {
       return;
     }
 
-    // 2. Duyệt và gán STT mới tăng dần theo khoảng cách
+    // 3. Duyệt và gán STT mới tăng dần theo khoảng cách
     let updatePromises = [];
     let count = 0;
 
@@ -582,10 +585,10 @@ async function tuDongCapNhatSTTTheoKhoangCach() {
       }
     }
 
-    // 3. Thực thi cập nhật đồng loạt lên Supabase[cite: 4]
+    // 4. Thực thi cập nhật đồng loạt lên Supabase
     await Promise.all(updatePromises);
 
-    // GHI NHẬN LỊCH SỬ: Lưu đoạn tuyến này vào bộ nhớ tạm là đã thực hiện
+    // 5. Ghi nhận lịch sử vào bộ nhớ tạm
     if (!processedSegments.includes(String(doanVal))) {
       processedSegments.push(String(doanVal));
       sessionStorage.setItem('synced_doan_stt', JSON.stringify(processedSegments));
@@ -594,6 +597,7 @@ async function tuDongCapNhatSTTTheoKhoangCach() {
     hideLoading();
     showToast(`✅ Đã đồng bộ thành công STT cho ${count} điểm của đoạn tuyến!`, "success");
 
+    // 6. Vẽ lại bản đồ
     if (typeof veLaiTuyenAB === 'function') {
       veLaiTuyenAB();
     }
@@ -607,4 +611,4 @@ async function tuDongCapNhatSTTTheoKhoangCach() {
     showToast("❌ Lỗi đồng bộ STT: " + err.message, "error");
     console.error("Lỗi gán STT tự động:", err);
   }
-}
+};
