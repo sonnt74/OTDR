@@ -844,3 +844,24 @@ async function executeChangePassword() {
     showToast("❌ Lỗi đổi mật khẩu: " + err.message, "error");
   }
 }
+// ==========================================================================
+// HÀM CUNG CẤP DỮ LIỆU ĐÃ LỌC CHUẨN XÁC CHO BẢNG ĐIỀU KHIỂN VÀ BẢN ĐỒ
+// ==========================================================================
+function getAuthorizedDataForMap() {
+  var access = getRoleAccess();
+  
+  // Lấy dữ liệu đã được lọc chặt chẽ theo phân quyền cấp bậc
+  var authorizedTramList = getFilteredTramList();
+  var authorizedDoanList = getFilteredDoanList();
+  var authorizedTuyenList = getFilteredTuyenList();
+
+  console.log("🗺️ [Phân quyền Bản đồ] Cấp bậc:", access.isSys ? "SYS" : access.isDai ? "ĐẠI" : access.isTram ? "TRẠM" : "NHÂN VIÊN", 
+              "| Số trạm được xem:", authorizedTramList.length, 
+              "| Số đoạn tuyến được xem:", authorizedDoanList.length);
+
+  return {
+    trams: authorizedTramList,
+    doans: authorizedDoanList,
+    tuyens: authorizedTuyenList
+  };
+}
