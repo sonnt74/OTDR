@@ -77,21 +77,38 @@ function getRoleAccess() {
 
 // Lọc danh sách tài khoản theo phân quyền nghiêm ngặt
 function getFilteredUsers() {
+  // Lấy dữ liệu thô từ Store hoặc biến toàn cục
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
   var access = getRoleAccess();
 
-  if (access.isSys) return users;
+  // 1. Admin hệ thống thấy tất cả
+  if (access.isSys) {
+    return users;
+  }
+
+  // 2. Admin đài thấy user trong đài hoặc các trạm thuộc đài đó
   if (access.isDai) {
     var tramIdsInDai = getFilteredTramList().map(t => String(t.id_tram || t.id));
     return users.filter(u => String(u.id_dai) === access.idDai || tramIdsInDai.includes(String(u.id_tram)));
   }
+
+  // 3. Admin trạm chỉ thấy user thuộc đúng trạm của mình
   if (access.isTram) {
     return users.filter(u => String(u.id_tram) === access.idTram);
   }
+
+  // 4. Nhân viên (member hoặc nhan_vien): Chỉ được phép thấy chính mình hoặc đồng nghiệp cùng trạm
   if (access.isMember) {
-    // Nhân viên chỉ nhìn thấy tài khoản của chính mình
-    return users.filter(u => u.account === access.account);
+    return users.filter(u => {
+      // Nếu có chung id_tram và id_tram không trống thì cho thấy, hoặc ít nhất phải là chính account đó
+      if (access.idTram && u.id_tram && String(u.id_tram) === String(access.idTram)) {
+        return true;
+      }
+      return u.account === access.account;
+    });
   }
+
+  // Mặc định an toàn tuyệt đối: trả về mảng rỗng nếu không khớp quyền nào
   return [];
 }
 
