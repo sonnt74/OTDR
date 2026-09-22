@@ -149,36 +149,48 @@ function getDistanceAlongRoute(targetPt, pathPts) {
  * HÀM XÂY DỰNG TUYẾN BACKBONE THEO THỨ TỰ CỨNG (thu_tu) VÀ SO SÁNH KHOẢNG CÁCH
  */
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
-  // 1. Lọc các điểm thuộc tuyến, trạm và đoạn được chọn
+ // 1. Lọc các điểm thuộc tuyến, trạm và đoạn được chọn
   var allPts = globalDataPoints.filter(pt => {
     let matchTuyen = (tuyenVal === 'ALL' || pt.idTuyen == tuyenVal);
     let matchTram = (tramVal === 'ALL' || pt.idTram == tramVal);
     let matchDoan = (doanVal === 'ALL' || pt.idDoanCap == doanVal || (pt.doanDungChung && pt.doanDungChung.includes(String(doanVal))));
-    return matchTuyen && matchTram && matchDoan;
+    return matchTuyen && matchDoan;
   });
 
   if (allPts.length === 0) return [];
 
+  // 2. LOẠI BỎ CÁC ĐIỂM TRÙNG ID (Chống trùng lặp điểm gốc)
+  let uniqueMap = new Map();
+  allPts.forEach(p => {
+    if (p.id && !uniqueMap.has(String(p.id))) {
+      uniqueMap.set(String(p.id), p);
+    }
+  });
+  let cleanPts = Array.from(uniqueMap.values());
+
   // Đảm bảo luôn có điểm Gốc Trạm TNN ở đầu tiên
-  var basePt = allPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
+  var basePt = cleanPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
   if (!basePt) {
-    basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, lyTrinh: "0+000", idTuyen: tuyenVal, thu_tu: -9999, loai: "Trạm", idLoaiDiem: 0, duTru: 0 };
-    allPts.unshift(basePt);
+    basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, thu_tu: -9999 };
+    cleanPts.unshift(basePt);
+  } else {
+    // Đưa trạm TNN lên đầu tiên nếu đã có trong mảng
+    cleanPts = cleanPts.filter(p => p.id !== basePt.id);
+    cleanPts.unshift(basePt);
   }
 
-  // =========================================================
-  // THUẬT TOÁN 1: SẮP XẾP THEO THỨ TỰ CỨNG (thu_tu từ Database)
-  // =========================================================
-  let sortedByThuTu = [...allPts].sort((a, b) => {
+  // 3. Sắp xếp chính thức dựa tuyệt đối vào giá trị thu_tu trong cơ sở dữ liệu
+  let sortedByThuTu = [...cleanPts].sort((a, b) => {
     if (a.id === 'TNN_BASE') return -1;
     if (b.id === 'TNN_BASE') return 1;
 
-    let thuTuA = a.thu_tu !== undefined && a.thu_tu !== null ? Number(a.thu_tu) : 9999;
-    let thuTuB = b.thu_tu !== undefined && b.thu_tu !== null ? Number(b.thu_tu) : 9999;
+    let tA = a.thu_tu !== undefined && a.thu_tu !== null ? Number(a.thu_tu) : 9999;
+    let tB = b.thu_tu !== undefined && b.thu_tu !== null ? Number(b.thu_tu) : 9999;
 
-    if (thuTuA !== thuTuB) return thuTuA - thuTuB;
-    return (a.ten || '').localeCompare(b.ten || '');
+    return tA - tB;
   });
+
+  return sortedByThuTu;
 
   // =========================================================
   // THUẬT TOÁN 2: NEAREST NEIGHBOR (KHOẢNG CÁCH KHÔNG GIAN CŨ)
@@ -304,6 +316,12 @@ window.copyToClipboardTNN = function(text) {
 };
 function veLaiTuyenAB() {
   if (!map) return;
+  if (typeof capLayer !== 'undefined' && capLayer) {
+    capLayer.clearLayers();
+  }
+  if (typeof mxLayer !== 'undefined' && mxLayer) {
+      mxLayer.clearLayers();
+  }
   markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
   
   var selectTuyen = document.getElementById('selectTuyen');
