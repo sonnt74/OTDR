@@ -5,7 +5,7 @@
 var autoClearMarkerTimer = null; 
 var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], rawLoaiDiemList = [], rawUserList = [];
 
-// SỬA LỖI: Thêm cờ kiểm soát luồng khởi tạo để chống load bản đồ nhiều lần
+// Khóa kiểm soát luồng khởi tạo để chống load bản đồ lặp
 var isSyncingMaster = false; 
 
 /**
@@ -35,7 +35,7 @@ function getSafeStrId(item, keys) {
  * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
-  isSyncingMaster = true; // KHÓA CỔNG: Ngăn chặn nạp điểm bản đồ trong lúc đang dựng Combobox
+  isSyncingMaster = true; 
   let localMaster = null;
 
   try {
@@ -49,7 +49,6 @@ async function taiDuLieuSupabase(forceRefresh = false) {
         rawLoaiDiemList = localMaster.rawLoaiDiemList || [];
         rawUserList = localMaster.rawUserList || [];
 
-        // Đồng bộ biến toàn cục window để map.js đọc chính xác
         window.rawLoaiDiemList = rawLoaiDiemList;
 
         AppStore.setState({
@@ -89,7 +88,6 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       rawLoaiDiemList = loaiRes.data || rawLoaiDiemList;
       rawUserList = userRes.data || rawUserList;
 
-      // Đồng bộ biến toàn cục window
       window.rawLoaiDiemList = rawLoaiDiemList;
 
       if (typeof idbLuuMaster === 'function') {
@@ -116,14 +114,10 @@ async function taiDuLieuSupabase(forceRefresh = false) {
   } catch (err) {
     console.warn("Đang sử dụng dữ liệu danh mục Offline:", err.message);
   } finally {
-    isSyncingMaster = false; // MỞ CỔNG: Quá trình dựng danh mục đã hoàn tất
+    isSyncingMaster = false; // MỞ CỔNG: Kết thúc khởi tạo danh mục
     hideLoading();
     if (typeof map !== 'undefined' && map) map.invalidateSize();
-    
-    // MỆNH LỆNH NẠP ĐIỂM DUY NHẤT 1 LẦN:
-    var selectTuyen = document.getElementById('selectTuyen');
-    var initTuyenVal = selectTuyen ? (String(selectTuyen.value).trim() || 'ALL') : 'ALL';
-    await taiDiemTheoTuyen(initTuyenVal);
+    // Đã loại bỏ lời gọi taiDiemTheoTuyen thừa ở đây để tránh xung đột luồng
   }
 }
 
@@ -131,7 +125,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
  * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH (SỬ DỤNG VIEW)
  */
 async function taiDiemTheoVungXem() {
-  if (isSyncingMaster) return; // CHẶN LẠI: Không nạp vùng xem nếu đang đồng bộ khởi tạo
+  if (isSyncingMaster) return; 
   if (typeof map === 'undefined' || !map) return;
   var selectTuyen = document.getElementById('selectTuyen');
   if (selectTuyen && selectTuyen.value !== 'ALL') return;
