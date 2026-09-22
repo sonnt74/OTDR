@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP DATA.JS - QUẢN LÝ LUỒNG DỮ LIỆU, PHÂN CẤP & PHÂN QUYỀN
+// TỆP DATA.JS - QUẢN LÝ DỮ LIỆU, PHÂN CẤP, PHÂN QUYỀN VÀ XỬ LÝ SỰ CỐ OTDR
 // ==========================================================================
 
 var autoClearMarkerTimer = null; 
@@ -30,7 +30,7 @@ function getSafeStrId(item, keys) {
 }
 
 /**
- * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (ĐÀI, TRẠM, TUYẾN, ĐOẠN, LOẠI ĐIỂM)
+ * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   isSyncingMaster = true; 
@@ -179,7 +179,7 @@ async function taiDiemTheoVungXem() {
 }
 
 /**
- * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP
+ * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN CÁP (CÓ HẸN GIỜ CHỐNG TREO)
  */
 async function taiDiemTheoTuyen(idTuyen) {
   if (!idTuyen || idTuyen === 'ALL' || idTuyen === 'undefined') {
