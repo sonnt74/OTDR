@@ -392,9 +392,10 @@ function renderMasterDoanTable() {
 // ==========================================================================
 // CÁC FORM THÊM/SỬA (ĐÃ BỔ SUNG CỘT TÊN ĐOẠN CÁP TRÁNH LỖI NOT-NULL)
 // ==========================================================================
-
 function chuanBiFormThemThanhVien(accToEdit) {
   var accountInput = document.getElementById('newMemberAccount');
+  var tenAccountInput = document.getElementById('newMemberTenAccount');
+  var soDtInput = document.getElementById('newMemberSoDT');
   var passInput = document.getElementById('newMemberPass');
   var roleSelect = document.getElementById('newMemberRole');
   var canEditCheck = document.getElementById('newMemberCanEdit');
@@ -445,17 +446,18 @@ function chuanBiFormThemThanhVien(accToEdit) {
     }
   }
 
-  // XỬ LÝ KHI SỬA HOẶC THÊM MỚI
   if (accToEdit && accountInput) {
     accountInput.value = accToEdit; 
-    accountInput.readOnly = true; // SỬA TỪ disabled THÀNH readOnly ĐỂ JAVASCRIPT ĐỌC ĐƯỢC DỮ LIỆU
-    accountInput.style.backgroundColor = "#e2e8f0"; // Tô màu xám nhẹ để nhận biết đang khóa
+    accountInput.readOnly = true; 
+    accountInput.style.backgroundColor = "#e2e8f0";
     if (passInput) passInput.value = '';
 
     var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
     var uObj = users.find(u => u.account === accToEdit);
     
     if (uObj) {
+      if (tenAccountInput) tenAccountInput.value = uObj.ten_account || '';
+      if (soDtInput) soDtInput.value = uObj.so_dt || '';
       if (roleSelect) roleSelect.value = uObj.role || 'nhan_vien';
       if (canEditCheck) canEditCheck.checked = !!uObj.can_edit_map;
       if (daiSelect) daiSelect.value = uObj.id_dai || (access.isDai ? access.idDai : '');
@@ -464,9 +466,11 @@ function chuanBiFormThemThanhVien(accToEdit) {
   } else {
     if (accountInput) { 
       accountInput.value = ''; 
-      accountInput.readOnly = false; // Cho phép nhập tên khi thêm mới
+      accountInput.readOnly = false; 
       accountInput.style.backgroundColor = "#ffffff";
     }
+    if (tenAccountInput) tenAccountInput.value = '';
+    if (soDtInput) soDtInput.value = '';
     if (passInput) passInput.value = '';
     if (roleSelect) roleSelect.value = 'nhan_vien';
     if (canEditCheck) canEditCheck.checked = false;
@@ -563,13 +567,11 @@ function moFormThemDoan(id) {
 // ==========================================================================
 // CÁC HÀM GHI/XÓA CÓ XÁC THỰC 2 LỚP BẰNG CUSTOM CONFIRM DIALOG
 // ==========================================================================
-
-// ==========================================================================
-// HÀM LƯU TÀI KHOẢN (THÊM / SỬA) ĐÃ LOẠI BỎ HOÀN TOÀN CÁC TRƯỜNG DƯ THỪA
-// ==========================================================================
 async function saveAccountAction() {
   var accountInput = document.getElementById('newMemberAccount');
   var accVal = accountInput ? accountInput.value.trim() : '';
+  var tenAccVal = document.getElementById('newMemberTenAccount').value.trim();
+  var soDtVal = document.getElementById('newMemberSoDT').value.trim();
   var password = document.getElementById('newMemberPass').value.trim();
   var access = getRoleAccess();
   
@@ -578,26 +580,33 @@ async function saveAccountAction() {
     return; 
   }
 
-  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu thông tin tài khoản <b>${accVal}</b> không?`, 'success');
+  var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
+  var existingUser = users.find(u => u.account === accVal);
+  var isEditing = accountInput.readOnly;
+
+  if (!isEditing && existingUser) {
+    if (typeof showToast === 'function') showToast(`❌ Tên tài khoản "${accVal}" đã tồn tại! Vui lòng chọn tên khác.`, "error");
+    return;
+  }
+
+  let actionTitle = isEditing ? `Cập nhật thông tin tài khoản <b>${accVal}</b>` : `Thêm mới tài khoản <b>${accVal}</b>`;
+  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn ${actionTitle} không?`, 'success');
   if (!isConfirmed) return;
 
   var selectedRole = document.getElementById('newMemberRole').value;
   var selectedDai = document.getElementById('newMemberDai').value;
   var selectedTram = document.getElementById('newMemberTram').value;
 
-  var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
-  var existingUser = users.find(u => u.account === accVal);
-
-  // Xây dựng payload chuẩn xác với khóa chính account
   var payload = {
     account: accVal,
+    ten_account: tenAccVal,
+    so_dt: soDtVal,
     role: selectedRole,
     can_edit_map: document.getElementById('newMemberCanEdit').checked,
     id_dai: (access.isDai && !access.isSys) ? Number(access.idDai) : (selectedDai ? Number(selectedDai) : null),
     id_tram: (access.isTram && !access.isSys && !access.isDai) ? Number(access.idTram) : (selectedTram ? Number(selectedTram) : null)
   };
 
-  // Giữ nguyên mật khẩu cũ nếu không nhập mật khẩu mới
   if (password) {
     payload.password = password;
   } else if (existingUser && existingUser.password) {
@@ -609,7 +618,6 @@ async function saveAccountAction() {
     var { data, error } = await supabaseClient.from('tai_khoan').upsert([payload]).select();
     if (error) throw error;
     
-    // Cập nhật mảng cục bộ trên RAM
     if (data && data.length > 0) {
       var idx = users.findIndex(u => u.account === accVal);
       if (idx >= 0) users[idx] = data[0]; else users.push(data[0]);
@@ -617,7 +625,7 @@ async function saveAccountAction() {
       AppStore.setState({ rawUserList: users });
     }
 
-    if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
+    if (typeof showToast === 'function') showToast("✅ Lưu tài khoản thành công!", "success");
     document.getElementById('addMemberModal').style.display = 'none';
     renderAllAdminTables();
     hideLoading();
