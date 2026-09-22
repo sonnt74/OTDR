@@ -147,7 +147,6 @@ async function taiDiemTheoVungXem() {
       }
 
       globalDataPoints = (pts || []).map(pt => {
-        var isMx = (Number(pt.id_loaidiem) === 4 || (pt.loai && (pt.loai.toLowerCase().includes('mx') || pt.loai.toLowerCase().includes('măng xông'))));
         return {
           id: String(pt.id),
           ten: pt.ten || '',
@@ -161,7 +160,8 @@ async function taiDiemTheoVungXem() {
           loai: pt.loai || 'Điểm',
           lyTrinh: pt.ly_trinh || '',
           duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-          stt: isMx ? 9999 : (pt.stt || 1)
+          // Lấy đúng STT từ DB, nếu không có mặc định là 1 (Không ép măng xông thành 9999 nữa)
+          stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1
         };
       });
 
@@ -206,7 +206,6 @@ async function taiDiemTheoTuyen(idTuyen) {
       }
 
       globalDataPoints = (pts || []).map(pt => {
-        var isMx = (Number(pt.id_loaidiem) === 4 || (pt.loai && (pt.loai.toLowerCase().includes('mx') || pt.loai.toLowerCase().includes('măng xông'))));
         return {
           id: String(pt.id),
           ten: pt.ten || '',
@@ -220,7 +219,8 @@ async function taiDiemTheoTuyen(idTuyen) {
           loai: pt.loai || 'Điểm',
           lyTrinh: pt.ly_trinh || '',
           duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-          stt: isMx ? 9999 : (pt.stt || 1)
+          // Lấy đúng STT từ DB, nếu không có mặc định là 1 (Không ép măng xông thành 9999 nữa)
+          stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1
         };
       });
 
