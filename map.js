@@ -146,14 +146,14 @@ function getDistanceAlongRoute(targetPt, pathPts) {
 }
 
 /**
- * HÀM XÂY DỰNG TUYẾN BACKBONE: Lọc và sắp xếp tuyệt đối theo thu_tu từ cơ sở dữ liệu
+ * HÀM XÂY DỰNG TUYẾN BACKBONE: Đảm bảo lọc và sắp xếp chính xác theo đúng đoạn tuyến được chọn
  */
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   if (!doanVal || doanVal === 'ALL') {
     return [];
   }
 
-  // 1. Lọc các điểm thuộc đoạn cáp này từ globalDataPoints
+  // 1. Lọc các điểm thuộc đúng đoạn cáp đang chọn dựa trên dữ liệu hiện có trong bộ nhớ
   let segmentPts = globalDataPoints.filter(pt => {
     return String(pt.idDoanCap) === String(doanVal) || (pt.thu_tu !== undefined && pt.thu_tu !== null);
   });
@@ -169,7 +169,7 @@ function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   });
   let cleanPts = Array.from(uniqueMap.values());
 
-  // 3. Đảm bảo điểm gốc Trạm TNN luôn ở vị trí đầu tiên
+  // 3. Đảm bảo điểm gốc Trạm TNN luôn ở vị trí đầu tiên làm mốc xuất phát
   var basePt = cleanPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
   if (!basePt) {
     basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, thu_tu: 0 };
@@ -179,7 +179,7 @@ function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
     cleanPts.unshift(basePt);
   }
 
-  // 4. Sắp xếp tuyệt đối theo cột thu_tu từ nhỏ đến lớn
+  // 4. Sắp xếp tuyệt đối theo cột thu_tu của đoạn tuyến từ nhỏ đến lớn
   let sortedByThuTu = cleanPts.sort((a, b) => {
     if (a.id === 'TNN_BASE') return -1;
     if (b.id === 'TNN_BASE') return 1;
