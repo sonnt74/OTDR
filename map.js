@@ -325,7 +325,7 @@ function veLaiTuyenAB() {
   function taoNutHanhDong(id, ten, lat, lng) {
     // 1. Nút quản trị (Chỉ hiện khi có quyền isDraggable)
     var btnAdmin = isDraggable ? 
-      `<button class="btn-small btn-success" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa Tên</button>
+      `<button class="btn-small btn-success" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa </button>
        <button class="btn-small del" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>` : '';
     
     // 2. Nút tiện ích (Luôn hiện cho tất cả mọi người)
