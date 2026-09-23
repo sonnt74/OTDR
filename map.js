@@ -146,41 +146,31 @@ function getDistanceAlongRoute(targetPt, pathPts) {
 }
 
 /**
- * HÀM XÂY DỰNG TUYẾN BACKBONE: Truy vấn trực tiếp từ doan_cap_diem và trả về danh sách điểm
+ * HÀM LẤY BACKBONE: Truy vấn từ bảng doan_cap_diem, sắp xếp theo thu_tu và ánh xạ với globalDataPoints
  */
 async function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
-  if (!doanVal || doanVal === 'ALL') {
-    return [];
-  }
+  if (!doanVal || doanVal === 'ALL') return [];
 
   try {
-    // 1. Truy vấn bảng trung gian doan_cap_diem, sắp xếp tăng dần theo thu_tu từ 1 đến n
     let { data: relationRows, error } = await supabaseClient
       .from('doan_cap_diem')
       .select('id_diem, thu_tu')
       .eq('id_doan_cap', Number(doanVal))
       .order('thu_tu', { ascending: true });
 
-    if (error || !relationRows || relationRows.length === 0) {
-      return [];
-    }
+    if (error || !relationRows || relationRows.length === 0) return [];
 
-    // 2. Trích xuất danh sách ID điểm theo đúng thứ tự
-    let orderedIds = relationRows.map(r => String(r.id_diem));
-
-    // 3. Map với globalDataPoints để lấy tọa độ (lat, lng)
     let orderedPoints = [];
-    for (let id of orderedIds) {
-      let pt = globalDataPoints.find(p => String(p.id) === id);
+    for (let row of relationRows) {
+      let pt = globalDataPoints.find(p => Number(p.id) === Number(row.id_diem));
       if (pt) {
+        pt.thu_tu = row.thu_tu;
         orderedPoints.push(pt);
       }
     }
-
     return orderedPoints;
-
   } catch (err) {
-    console.error("Lỗi khi xây dựng tuyến backbone:", err);
+    console.error("Lỗi khi lấy backbone:", err);
     return [];
   }
 }
@@ -264,7 +254,7 @@ window.copyToClipboardTNN = function(text) {
   });
 };
 /**
- * HÀM VẼ LẠI TUYẾN A-B: Giữ nguyên vẹn toàn bộ tính năng giao diện, chuẩn hóa async/await để đọc đúng dữ liệu từ bảng doan_cap_diem
+ * HÀM VẼ LẠI TUYẾN A-B: Giữ nguyên 100% tính năng cũ, thêm async/await để đồng bộ dữ liệu
  */
 async function veLaiTuyenAB() {
   if (!map) return;
@@ -281,7 +271,7 @@ async function veLaiTuyenAB() {
   var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
   var doanVal = document.getElementById('selectDoanCap') ? document.getElementById('selectDoanCap').value : 'ALL';
 
-  // DÙNG 'await' ĐỂ CHỜ LẤY DỮ LIỆU CHUẨN TỪ BẢNG TRUNG GIAN doan_cap_diem
+  // Chờ lấy backbone chuẩn từ cơ sở dữ liệu theo doan_cap_diem và thu_tu
   var backbone = await getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
   if (!backbone || backbone.length === 0) return;
 
@@ -292,18 +282,15 @@ async function veLaiTuyenAB() {
   var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
 
   function taoNutHanhDong(id, ten, lat, lng) {
-    // 1. Nút quản trị (Chỉ hiện khi có quyền isDraggable)
     var btnAdmin = isDraggable ? 
       `<button class="btn-small btn-success" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa Tên</button>
        <button class="btn-small del" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>` : '';
     
-    // 2. Nút tiện ích (Luôn hiện cho tất cả mọi người)
     var btnTienIch = `
       <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="btn-small" style="background:#0dcaf0; color:black; text-decoration:none;">🗺️ Chỉ đường</a>
       <button class="btn-small" style="background:#6c757d; color:white;" onclick="copyToClipboardTNN('${lat.toFixed(6)}, ${lng.toFixed(6)}')">📋 Tọa độ</button>
     `;
 
-    // 3. Gom nhóm bằng Flexbox
     return `
       <hr style="margin:6px 0; border:0; border-top:1px dashed #ccc;">
       <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:4px;">
@@ -346,7 +333,6 @@ async function veLaiTuyenAB() {
     var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : '<div class="standard-marker"></div>';
     var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
     
-    // Giao diện Popup chuẩn hóa cho điểm thường
     var popupHtml = `
       <div style="font-size: 12px; line-height: 1.6;">
         <b style="font-size: 14px; color: #0d6efd;">${pt.ten}</b><br>
@@ -370,7 +356,6 @@ async function veLaiTuyenAB() {
     
     var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px; color:white;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}', ${mx.lat}, ${mx.lng})">📝 Ghi chú</button>`;
     
-    // Giao diện Popup chuẩn hóa cho Măng xông
     var popupHtml = `
       <div style="font-size: 12px; line-height: 1.6;">
         <b style="font-size: 14px; color: #198754;">${mx.ten}</b><br>
