@@ -764,7 +764,7 @@ window.saveDiemHatangFullAction = async function() {
   }
 };
 // ==========================================================================
-// HÀM XEM & SỬA THÔNG TIN MẬT (Đã bổ sung bộ lọc tự động làm sạch mã HTML)
+// HÀM XEM & SỬA THÔNG TIN MẬT (Đã fix lỗi thứ tự tham số hiển thị giao diện)
 // ==========================================================================
 window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
   if (typeof showLoading === 'function') showLoading("Đang tải thông tin mật...");
@@ -780,26 +780,27 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
     if (error) throw error;
     if (typeof hideLoading === 'function') hideLoading();
 
-    // 2. BỘ LỌC LÀM SẠCH DỮ LIỆU TRƯỚC KHI HIỂN THỊ
+    // 2. Bộ lọc làm sạch dữ liệu
     let noiDungHienTai = data.ghichu_an;
     
-    // Kiểm tra nếu rỗng, null, hoặc chứa câu thông báo HTML cũ của phiên bản trước
     if (!noiDungHienTai || 
         String(noiDungHienTai).trim() === '' || 
         String(noiDungHienTai).trim() === 'null' ||
         String(noiDungHienTai).includes('<i>Chưa có thông tin')) {
         
-        noiDungHienTai = ""; // Xóa trắng hoàn toàn
-
+        noiDungHienTai = ""; 
     } else {
-        // Dịch các thẻ <br> cũ (nếu lỡ lưu vào DB) thành dấu xuống dòng chuẩn của ô nhập
         noiDungHienTai = String(noiDungHienTai).replace(/<br\s*[\/]?>/gi, '\n');
     }
 
     // 3. Mở Form cho phép chỉnh sửa
     if (typeof showTextareaDialog === 'function') {
       
-      showTextareaDialog(noiDungHienTai, async function(noiDungMoi) {
+      // SỬA LỖI TẠI ĐÂY: Thêm Tiêu đề vào tham số đầu tiên, lùi noiDungHienTai về tham số thứ 2
+      let tieuDeHopThoai = `📝 Ghi chú mật - [${tenDiem}]`;
+      
+      showTextareaDialog(tieuDeHopThoai, noiDungHienTai, async function(noiDungMoi) {
+        
         if (typeof showLoading === 'function') showLoading("Đang lưu thông tin mật...");
 
         try {
