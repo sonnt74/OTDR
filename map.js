@@ -146,51 +146,44 @@ function getDistanceAlongRoute(targetPt, pathPts) {
 }
 
 /**
- * HÀM XÂY DỰNG TUYẾN BACKBONE: Đảm bảo lọc và sắp xếp chính xác theo đúng đoạn tuyến được chọn
+ * HÀM XÂY DỰNG TUYẾN BACKBONE TUYẾN TÍNH (MỞ): Lấy chính xác từ doan_cap_diem, sắp xếp theo thu_tu từ 1 đến n
  */
-function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
+async function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   if (!doanVal || doanVal === 'ALL') {
     return [];
   }
 
-  // 1. Lọc các điểm thuộc đúng đoạn cáp đang chọn dựa trên dữ liệu hiện có trong bộ nhớ
-  let segmentPts = globalDataPoints.filter(pt => {
-    return String(pt.idDoanCap) === String(doanVal) || (pt.thu_tu !== undefined && pt.thu_tu !== null);
-  });
+  try {
+    // 1. Truy vấn trực tiếp từ bảng trung gian doan_cap_diem theo id_doan_cap và sắp xếp tăng dần theo thu_tu
+    let { data: relationRows, error } = await supabaseClient
+      .from('doan_cap_diem')
+      .select('id_diem, thu_tu')
+      .eq('id_doan_cap', Number(doanVal))
+      .order('thu_tu', { ascending: true });
 
-  if (segmentPts.length === 0) return [];
-
-  // 2. Chống trùng lặp điểm bằng Map ID để tránh lặp đường trên bản đồ
-  let uniqueMap = new Map();
-  segmentPts.forEach(p => {
-    if (p.id && !uniqueMap.has(String(p.id))) {
-      uniqueMap.set(String(p.id), p);
+    if (error || !relationRows || relationRows.length === 0) {
+      return [];
     }
-  });
-  let cleanPts = Array.from(uniqueMap.values());
 
-  // 3. Đảm bảo điểm gốc Trạm TNN luôn ở vị trí đầu tiên làm mốc xuất phát
-  var basePt = cleanPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
-  if (!basePt) {
-    basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945, thu_tu: 0 };
-    cleanPts.unshift(basePt);
-  } else {
-    cleanPts = cleanPts.filter(p => p.id !== basePt.id);
-    cleanPts.unshift(basePt);
+    // 2. Trích xuất danh sách ID điểm theo đúng thứ tự thu_tu từ 1 đến n
+    let orderedIds = relationRows.map(r => String(r.id_diem));
+
+    // 3. Map các ID này với danh sách điểm trong globalDataPoints để lấy tọa độ (lat, lng)
+    let orderedPoints = [];
+    for (let id of orderedIds) {
+      let pt = globalDataPoints.find(p => String(p.id) === id);
+      if (pt) {
+        orderedPoints.push(pt);
+      }
+    }
+
+    // Trả về mảng điểm tuyến tính (dừng ở điểm kết cuối n, không nối vòng)
+    return orderedPoints;
+
+  } catch (err) {
+    console.error("Lỗi khi xây dựng tuyến backbone:", err);
+    return [];
   }
-
-  // 4. Sắp xếp tuyệt đối theo cột thu_tu của đoạn tuyến từ nhỏ đến lớn
-  let sortedByThuTu = cleanPts.sort((a, b) => {
-    if (a.id === 'TNN_BASE') return -1;
-    if (b.id === 'TNN_BASE') return 1;
-
-    let tA = (a.thu_tu !== undefined && a.thu_tu !== null) ? Number(a.thu_tu) : 9999;
-    let tB = (b.thu_tu !== undefined && b.thu_tu !== null) ? Number(b.thu_tu) : 9999;
-
-    return tA - tB;
-  });
-
-  return sortedByThuTu;
 }
 
 function precalculateRouteDataForPoints(pts, backbonePts) {
