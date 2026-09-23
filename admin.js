@@ -502,7 +502,7 @@ function moFormThemDoan(id) {
 
   document.getElementById('auxFormFields').innerHTML = `
     <div class="form-group"><label>Mã đoạn cáp:</label><input type="text" id="auxMaDoan" value="${item.ma_doancap || item.ma_doan || ''}" placeholder="VD: D01"></div>
-    <div class="form-group"><label>Tên đoạn cáp:</label><input type="text" id="auxTenDoan" value="${item.ten_doan_cap || item.ten_doancap || item.ten || ''}" placeholder="VD: Đoạn từ TNN - Cột 1"></div>
+    <div class="form-group"><label>Tên đoạn cáp:</label><input type="text" id="auxTenDoan" value="${item.ten_doan_cap || item.ten_doancap || item.ten || ''}" placeholder="VD: Đoạn từ Trạm - Cột 1"></div>
     <div class="form-group"><label>Thuộc Tuyến:</label><select id="auxIdTuyen"><option value="">-- Chọn Tuyến --</option>${tuyenOptions}</select></div>
     <div class="form-group"><label>Thuộc Trạm:</label><select id="auxIdTram"><option value="">-- Chọn Trạm --</option>${tramOptions}</select></div>
   `;
