@@ -633,6 +633,9 @@ window.copyToClipboardTNN = function(text) {
 // ==========================================================================
 // HÀM THỰC THI LƯU DỮ LIỆU ĐIỂM HẠ TẦNG (ĐÃ SỬA CỘT ten THÀNH ten_diem)
 // ==========================================================================
+// ==========================================================================
+// HÀM THỰC THI LƯU DỮ LIỆU ĐIỂM HẠ TẦNG (ĐÃ BỔ SUNG onConflict CHO KHÓA TỔ HỢP)
+// ==========================================================================
 window.saveDiemHatangFullAction = async function() {
   let action = document.getElementById('diemActionType').value;
   let idDiemEdit = document.getElementById('diemEditId').value;
@@ -660,7 +663,6 @@ window.saveDiemHatangFullAction = async function() {
     let idDiemTarget = null;
 
     if (action === 'ADD') {
-      // SỬA: Đổi 'ten' thành 'ten_diem' cho khớp với cấu trúc bảng diem_ha_tang trong CSDL
       const { data: newDiem, error: errDiem } = await supabaseClient
         .from('diem_ha_tang')
         .insert([{ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu }])
@@ -669,7 +671,6 @@ window.saveDiemHatangFullAction = async function() {
       idDiemTarget = newDiem[0].id_diem;
     } else {
       idDiemTarget = Number(idDiemEdit);
-      // SỬA: Đổi 'ten' thành 'ten_diem' khi cập nhật
       const { error: errUpdate } = await supabaseClient
         .from('diem_ha_tang')
         .update({ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu })
@@ -731,7 +732,11 @@ window.saveDiemHatangFullAction = async function() {
         arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: 1 });
       }
 
-      const { error: errUpsert } = await supabaseClient.from('doan_cap_diem').upsert(arrayDeUpsert);
+      // SỬA QUAN TRỌNG: Thêm { onConflict: 'id_doan_cap,id_diem' } để Supabase hiểu cách cập nhật số thứ tự
+      const { error: errUpsert } = await supabaseClient
+        .from('doan_cap_diem')
+        .upsert(arrayDeUpsert, { onConflict: 'id_doan_cap,id_diem' });
+        
       if (errUpsert) throw errUpsert;
     }
 
