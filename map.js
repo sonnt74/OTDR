@@ -654,6 +654,9 @@ window.copyToClipboardTNN = function(text) {
 // ==========================================================================
 // HÀM THỰC THI LƯU DỮ LIỆU ĐIỂM HẠ TẦNG (Đã sửa lỗi hiệu ứng flyTo mượt mà)
 // ==========================================================================
+// ==========================================================================
+// HÀM THỰC THI LƯU DỮ LIỆU ĐIỂM HẠ TẦNG (Đã fix triệt để lỗi mất focus bản đồ)
+// ==========================================================================
 window.saveDiemHatangFullAction = async function() {
   let action = document.getElementById('diemActionType').value;
   let idDiemEdit = document.getElementById('diemEditId').value;
@@ -666,7 +669,6 @@ window.saveDiemHatangFullAction = async function() {
   let lat = parseFloat(document.getElementById('diemLatInput').value);
   let lng = parseFloat(document.getElementById('diemLngInput').value);
 
-  // Lấy danh sách ID các Đoạn cáp kỹ sư đã tick chọn
   let checkedDoanIds = Array.from(document.querySelectorAll('#diemDoanCheckboxList .doan-checkbox:checked')).map(cb => cb.value);
 
   if (!ten) { showToast("⚠️ Vui lòng nhập tên điểm hạ tầng!", "error"); return; }
@@ -698,7 +700,6 @@ window.saveDiemHatangFullAction = async function() {
       await supabaseClient.from('doan_cap_diem').delete().eq('id_diem', idDiemTarget);
     }
 
-    // VÒNG LẶP XỬ LÝ CHO TỪNG ĐOẠN CÁP
     for (let i = 0; i < checkedDoanIds.length; i++) {
       let idDoan = Number(checkedDoanIds[i]);
 
@@ -760,20 +761,26 @@ window.saveDiemHatangFullAction = async function() {
     showToast(`✅ Đã ${action === 'ADD' ? 'thêm' : 'cập nhật'} thành công!`, "success");
     document.getElementById('diemHaTangModal').style.display = 'none';
     
-    // Tải lại dữ liệu (Có thể làm ngắt quá trình vẽ bản đồ)
+    // BẮT ĐẦU VÙNG XỬ LÝ FIX LỖI BẢN ĐỒ
+    // 1. Gọi API tải lại dữ liệu (Cố gắng đợi nếu hàm có hỗ trợ async)
     if (typeof taiDuLieuSupabase === 'function') {
-       taiDuLieuSupabase(false); 
+       try { await taiDuLieuSupabase(false); } catch(e) { taiDuLieuSupabase(false); }
     }
 
-    // SỬA LỖI: Dùng setTimeout để hoãn lệnh flyTo lại 300ms, chờ bản đồ vẽ xong mới thực hiện bay
+    // 2. Đặt bộ đếm thời gian 1.2 giây để đảm bảo API đã lấy xong và vẽ lại xong
     if (typeof map !== 'undefined') {
        setTimeout(() => {
+           // Lệnh cực kỳ quan trọng: Dừng ngay lập tức mọi hiệu ứng auto-zoom của hàm vẽ lại
+           map.stop(); 
+           
+           // Thực hiện bay về điểm vừa thao tác
            map.flyTo([lat, lng], 19, { 
                animate: true, 
-               duration: 1.5
+               duration: 1.5 
            });
-       }, 300);
+       }, 1200); // 1200ms (1.2s) là khoảng thời gian rất an toàn
     }
+    // KẾT THÚC VÙNG FIX LỖI
 
   } catch (err) {
     showToast("❌ Lỗi xử lý: " + err.message, "error");
