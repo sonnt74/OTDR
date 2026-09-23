@@ -791,10 +791,46 @@ window.saveDiemHatangFullAction = async function() {
   }
 };
 // Hàm hiển thị nội dung ghi chú ẩn chung cho mọi điểm
-window.xemGhiChuAnTaiDiem = function(noiDung) {
-  if (typeof showConfirmDialog === 'function') {
-    showConfirmDialog(`<b>Thông tin mật (Ghi chú ẩn):</b><br/><br/>${noiDung}`, 'info');
-  } else {
-    alert("Ghi chú ẩn:\n\n" + noiDung);
+// ==========================================================================
+// HÀM XEM THÔNG TIN MẬT (Lấy trực tiếp từ CSDL - Bảo mật tuyệt đối)
+// ==========================================================================
+window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
+  // Bật hiệu ứng loading để kỹ sư biết hệ thống đang lấy dữ liệu
+  if (typeof showLoading === 'function') showLoading("Đang tải thông tin mật...");
+
+  try {
+    // Gọi Supabase lấy đúng 1 trường 'ghichu_an' của điểm này
+    const { data, error } = await supabaseClient
+      .from('diem_ha_tang')
+      .select('ghichu_an')
+      .eq('id_diem', idDiem)
+      .single(); // single() đảm bảo chỉ lấy 1 dòng kết quả
+
+    if (error) throw error;
+
+    // Xử lý dữ liệu trả về
+    let noiDung = data.ghichu_an;
+    if (!noiDung || noiDung.trim() === '' || noiDung === 'null') {
+        noiDung = "<i>Chưa có thông tin ghi chú nội bộ cho điểm này.</i>";
+    } else {
+        // Chuyển ký tự xuống dòng (\n) thành thẻ <br> để hiển thị đẹp trên HTML
+        noiDung = noiDung.replace(/\n/g, '<br/>');
+    }
+
+    // Hiển thị hộp thoại
+    if (typeof showConfirmDialog === 'function') {
+      showConfirmDialog(`<b>Thông tin mật - [${tenDiem}]:</b><br/><br/>${noiDung}`, 'info');
+    } else {
+      alert(`Ghi chú ẩn [${tenDiem}]:\n\n${noiDung.replace(/<br\/>/g, '\n')}`);
+    }
+
+  } catch (err) {
+    console.error("Lỗi lấy thông tin mật:", err);
+    if (typeof showToast === 'function') {
+      showToast("❌ Không thể tải thông tin mật. Lỗi mạng hoặc phiên đăng nhập!", "error");
+    }
+  } finally {
+    // Tắt loading
+    if (typeof hideLoading === 'function') hideLoading();
   }
 };
