@@ -764,7 +764,7 @@ window.saveDiemHatangFullAction = async function() {
   }
 };
 // ==========================================================================
-// HÀM XEM & SỬA THÔNG TIN MẬT (Dùng chung cho mọi điểm hạ tầng)
+// HÀM XEM & SỬA THÔNG TIN MẬT (Đã bổ sung bộ lọc tự động làm sạch mã HTML)
 // ==========================================================================
 window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
   if (typeof showLoading === 'function') showLoading("Đang tải thông tin mật...");
@@ -778,23 +778,28 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
       .single();
 
     if (error) throw error;
-
-    // Tắt loading sau khi tải xong dữ liệu để mở hộp thoại
     if (typeof hideLoading === 'function') hideLoading();
 
-    // 2. Xử lý dữ liệu (nếu rỗng thì gán chuỗi rỗng để đưa vào ô nhập)
+    // 2. BỘ LỌC LÀM SẠCH DỮ LIỆU TRƯỚC KHI HIỂN THỊ
     let noiDungHienTai = data.ghichu_an;
-    if (!noiDungHienTai || noiDungHienTai === 'null') {
-        noiDungHienTai = "";
+    
+    // Kiểm tra nếu rỗng, null, hoặc chứa câu thông báo HTML cũ của phiên bản trước
+    if (!noiDungHienTai || 
+        String(noiDungHienTai).trim() === '' || 
+        String(noiDungHienTai).trim() === 'null' ||
+        String(noiDungHienTai).includes('<i>Chưa có thông tin')) {
+        
+        noiDungHienTai = ""; // Xóa trắng hoàn toàn
+
+    } else {
+        // Dịch các thẻ <br> cũ (nếu lỡ lưu vào DB) thành dấu xuống dòng chuẩn của ô nhập
+        noiDungHienTai = String(noiDungHienTai).replace(/<br\s*[\/]?>/gi, '\n');
     }
 
-    // 3. Mở Form cho phép chỉnh sửa bằng hàm có sẵn của hệ thống
+    // 3. Mở Form cho phép chỉnh sửa
     if (typeof showTextareaDialog === 'function') {
       
-      // showTextareaDialog nhận vào nội dung cũ và một hàm callback khi bấm nút Lưu
       showTextareaDialog(noiDungHienTai, async function(noiDungMoi) {
-        
-        // Bật loading quá trình lưu
         if (typeof showLoading === 'function') showLoading("Đang lưu thông tin mật...");
 
         try {
@@ -806,16 +811,12 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
             
           if (errUpdate) throw errUpdate;
           
-          // Báo thành công
           if (typeof showToast === 'function') {
               showToast("✅ Đã lưu thông tin mật thành công!", "success");
           }
-
-          // (Tùy chọn) Ghi lại lịch sử hệ thống nếu bạn đang dùng tính năng này
           if (typeof ghiNhatKyThaoTac === 'function') {
               ghiNhatKyThaoTac("SUA_MAT", `Kỹ sư cập nhật Ghi chú mật điểm [${tenDiem}]`);
           }
-
         } catch (err) {
           console.error("Lỗi cập nhật Ghi chú mật:", err);
           if (typeof showToast === 'function') {
@@ -827,7 +828,6 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
       });
       
     } else {
-      // Trường hợp dự phòng nếu UI lỗi không tìm thấy showTextareaDialog
       alert("Hệ thống chưa tìm thấy giao diện Textarea để sửa!");
     }
 
