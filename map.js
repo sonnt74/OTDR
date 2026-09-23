@@ -507,10 +507,7 @@ window.copyToClipboardTNN = function(text) {
   });
 };
 /**
- * HÀM TỰ ĐỘNG CHUẨN HÓA, BỔ SUNG MĂNG XÔNG VÀ GÁN THỨ TỰ (thu_tu) VÀO BẢNG doan_cap_diem
- */
-/**
- * HÀM TỰ ĐỘNG SẮP XẾP VÀ GÁN THỨ TỰ TỪ 1 ĐẾN N DỰA TRÊN BẢNG TRUNG GIAN doan_cap_diem
+ * HÀM TỰ ĐỘNG LÀM SẠCH, SẮP XẾP KHÔNG GIAN VÀ GHI MỚI THỨ TỰ TỪ 1 ĐẾN N VÀO BẢNG doan_cap_diem
  */
 window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   var selectTuyen = document.getElementById('selectTuyen');
@@ -524,52 +521,35 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
     return;
   }
 
-  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn tự động sắp xếp tọa độ và gán thu_tu từ 1 đến n cho đoạn cáp này không?`, 'success');
+  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn làm sạch và tự động đồng bộ lại toàn bộ thứ tự từ 1 đến n cho đoạn cáp này không?`, 'success');
   if (!isConfirmed) return;
 
-  showLoading("Đang truy vấn liên kết từ bảng doan_cap_diem và sắp xếp không gian...");
+  showLoading("Đang làm sạch dữ liệu cũ và sắp xếp lại không gian...");
 
   try {
-    // 1. Truy vấn trực tiếp các cặp liên kết từ bảng trung gian doan_cap_diem theo đoạn cáp
-    let { data: relationRows, error: relError } = await supabaseClient
-      .from('doan_cap_diem')
-      .select('id_diem')
-      .eq('id_doan_cap', Number(doanVal));
-
-    if (relError) throw new Error(relError.message);
-
-    // Lấy danh sách ID điểm thuộc đoạn này
-    let linkedPointIds = relationRows ? relationRows.map(r => String(r.id_diem)) : [];
-
-    if (linkedPointIds.length === 0) {
-      hideLoading();
-      showToast("⚠️ Đoạn cáp này chưa có điểm hạ tầng nào liên kết trong cơ sở dữ liệu!", "warning");
-      return;
-    }
-
-    // 2. Lọc các điểm tương ứng từ mảng globalDataPoints trong bộ nhớ
-    let segmentPts = globalDataPoints.filter(pt => linkedPointIds.includes(String(pt.id)));
+    // 1. Lọc danh sách điểm thuộc đúng đoạn cáp hiện tại từ globalDataPoints
+    let segmentPts = globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
 
     if (segmentPts.length === 0) {
       hideLoading();
-      showToast("⚠️ Không tìm thấy thông tin chi tiết của các điểm trong bộ nhớ!", "error");
+      showToast("⚠️ Không tìm thấy điểm nào thuộc đoạn cáp này trong bộ nhớ!", "warning");
       return;
     }
 
-    // Chuẩn hóa ID điểm về dạng số nguyên để khớp khóa chính
+    // Chuẩn hóa ID điểm về dạng số nguyên để đảm bảo khớp khóa chính CSDL
     let cleanPts = segmentPts.map(pt => ({
       ...pt,
       id: Number(pt.id)
     }));
 
-    // 3. Xác định điểm gốc Trạm TNN làm mốc khởi đầu
+    // 2. Xác định điểm gốc Trạm TNN làm mốc khởi đầu
     var basePt = cleanPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
     if (!basePt) {
       basePt = { id: 999999, ten: "Trạm TNN", lat: 21.593365, lng: 105.839945 };
       cleanPts.unshift(basePt);
     }
 
-    // 4. Sắp xếp theo khoảng cách không gian (Nearest Neighbor) từ trạm gốc đi ra
+    // 3. Sắp xếp theo khoảng cách không gian (Nearest Neighbor) từ trạm gốc đi ra
     let sortedPath = [basePt];
     let remaining = cleanPts.filter(p => p.id !== basePt.id);
 
@@ -593,31 +573,41 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
 
     if (validPts.length === 0) {
       hideLoading();
-      showToast("⚠️ Không có điểm hạ tầng hợp lệ để gán thứ tự!", "warning");
+      showToast("⚠️ Không có điểm hạ tầng hợp lệ để đồng bộ!", "warning");
       return;
     }
 
-    // 5. Gán số thứ tự từ 1 đến n và cập nhật chính xác vào bảng doan_cap_diem
+    // 4. Xóa sạch (Delete) toàn bộ các bản ghi cũ của đoạn cáp này trong bảng doan_cap_diem để tránh rác dữ liệu sai lệch
+    let { error: deleteError } = await supabaseClient
+      .from('doan_cap_diem')
+      .delete()
+      .eq('id_doan_cap', Number(doanVal));
+
+    if (deleteError) {
+      throw new Error(`Không thể xóa dữ liệu cũ: ${deleteError.message}`);
+    }
+
+    // 5. Thêm mới hoàn toàn (Insert) danh sách các điểm đã sắp xếp chuẩn xác từ 1 đến n
     for (let i = 0; i < validPts.length; i++) {
       let pt = validPts[i];
-      let thuTuMoi = i + 1; // Số thứ tự tuần tự từ 1 đến n
+      let thuTuMoi = i + 1; // Số thứ tự tuần tự chuẩn từ 1 đến n
       pt.thu_tu = thuTuMoi;
 
-      let { error: upsertError } = await supabaseClient
+      let { error: insertError } = await supabaseClient
         .from('doan_cap_diem')
-        .upsert({
+        .insert({
           id_doan_cap: Number(doanVal),
           id_diem: Number(pt.id),
           thu_tu: thuTuMoi
-        }, { onConflict: 'id_doan_cap,id_diem' });
+        });
 
-      if (upsertError) {
-        throw new Error(`Lỗi cập nhật điểm ID ${pt.id}: ${upsertError.message}`);
+      if (insertError) {
+        throw new Error(`Lỗi thêm mới điểm ID ${pt.id}: ${insertError.message}`);
       }
     }
 
     hideLoading();
-    showToast(`✅ Đã đồng bộ thành công thứ tự từ 1 đến ${validPts.length} vào bảng doan_cap_diem!`, "success");
+    showToast(`✅ Đã làm sạch và đồng bộ thành công ${validPts.length} điểm vào bảng doan_cap_diem!`, "success");
 
     // 6. Vẽ lại bản đồ ngay lập tức
     if (typeof veLaiTuyenAB === 'function') {
