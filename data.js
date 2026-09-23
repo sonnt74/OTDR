@@ -506,7 +506,6 @@ function timViTriDut() {
   var tuyenVal = document.getElementById('selectTuyen').value;
   var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
   var doanVal = document.getElementById('selectDoanCap').value;
-  await taiDuLieuDoanCapDiem(doanVal);
   
   var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
   precalculateRouteDataForPoints(backbone, backbone);
@@ -667,8 +666,6 @@ function timLyTrinhBanDo() {
   var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
   var tramVal = selectTram ? selectTram.value : 'ALL';
   var doanVal = selectDoanCap ? selectDoanCap.value : 'ALL';
-
-  await taiDuLieuDoanCapDiem(doanVal);
 
   var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, getMasterRouteBackbone(tuyenVal, tramVal, doanVal));
   var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
