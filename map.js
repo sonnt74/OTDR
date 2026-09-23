@@ -256,31 +256,41 @@ window.copyToClipboardTNN = function(text) {
 /**
  * HÀM VẼ LẠI TUYẾN A-B: Giữ nguyên 100% tính năng cũ, thêm async/await để đồng bộ dữ liệu
  */
+/**
+ * HÀM VẼ LẠI TUYẾN A-B TRÊN BẢN ĐỒ: Sử dụng trực tiếp backbone làm nguồn điểm để vẽ marker và polyline
+ */
 async function veLaiTuyenAB() {
   if (!map) return;
-  if (typeof capLayer !== 'undefined' && capLayer) {
-    capLayer.clearLayers();
-  }
-  if (typeof mxLayer !== 'undefined' && mxLayer) {
-      mxLayer.clearLayers();
-  }
-  markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
+
+  // Dọn dẹp sạch sẽ các lớp bản đồ cũ trước khi vẽ mới
+  if (typeof capLayer !== 'undefined' && capLayer) capLayer.clearLayers();
+  if (typeof mxLayer !== 'undefined' && mxLayer) mxLayer.clearLayers();
+  if (typeof markersLayer !== 'undefined' && markersLayer) markersLayer.clearLayers();
+  if (typeof polylinesLayer !== 'undefined' && polylinesLayer) polylinesLayer.clearLayers();
   
   var selectTuyen = document.getElementById('selectTuyen');
   var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
   var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
   var doanVal = document.getElementById('selectDoanCap') ? document.getElementById('selectDoanCap').value : 'ALL';
 
-  // Chờ lấy backbone chuẩn từ cơ sở dữ liệu theo doan_cap_diem và thu_tu
+  // 1. Chờ lấy danh sách điểm chuẩn xác từ bảng doan_cap_diem
   var backbone = await getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
-  if (!backbone || backbone.length === 0) return;
+  if (!backbone || backbone.length === 0) {
+    console.log("⚠️ Không có dữ liệu điểm backbone để vẽ bản đồ.");
+    return;
+  }
 
-  precalculateRouteDataForPoints(backbone, backbone);
-  var pts = getPointsCuaTuyenHienTai();
-  
+  // Tính toán lý trình và cự ly (giữ nguyên hàm có sẵn của bạn)
+  if (typeof precalculateRouteDataForPoints === 'function') {
+    precalculateRouteDataForPoints(backbone, backbone);
+  }
+
+  // 2. Dùng trực tiếp danh sách backbone làm danh sách điểm vẽ (khắc phục triệt để lỗi getPointsCuaTuyenHienTai)
+  var pts = backbone;
   var bounds = [];
-  var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
+  var isDraggable = (typeof currentUser !== 'undefined' && (currentUser.canEditMap || currentUser.role === 'sys_admin'));
 
+  // Hàm tạo nút hành động CRUD và tiện ích (Giữ nguyên 100%)
   function taoNutHanhDong(id, ten, lat, lng) {
     var btnAdmin = isDraggable ? 
       `<button class="btn-small btn-success" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa Tên</button>
@@ -299,6 +309,7 @@ async function veLaiTuyenAB() {
       </div>`;
   }
 
+  // Hàm xử lý kéo thả đổi tọa độ (Giữ nguyên 100%)
   async function handleDragEnd(e, ptObj) {
     var newPos = e.target.getLatLng();
     var isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu tọa độ mới cho điểm [${ptObj.ten}] không?`);
@@ -309,7 +320,7 @@ async function veLaiTuyenAB() {
         const { error } = await supabaseClient.from('diem_ha_tang').update({ lat: newPos.lat, long: newPos.lng }).eq('id_diem', ptObj.id);
         if (error) throw error;
         
-        var localPt = globalDataPoints.find(p => p.id == ptObj.id);
+        var localPt = globalDataPoints.find(p => Number(p.id) === Number(ptObj.id));
         if (localPt) { localPt.lat = newPos.lat; localPt.lng = newPos.lng; }
         
         hideLoading();
@@ -327,7 +338,7 @@ async function veLaiTuyenAB() {
     }
   }
 
-  // Vẽ các điểm thông thường (Bể, Cột, Mốc)
+  // 3. Vẽ các điểm thông thường lên bản đồ
   pts.forEach((pt, index) => {
     bounds.push([pt.lat, pt.lng]);
     var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : '<div class="standard-marker"></div>';
@@ -336,44 +347,60 @@ async function veLaiTuyenAB() {
     var popupHtml = `
       <div style="font-size: 12px; line-height: 1.6;">
         <b style="font-size: 14px; color: #0d6efd;">${pt.ten}</b><br>
-        Loại: <b>${pt.loai}</b><br>
+        Thứ tự: <b>${pt.thu_tu || (index + 1)}</b><br>
+        Loại: <b>${pt.loai || 'Điểm hạ tầng'}</b><br>
         📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}</span><br>
-        📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b><br>
-        📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText}</b>
+        📍 Lý trình QL: <b>${pt.calculatedLyTrinhText || '0m'}</b><br>
+        📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText || '0m'}</b>
       </div>
     ` + taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng);
     
     marker.bindPopup(popupHtml);
     marker.on('dragend', e => handleDragEnd(e, pt));
-    markersLayer.addLayer(marker);
+    if (typeof markersLayer !== 'undefined') {
+      markersLayer.addLayer(marker);
+    }
   });
 
-  // Vẽ các Măng Xông
-  var mxList = backbone.filter(p => isMangXong(p));
-  mxList.forEach(mx => {
-    bounds.push([mx.lat, mx.lng]);
-    var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
-    
-    var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px; color:white;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}', ${mx.lat}, ${mx.lng})">📝 Ghi chú</button>`;
-    
-    var popupHtml = `
-      <div style="font-size: 12px; line-height: 1.6;">
-        <b style="font-size: 14px; color: #198754;">${mx.ten}</b><br>
-        📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${mx.lat.toFixed(6)}, ${mx.lng.toFixed(6)}</span><br>
-        📍 Lý trình QL: <b>${mx.calculatedLyTrinhText}</b><br>
-        📏 Cự ly từ Trạm A: <b>${mx.distanceFromAText}</b><br>
-      </div>
-      <div style="margin-top:4px;">${ghiChuBtn}</div>
-    ` + taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng);
+  // 4. Vẽ các Măng Xông (nếu có hàm isMangXong)
+  if (typeof isMangXong === 'function') {
+    var mxList = backbone.filter(p => isMangXong(p));
+    mxList.forEach(mx => {
+      bounds.push([mx.lat, mx.lng]);
+      var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
+      
+      var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px; color:white;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu || ''}', ${mx.lat}, ${mx.lng})">📝 Ghi chú</button>`;
+      
+      var popupHtml = `
+        <div style="font-size: 12px; line-height: 1.6;">
+          <b style="font-size: 14px; color: #198754;">${mx.ten}</b><br>
+          Thứ tự: <b>${mx.thu_tu}</b><br>
+          📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${mx.lat.toFixed(6)}, ${mx.lng.toFixed(6)}</span><br>
+          📍 Lý trình QL: <b>${mx.calculatedLyTrinhText || '0m'}</b><br>
+          📏 Cự ly từ Trạm A: <b>${mx.distanceFromAText || '0m'}</b><br>
+        </div>
+        <div style="margin-top:4px;">${ghiChuBtn}</div>
+      ` + taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng);
 
-    mxMarker.bindPopup(popupHtml);
-    mxMarker.on('dragend', e => handleDragEnd(e, mx));
-    mxLayer.addLayer(mxMarker);
-  });
+      mxMarker.bindPopup(popupHtml);
+      mxMarker.on('dragend', e => handleDragEnd(e, mx));
+      if (typeof mxLayer !== 'undefined') {
+        mxLayer.addLayer(mxMarker);
+      }
+    });
+  }
 
-  var lineCoordinates = backbone.map(p => [p.lat, p.lng]);
-  if (lineCoordinates.length > 1) polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: '#0d6efd', weight: 4, opacity: 0.85 }));
-  if (bounds.length > 0 && tuyenVal !== 'ALL') map.fitBounds(bounds, { padding: [40, 40] });
+  // 5. Vẽ đường Polyline nối liền mạch từ điểm 1 đến n (Không lặp vòng)
+  var lineCoordinates = backbone.map(p => [Number(p.lat), Number(p.lng)]);
+  if (lineCoordinates.length > 1 && typeof polylinesLayer !== 'undefined') {
+    var polyline = L.polyline(lineCoordinates, { color: '#0d6efd', weight: 4, opacity: 0.85 });
+    polylinesLayer.addLayer(polyline);
+  }
+
+  // 6. Tự động căn chỉnh khung nhìn bản đồ ôm trọn tuyến cáp
+  if (bounds.length > 0 && tuyenVal !== 'ALL') {
+    map.fitBounds(bounds, { padding: [40, 40] });
+  }
 }
 window.veLaiTuyenAB = veLaiTuyenAB;
 
