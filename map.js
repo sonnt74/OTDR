@@ -323,34 +323,44 @@ function veLaiTuyenAB() {
   var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
 
  // HÀM TẠO NÚT BẤM POPUP (Đã áp dụng bảo mật Hướng 2 - Truyền ID thay vì truyền chuỗi)
+ // HÀM TẠO NÚT BẤM POPUP (Đã bổ sung bộ theo dõi lỗi và mở rộng điều kiện phân quyền)
   function taoNutHanhDong(ptObj) {
     let id = ptObj.id || ptObj.id_diem;
     let ten = ptObj.ten || ptObj.ten_diem || 'Điểm hạ tầng';
     let lat = ptObj.lat;
     let lng = ptObj.lng;
 
-    // 1. Kiểm tra quyền xem ghi chú ẩn
-    let hasQuyenGhiChuAn = (currentUser.xem_ghichu_an === true || currentUser.xem_ghichu_an === 1);
+    // 1. Lấy thông tin user hiện tại đang đăng nhập
+    let currentUser = (typeof AppStore !== 'undefined' && AppStore.getState().currentUser) ? AppStore.getState().currentUser : (window.currentUser || {});
+    
+    // BẪY THEO DÕI: In ra Console để xem lúc click vào map, hệ thống đang hiểu user là ai
+    console.log("🔍 [Debug GIS] Dữ liệu currentUser khi click map:", currentUser);
 
-    // 2. Nút Ghi chú mật (Chỉ hiện nếu có quyền)
-    // SỬA ĐỔI QUAN TRỌNG: Chỉ truyền id và ten vào hàm, KHÔNG truyền nội dung ghi chú nữa
+    // 2. Kiểm tra quyền xem ghi chú ẩn (Mở rộng bắt cả chuỗi và số)
+    let valQuyen = currentUser.xem_ghichu_an;
+    let hasQuyenGhiChuAn = (valQuyen === true || valQuyen === 1 || valQuyen === '1' || valQuyen === 'true' || valQuyen === 'TRUE');
+    
+    // In ra kết quả kiểm tra quyền
+    console.log("🔍 [Debug GIS] Cấp quyền xem mật:", hasQuyenGhiChuAn, "(Giá trị gốc:", valQuyen, ")");
+
+    // 3. Nút Ghi chú mật (Chỉ hiện nếu có quyền)
     var btnGhiChuAn = '';
     if (hasQuyenGhiChuAn) {
       btnGhiChuAn = `<button class="btn-small" style="background:#f59e0b; color:white; flex: 1; margin-right: 0;" onclick="xemGhiChuAnTaiDiem(${id}, '${ten}')">📝 Ghi chú mật</button>`;
     }
 
-    // 3. Nút quản trị (Giữ nguyên)
+    // 4. Nút quản trị (Sửa, Xóa)
     var btnAdmin = isDraggable ? 
       `<button class="btn-small btn-success" style="flex: 1; margin-right: 0;" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa</button>
        <button class="btn-small del" style="flex: 1; margin-right: 0;" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>` : '';
     
-    // 4. Nút tiện ích (Giữ nguyên)
+    // 5. Nút tiện ích (Map, Tọa độ)
     var btnTienIch = `
       <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="btn-small" style="background:#0dcaf0; color:black; text-decoration:none; flex: 1; margin-right: 0; display: flex; align-items: center; justify-content: center;">🗺️ Map</a>
       <button class="btn-small" style="background:#6c757d; color:white; flex: 1; margin-right: 0;" onclick="copyToClipboardTNN('${lat.toFixed(6)}, ${lng.toFixed(6)}')">📋 Tọa độ</button>
     `;
 
-    // 5. Gom nhóm bố cục (Giữ nguyên giao diện Flexbox 2 dòng)
+    // 6. Gom nhóm bố cục (Flexbox)
     let row1 = (btnGhiChuAn || btnAdmin) ? `<div style="display:flex; gap:4px; width: 100%; margin-bottom:4px;">${btnGhiChuAn}${btnAdmin}</div>` : '';
     let row2 = `<div style="display:flex; gap:4px; width: 100%;">${btnTienIch}</div>`;
 
