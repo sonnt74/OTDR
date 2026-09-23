@@ -322,42 +322,43 @@ function veLaiTuyenAB() {
   var bounds = [];
   var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
 
- function taoNutHanhDong(ptObj) {
-    let id = ptObj.id;
-    let ten = ptObj.ten;
+ // HÀM TẠO NÚT BẤM POPUP (Đã áp dụng bảo mật Hướng 2 - Truyền ID thay vì truyền chuỗi)
+  function taoNutHanhDong(ptObj) {
+    let id = ptObj.id || ptObj.id_diem;
+    let ten = ptObj.ten || ptObj.ten_diem || 'Điểm hạ tầng';
     let lat = ptObj.lat;
     let lng = ptObj.lng;
-    let ghichuAn = ptObj.ghichu_an;
 
-    // 1. Kiểm tra quyền xem ghi chú ẩn (Thông tin mật)
+    // 1. Kiểm tra quyền xem ghi chú ẩn
     let hasQuyenGhiChuAn = (currentUser.xem_ghichu_an === true || currentUser.xem_ghichu_an === 1);
 
     // 2. Nút Ghi chú mật (Chỉ hiện nếu có quyền)
+    // SỬA ĐỔI QUAN TRỌNG: Chỉ truyền id và ten vào hàm, KHÔNG truyền nội dung ghi chú nữa
     var btnGhiChuAn = '';
     if (hasQuyenGhiChuAn) {
-      let safeNote = ghichuAn ? String(ghichuAn).replace(/'/g, "\\'") : 'Chưa có thông tin ghi chú nội bộ.';
-      btnGhiChuAn = `<button class="btn-small" style="background:#f59e0b; color:white; flex: 1; margin-right: 0;" onclick="xemGhiChuAnTaiDiem('${safeNote}')">📝 Mật</button>`;
+      btnGhiChuAn = `<button class="btn-small" style="background:#f59e0b; color:white; flex: 1; margin-right: 0;" onclick="xemGhiChuAnTaiDiem(${id}, '${ten}')">📝 Ghi chú mật</button>`;
     }
 
-    // 3. Nút quản trị (Sửa đổi thành "Sửa" thay vì "Sửa tên")
+    // 3. Nút quản trị (Giữ nguyên)
     var btnAdmin = isDraggable ? 
       `<button class="btn-small btn-success" style="flex: 1; margin-right: 0;" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa</button>
        <button class="btn-small del" style="flex: 1; margin-right: 0;" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>` : '';
     
-    // 4. Nút tiện ích (Căn đều bằng Flexbox)
+    // 4. Nút tiện ích (Giữ nguyên)
     var btnTienIch = `
       <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="btn-small" style="background:#0dcaf0; color:black; text-decoration:none; flex: 1; margin-right: 0; display: flex; align-items: center; justify-content: center;">🗺️ Map</a>
-      <button class="btn-small" style="background:#6c757d; color:white; flex: 1; margin-right: 0;" onclick="copyToClipboardTNN('${lat.toFixed(6)},${lng.toFixed(6)}')">📋 Tọa độ</button>
+      <button class="btn-small" style="background:#6c757d; color:white; flex: 1; margin-right: 0;" onclick="copyToClipboardTNN('${lat.toFixed(6)}, ${lng.toFixed(6)}')">📋 Tọa độ</button>
     `;
 
-    // 5. Gom nhóm bố cục (Chia 2 dòng gọn gàng, nút tự co giãn đều nhau)
+    // 5. Gom nhóm bố cục (Giữ nguyên giao diện Flexbox 2 dòng)
     let row1 = (btnGhiChuAn || btnAdmin) ? `<div style="display:flex; gap:4px; width: 100%; margin-bottom:4px;">${btnGhiChuAn}${btnAdmin}</div>` : '';
     let row2 = `<div style="display:flex; gap:4px; width: 100%;">${btnTienIch}</div>`;
 
     return `
       <hr style="margin:6px 0; border:0; border-top:1px dashed #ccc;">
       <div style="display:flex; flex-direction:column; margin-top:4px;">
-        ${row1}${row2}
+        ${row1}
+        ${row2}
       </div>`;
   }
 
