@@ -467,7 +467,9 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
         if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("XOA_DIEM", `Kỹ sư đã xóa điểm [${ten}] ID: ${id}`);
         showToast("✅ Đã xóa điểm hạ tầng thành công!", "success");
         veLaiTuyenAB();
-        map.setView([lat, lng], 19, { animate: true });
+        if (typeof map !== 'undefined') {
+            map.flyTo([lat, lng], 19, { animate: true, duration: 1.5 });
+        }
       } catch (err) { showToast("❌ Lỗi xóa điểm: " + err.message, "error"); }
       hideLoading();
     }
@@ -765,7 +767,12 @@ window.saveDiemHatangFullAction = async function() {
     if (typeof taiDuLieuSupabase === 'function') {
        taiDuLieuSupabase(false); 
     }
-
+    if (typeof map !== 'undefined') {
+       map.flyTo([lat, lng], 19, { 
+           animate: true, 
+           duration: 1.5 // Thời gian bay là 1.5 giây tạo cảm giác mượt mà
+       });
+    }
   } catch (err) {
     showToast("❌ Lỗi xử lý: " + err.message, "error");
     console.error(err);
