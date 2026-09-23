@@ -186,41 +186,29 @@ async function taiDuLieuDoanCapDiem(doanVal) {
  * 2. HÀM XÂY DỰNG TUYẾN BACKBONE (ĐỒNG BỘ): 
  * Giúp hàm veLaiTuyenAB() cũ của bạn hoạt động hoàn hảo, không cần sửa đổi gì bên trong.
  */
+/**
+ * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ CỦA BẢNG DOAN_CAP_DIEM
+ */
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   if (!doanVal || doanVal === 'ALL') {
     return [];
   }
 
-  // Lọc các điểm thuộc đoạn cáp từ globalDataPoints
-  let segmentPts = globalDataPoints.filter(pt => {
-    return String(pt.idDoanCap) === String(doanVal) || window.cacheThuTuDoanCap[Number(pt.id)] !== undefined;
+  // 1. Lọc các điểm thuộc đúng đoạn cáp hiện tại từ bộ nhớ globalDataPoints
+  let segmentPts = globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
+
+  if (segmentPts.length === 0) {
+    return [];
+  }
+
+  // 2. Sắp xếp tuyệt đối theo cột stt (hoặc thu_tu) đã được đồng bộ sẵn từ cơ sở dữ liệu
+  segmentPts.sort((a, b) => {
+    let orderA = a.stt !== undefined && a.stt !== null ? Number(a.stt) : (a.thu_tu !== undefined ? Number(a.thu_tu) : 9999);
+    let orderB = b.stt !== undefined && b.stt !== null ? Number(b.stt) : (b.thu_tu !== undefined ? Number(b.thu_tu) : 9999);
+    return orderA - orderB;
   });
 
-  if (segmentPts.length === 0) return [];
-
-  // Gán số thứ tự từ bộ nhớ đệm (doan_cap_diem) vào điểm
-  segmentPts.forEach(pt => {
-    let thuTuCSDL = window.cacheThuTuDoanCap[Number(pt.id)];
-    pt.thu_tu = (thuTuCSDL !== undefined) ? thuTuCSDL : 9999;
-  });
-
-  // Chống trùng lặp điểm bằng Map ID
-  let uniqueMap = new Map();
-  segmentPts.forEach(p => {
-    if (p.id && !uniqueMap.has(String(p.id))) {
-      uniqueMap.set(String(p.id), p);
-    }
-  });
-  let cleanPts = Array.from(uniqueMap.values());
-
-  // Sắp xếp tuyệt đối theo đúng cột thu_tu từ nhỏ đến lớn (1 đến n)
-  let sortedByThuTu = cleanPts.sort((a, b) => {
-    let tA = (a.thu_tu !== undefined && a.thu_tu !== null) ? Number(a.thu_tu) : 9999;
-    let tB = (b.thu_tu !== undefined && b.thu_tu !== null) ? Number(b.thu_tu) : 9999;
-    return tA - tB;
-  });
-
-  return sortedByThuTu;
+  return segmentPts;
 }
 
 function precalculateRouteDataForPoints(pts, backbonePts) {
