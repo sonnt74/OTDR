@@ -436,7 +436,11 @@ function isMangXong(pt) {
 // ==========================================================================
 
 // 1. Hàm xử lý Sửa tên và Xóa đối tượng hạ tầng
+// ==========================================================================
+// HÀM QUẢN LÝ CRUD ĐIỂM HẠ TẦNG (THÊM, SỬA, XÓA) - ĐÃ TỐI ƯU ĐỌC BỘ NHỚ RAM
+// ==========================================================================
 window.moFormCrud = async function(action, id, ten, lat, lng) {
+  // 1. XỬ LÝ XÓA ĐIỂM
   if (action === 'DELETE') {
     let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn điểm <b>${ten}</b> khỏi tuyến không?`, 'danger');
     if (isConfirmed) {
@@ -456,6 +460,7 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
       hideLoading();
     }
   } 
+  // 2. XỬ LÝ THÊM (ADD) HOẶC SỬA (EDIT) ĐIỂM HẠ TẦNG
   else if (action === 'ADD' || action === 'EDIT') {
     showLoading("Đang tải biểu mẫu...");
     
@@ -473,34 +478,33 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
     let doanContainer = document.getElementById('diemDoanCheckboxList');
     let tuyenSelect = document.getElementById('diemTuyenSelect');
 
-    // 1. TẢI CƯỠNG BỨC DANH SÁCH LOẠI ĐIỂM (CHỐNG LỖI RỖNG)
-    let dsLoai = [];
-    try {
-      let { data: loaiData, error: loaiErr } = await supabaseClient.from('loai_diem').select('*');
-      if (!loaiErr && loaiData && loaiData.length > 0) {
-        dsLoai = loaiData;
-        window.rawLoaiDiemList = loaiData;
-      } else if (window.rawLoaiDiemList && window.rawLoaiDiemList.length > 0) {
-        dsLoai = window.rawLoaiDiemList;
-      }
-    } catch(e) {
-      dsLoai = window.rawLoaiDiemList || [];
+    // BƯỚC A: LẤY DANH SÁCH LOẠI ĐIỂM TRỰC TIẾP TỪ BỘ NHỚ RAM (window.rawLoaiDiemList)
+    let dsLoai = window.rawLoaiDiemList || [];
+    
+    // Dự phòng an toàn (Fallback) nếu bộ nhớ RAM trống
+    if (dsLoai.length === 0) {
+      dsLoai = [
+        { id_loaidiem: 1, ten_loai: 'Cột cáp' },
+        { id_loaidiem: 2, ten_loai: 'Bể cáp' },
+        { id_loaidiem: 3, ten_loai: 'Mốc tuyến' },
+        { id_loaidiem: 4, ten_loai: 'Măng xông' }
+      ];
     }
 
     loaiSelect.innerHTML = '';
     dsLoai.forEach(loai => {
-      let loaiId = loai.id_loaidiem || loai.id || loai.loai_id;
+      let loaiId = loai.id_loaidiem !== undefined ? loai.id_loaidiem : (loai.id !== undefined ? loai.id : 1);
       let loaiName = loai.ten_loai || loai.loai || loai.ten || ('Loại ' + loaiId);
       loaiSelect.innerHTML += `<option value="${loaiId}">${loaiName}</option>`;
     });
 
-    // 2. Hiển thị thông tin Tuyến hiện tại
+    // BƯỚC B: HIỂN THỊ THÔNG TIN TUYẾN HIỆN TẠI
     let currentTuyen = AppStore.getState().selectedTuyen;
     let tuyenList = AppStore.getState().tuyenList || window.rawTuyenList || [];
     let curTuyenObj = tuyenList.find(t => String(t.id_tuyen_cap || t.id || t.id_tuyen) === String(currentTuyen));
     tuyenSelect.innerHTML = `<option value="${currentTuyen}">${curTuyenObj ? (curTuyenObj.ten_tuyen || curTuyenObj.ten_tuyencap || curTuyenObj.ten) : 'Tuyến hiện tại'}</option>`;
 
-    // 3. LẤY TOÀN BỘ ĐOẠN CÁP HỢP LỆ VÀ NHÓM THEO TUYẾN
+    // BƯỚC C: LẤY TOÀN BỘ ĐOẠN CÁP HỢP LỆ VÀ NHÓM THEO TUYẾN
     let doanList = (typeof getFilteredDoanList === 'function') ? getFilteredDoanList() : (AppStore.getState().doanCapList || window.rawDoanCapList || []);
     
     let groupedDoanByTuyen = {};
@@ -535,11 +539,16 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
       `;
     });
 
-    // 4. Phân nhánh dữ liệu ADD / EDIT
+    // BƯỚC D: PHÂN NHÁNH DỮ LIỆU KHI THÊM MỚI (ADD) HOẶC SỬA (EDIT)
     if (action === 'ADD') {
-      latInput.value = lat; lngInput.value = lng;
-      tenInput.value = ''; lyTrinhInput.value = ''; duTruInput.value = 0; ghiChuInput.value = '';
+      latInput.value = lat; 
+      lngInput.value = lng;
+      tenInput.value = ''; 
+      lyTrinhInput.value = ''; 
+      duTruInput.value = 0; 
+      ghiChuInput.value = '';
       
+      // Tự động tick chọn đoạn cáp đang làm việc hiện tại
       let currentDoan = AppStore.getState().selectedDoanCap;
       let cb = doanContainer.querySelector(`input[value="${currentDoan}"]`);
       if (cb) cb.checked = true;
@@ -547,12 +556,16 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
     } else if (action === 'EDIT') {
       let ptObj = globalDataPoints.find(p => String(p.id) === String(id));
       if (ptObj) {
-        latInput.value = ptObj.lat || lat; lngInput.value = ptObj.lng || lng;
-        tenInput.value = ptObj.ten || ''; lyTrinhInput.value = ptObj.lyTrinh || '';
-        duTruInput.value = ptObj.duTru || 0; loaiSelect.value = ptObj.idLoaiDiem || 1;
+        latInput.value = ptObj.lat || lat; 
+        lngInput.value = ptObj.lng || lng;
+        tenInput.value = ptObj.ten || ''; 
+        lyTrinhInput.value = ptObj.lyTrinh || '';
+        duTruInput.value = ptObj.duTru || 0; 
+        loaiSelect.value = ptObj.idLoaiDiem || 1;
         ghiChuInput.value = (ptObj.ghiChu && ptObj.ghiChu !== 'undefined' && ptObj.ghiChu !== 'null') ? ptObj.ghiChu : '';
       }
 
+      // Truy vấn CSDL để đánh dấu (tick) các đoạn cáp mà điểm này đang thuộc về
       try {
         let { data: linkedDoan } = await supabaseClient.from('doan_cap_diem').select('id_doan_cap').eq('id_diem', Number(id));
         let linkedIds = (linkedDoan || []).map(d => String(d.id_doan_cap));
