@@ -430,7 +430,7 @@ function veLaiTuyenAB() {
         📍 Lý trình QL: <b>${mx.calculatedLyTrinhText}</b><br>
         📏 Cự ly từ Trạm A: <b>${mx.distanceFromAText}</b><br>
       </div>
-      <div style="margin-top:4px;">${ghiChuBtn}</div>
+ 
     ` + taoNutHanhDong(mx);
 
     mxMarker.bindPopup(popupHtml);
