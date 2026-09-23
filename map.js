@@ -509,6 +509,9 @@ window.copyToClipboardTNN = function(text) {
 /**
  * HÀM TỰ ĐỘNG CHUẨN HÓA, BỔ SUNG MĂNG XÔNG VÀ GÁN THỨ TỰ (thu_tu) VÀO BẢNG doan_cap_diem
  */
+/**
+ * HÀM TỰ ĐỘNG SẮP XẾP VÀ GÁN THỨ TỰ TỪ 1 ĐẾN N DỰA TRÊN BẢNG TRUNG GIAN doan_cap_diem
+ */
 window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   var selectTuyen = document.getElementById('selectTuyen');
   var selectDoanCap = document.getElementById('selectDoanCap');
@@ -521,47 +524,54 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
     return;
   }
 
-  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn tự động sắp xếp và gán thu_tu từ 1 đến n cho đoạn cáp này dựa trên tọa độ không gian không?`, 'success');
+  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn tự động sắp xếp tọa độ và gán thu_tu từ 1 đến n cho đoạn cáp này không?`, 'success');
   if (!isConfirmed) return;
 
-  showLoading("Đang lấy dữ liệu từ bảng doan_cap_diem và sắp xếp không gian...");
+  showLoading("Đang truy vấn liên kết từ bảng doan_cap_diem và sắp xếp không gian...");
 
   try {
-    // 1. Lấy danh sách điểm thuộc đoạn cáp từ globalDataPoints và kiểm tra bảng doan_cap_diem
-    let segmentPts = globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
-
-    let { data: relationData, error: relError } = await supabaseClient
+    // 1. Truy vấn trực tiếp các cặp liên kết từ bảng trung gian doan_cap_diem theo đoạn cáp
+    let { data: relationRows, error: relError } = await supabaseClient
       .from('doan_cap_diem')
-      .select('id_diem, thu_tu')
+      .select('id_diem')
       .eq('id_doan_cap', Number(doanVal));
 
     if (relError) throw new Error(relError.message);
 
-    // Gom ID điểm từ cả bộ nhớ cục bộ và bảng trung gian để không bỏ sót măng xông mới
-    let pointIdSet = new Set();
-    segmentPts.forEach(p => pointIdSet.add(String(p.id)));
-    if (relationData) {
-      relationData.forEach(r => pointIdSet.add(String(r.id_diem)));
-    }
+    // Lấy danh sách ID điểm thuộc đoạn này
+    let linkedPointIds = relationRows ? relationRows.map(r => String(r.id_diem)) : [];
 
-    let allPts = globalDataPoints.filter(pt => pointIdSet.has(String(pt.id)));
-
-    if (allPts.length === 0) {
+    if (linkedPointIds.length === 0) {
       hideLoading();
-      showToast("⚠️ Không tìm thấy điểm nào thuộc đoạn cáp này!", "warning");
+      showToast("⚠️ Đoạn cáp này chưa có điểm hạ tầng nào liên kết trong cơ sở dữ liệu!", "warning");
       return;
     }
 
-    // 2. Xác định điểm gốc Trạm TNN
-    var basePt = allPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
-    if (!basePt) {
-      basePt = { id: 'TNN_BASE', ten: "Trạm TNN", lat: 21.593365, lng: 105.839945 };
-      allPts.unshift(basePt);
+    // 2. Lọc các điểm tương ứng từ mảng globalDataPoints trong bộ nhớ
+    let segmentPts = globalDataPoints.filter(pt => linkedPointIds.includes(String(pt.id)));
+
+    if (segmentPts.length === 0) {
+      hideLoading();
+      showToast("⚠️ Không tìm thấy thông tin chi tiết của các điểm trong bộ nhớ!", "error");
+      return;
     }
 
-    // 3. Sắp xếp theo khoảng cách không gian (Nearest Neighbor) từ trạm gốc đi ra
+    // Chuẩn hóa ID điểm về dạng số nguyên để khớp khóa chính
+    let cleanPts = segmentPts.map(pt => ({
+      ...pt,
+      id: Number(pt.id)
+    }));
+
+    // 3. Xác định điểm gốc Trạm TNN làm mốc khởi đầu
+    var basePt = cleanPts.find(p => Math.abs(p.lat - 21.593365) < 0.0001);
+    if (!basePt) {
+      basePt = { id: 999999, ten: "Trạm TNN", lat: 21.593365, lng: 105.839945 };
+      cleanPts.unshift(basePt);
+    }
+
+    // 4. Sắp xếp theo khoảng cách không gian (Nearest Neighbor) từ trạm gốc đi ra
     let sortedPath = [basePt];
-    let remaining = allPts.filter(p => p !== basePt);
+    let remaining = cleanPts.filter(p => p.id !== basePt.id);
 
     while (remaining.length > 0) {
       let current = sortedPath[sortedPath.length - 1];
@@ -578,18 +588,19 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
       remaining.splice(nearestIdx, 1);
     }
 
-    let validPts = sortedPath.filter(pt => pt.id !== 'TNN_BASE');
+    // Lọc bỏ trạm gốc ra khỏi danh sách ghi cơ sở dữ liệu
+    let validPts = sortedPath.filter(pt => pt.id !== 999999 && pt.id !== 'TNN_BASE');
 
     if (validPts.length === 0) {
       hideLoading();
-      showToast("⚠️ Không có điểm hạ tầng nào để đánh số!", "warning");
+      showToast("⚠️ Không có điểm hạ tầng hợp lệ để gán thứ tự!", "warning");
       return;
     }
 
-    // 4. Gán số thứ tự liên tục từ 1 đến n và Upsert vào bảng doan_cap_diem
+    // 5. Gán số thứ tự từ 1 đến n và cập nhật chính xác vào bảng doan_cap_diem
     for (let i = 0; i < validPts.length; i++) {
       let pt = validPts[i];
-      let thuTuMoi = i + 1; // Đảm bảo đánh số tuần tự 1, 2, 3... n
+      let thuTuMoi = i + 1; // Số thứ tự tuần tự từ 1 đến n
       pt.thu_tu = thuTuMoi;
 
       let { error: upsertError } = await supabaseClient
@@ -601,14 +612,14 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
         }, { onConflict: 'id_doan_cap,id_diem' });
 
       if (upsertError) {
-        throw new Error(`Lỗi cập nhật điểm ${pt.ten || pt.id}: ${upsertError.message}`);
+        throw new Error(`Lỗi cập nhật điểm ID ${pt.id}: ${upsertError.message}`);
       }
     }
 
     hideLoading();
-    showToast(`✅ Đã gán thành công thu_tu từ 1 đến ${validPts.length} cho đoạn cáp!`, "success");
+    showToast(`✅ Đã đồng bộ thành công thứ tự từ 1 đến ${validPts.length} vào bảng doan_cap_diem!`, "success");
 
-    // 5. Vẽ lại bản đồ ngay lập tức
+    // 6. Vẽ lại bản đồ ngay lập tức
     if (typeof veLaiTuyenAB === 'function') {
       veLaiTuyenAB();
     }
@@ -616,6 +627,6 @@ window.tuDongCapNhatSTTTheoKhoangCach = async function() {
   } catch (err) {
     hideLoading();
     showToast("❌ Lỗi đồng bộ: " + err.message, "error");
-    console.error("Chi tiết lỗi:", err);
+    console.error("Chi tiết lỗi đồng bộ STT:", err);
   }
 };
