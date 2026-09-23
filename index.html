@@ -255,38 +255,66 @@
       </div>
     </div>
   </div>
-<!-- MODAL THÊM / SỬA ĐIỂM HẠ TẦNG (CỘT, BỂ, MỐC, MĂNG XÔNG) -->
+<!-- MODAL THÊM / SỬA ĐIỂM HẠ TẦNG (SIÊU GỌN - KHÔNG CẦN SCROLL) -->
 <div id="diemHaTangModal" class="app-modal" style="z-index: 3500;">
-  <div class="modal-content" style="max-width: 450px;">
-    <div class="modal-header">
+  <div class="modal-content" style="max-width: 420px; padding: 12px; border-radius: 12px;">
+    <div class="modal-header" style="padding: 6px 8px; margin-bottom: 6px; font-size: 13px; border-bottom: 1px solid #cbd5e1;">
       <span id="diemModalTitle">📍 Quản Lý Điểm Hạ Tầng</span>
-      <button onclick="document.getElementById('diemHaTangModal').style.display='none'" class="btn-small" style="background:#ef4444; color:white;">Đóng ✕</button>
     </div>
-    <div class="modal-body">
-      <input type="hidden" id="diemActionType"> <!-- Lưu trạng thái: ADD hoặc EDIT -->
-      <input type="hidden" id="diemEditId">   <!-- Lưu ID điểm khi sửa -->
+    <div class="modal-body" style="padding: 0; display: flex; flex-direction: column; gap: 4px; overflow: visible;">
+      <input type="hidden" id="diemActionType">
+      <input type="hidden" id="diemEditId">
       
-      <div class="form-group"><label>Tên điểm hạ tầng:</label><input type="text" id="diemTen" placeholder="VD: Cột 01, Bể cáp B02..."></div>
-      <div class="form-group"><label>Loại điểm:</label><select id="diemLoaiSelect"></select></div>
-      <div class="form-group"><label>Thuộc Tuyến Cáp:</label><select id="diemTuyenSelect" disabled style="background:#e2e8f0;"></select></div>
-      <div class="form-group"><label>Thuộc Đoạn Cáp (Chọn nhiều đoạn dùng chung, nhóm theo tuyến):</label>
-        <div id="diemDoanCheckboxList" style="max-height: 160px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; background: #f8fafc; display: flex; flex-direction: column; gap: 4px;">
-          <!-- Các Checkbox sẽ được JavaScript render phân nhóm tự động vào đây -->
+      <div class="form-group" style="margin-bottom: 4px;">
+        <label style="font-size: 10px; margin-bottom: 1px;">Tên điểm hạ tầng:</label>
+        <input type="text" id="diemTen" placeholder="VD: Cột 01, Bể cáp B02..." style="padding: 4px 6px; font-size: 11px;">
+      </div>
+
+      <div style="display: flex; gap: 6px; margin-bottom: 4px;">
+        <div class="form-group" style="flex: 1; margin: 0;">
+          <label style="font-size: 10px; margin-bottom: 1px;">Loại điểm:</label>
+          <select id="diemLoaiSelect" style="padding: 4px 6px; font-size: 11px;"></select>
+        </div>
+        <div class="form-group" style="flex: 1; margin: 0;">
+          <label style="font-size: 10px; margin-bottom: 1px;">Tuyến cáp:</label>
+          <select id="diemTuyenSelect" disabled style="background:#e2e8f0; padding: 4px 6px; font-size: 11px;"></select>
         </div>
       </div>
-      <div class="form-group"><label>Lý trình quản lý:</label><input type="text" id="diemLyTrinh" placeholder="VD: 1+250"></div>
-      <div class="form-group"><label>Cự ly dự trù (mét):</label><input type="number" id="diemDuTru" value="0" step="0.1"></div>
       
-      <div class="form-group"><label>Tọa độ (Lat, Lng):</label>
-        <div style="display:flex; gap:6px;">
-          <input type="text" id="diemLatInput" readonly style="background:#f1f5f9;">
-          <input type="text" id="diemLngInput" readonly style="background:#f1f5f9;">
+      <div class="form-group" style="margin-bottom: 4px;">
+        <label style="font-size: 10px; margin-bottom: 1px;">Thuộc Đoạn Cáp (Chọn nhiều, nhóm theo tuyến):</label>
+        <div id="diemDoanCheckboxList" style="max-height: 85px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 6px; background: #f8fafc; display: flex; flex-direction: column; gap: 2px;"></div>
+      </div>
+
+      <div style="display: flex; gap: 6px; margin-bottom: 4px;">
+        <div class="form-group" style="flex: 1.5; margin: 0;">
+          <label style="font-size: 10px; margin-bottom: 1px;">Lý trình:</label>
+          <input type="text" id="diemLyTrinh" placeholder="VD: 1+250" style="padding: 4px 6px; font-size: 11px;">
+        </div>
+        <div class="form-group" style="flex: 1; margin: 0;">
+          <label style="font-size: 10px; margin-bottom: 1px;">Dự trù (m):</label>
+          <input type="number" id="diemDuTru" value="0" step="0.1" style="padding: 4px 6px; font-size: 11px;">
         </div>
       </div>
 
-      <div class="form-group"><label>Ghi chú / Thông số:</label><textarea id="diemGhiChuInput" rows="3" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; box-sizing:border-box;" placeholder="Nhập ghi chú chi tiết..."></textarea></div>
+      <div class="form-group" style="margin-bottom: 4px;">
+        <label style="font-size: 10px; margin-bottom: 1px;">Tọa độ (Lat, Lng):</label>
+        <div style="display:flex; gap:4px;">
+          <input type="text" id="diemLatInput" readonly style="background:#f1f5f9; padding: 4px 6px; font-size: 11px;">
+          <input type="text" id="diemLngInput" readonly style="background:#f1f5f9; padding: 4px 6px; font-size: 11px;">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 6px;">
+        <label style="font-size: 10px; margin-bottom: 1px;">Ghi chú:</label>
+        <textarea id="diemGhiChuInput" rows="2" style="width:100%; padding:4px 6px; border:1px solid #cbd5e1; border-radius:4px; font-size:11px; box-sizing:border-box; resize: none;" placeholder="Nhập ghi chú..."></textarea>
+      </div>
       
-      <button class="btn-action btn-success" style="margin-top:8px;" onclick="saveDiemHatangFullAction()">LƯU THÔNG TIN ĐIỂM</button>
+      <!-- NÚT LƯU VÀ NÚT ĐÓNG BÊN DƯỚI -->
+      <div style="display: flex; gap: 8px; margin-top: 2px;">
+        <button class="btn-action btn-success" style="flex: 1; padding: 6px; font-size: 11px; margin: 0;" onclick="saveDiemHatangFullAction()">💾 LƯU THÔNG TIN</button>
+        <button class="btn-action" style="flex: 1; background: #64748b; padding: 6px; font-size: 11px; margin: 0;" onclick="document.getElementById('diemHaTangModal').style.display='none'">❌ ĐÓNG</button>
+      </div>
     </div>
   </div>
 </div>
