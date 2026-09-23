@@ -333,9 +333,15 @@ function veLaiTuyenAB() {
     // 1. Lấy thông tin user hiện tại đang đăng nhập
     let currentUser = (typeof AppStore !== 'undefined' && AppStore.getState().currentUser) ? AppStore.getState().currentUser : (window.currentUser || {});
     
-     // 2. Kiểm tra quyền xem ghi chú ẩn (Mở rộng bắt cả chuỗi và số)
+    // BẪY THEO DÕI: In ra Console để xem lúc click vào map, hệ thống đang hiểu user là ai
+    console.log("🔍 [Debug GIS] Dữ liệu currentUser khi click map:", currentUser);
+
+    // 2. Kiểm tra quyền xem ghi chú ẩn (Mở rộng bắt cả chuỗi và số)
     let valQuyen = currentUser.xem_ghichu_an;
     let hasQuyenGhiChuAn = (valQuyen === true || valQuyen === 1 || valQuyen === '1' || valQuyen === 'true' || valQuyen === 'TRUE');
+    
+    // In ra kết quả kiểm tra quyền
+    console.log("🔍 [Debug GIS] Cấp quyền xem mật:", hasQuyenGhiChuAn, "(Giá trị gốc:", valQuyen, ")");
 
     // 3. Nút Ghi chú mật (Chỉ hiện nếu có quyền)
     var btnGhiChuAn = '';
