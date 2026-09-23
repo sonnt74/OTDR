@@ -438,9 +438,7 @@ function isMangXong(pt) {
 // 1. Hàm xử lý Sửa tên và Xóa đối tượng hạ tầng
 window.moFormCrud = async function(action, id, ten, lat, lng) {
   if (action === 'DELETE') {
-    // Xác thực xóa (Đã có hộp thoại đỏ cảnh báo)
     let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn điểm <b>${ten}</b> khỏi tuyến không?`, 'danger');
-    
     if (isConfirmed) {
       showLoading("Đang xóa điểm hạ tầng...");
       try {
@@ -452,76 +450,95 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
         
         if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("XOA_DIEM", `Kỹ sư đã xóa điểm [${ten}] ID: ${id}`);
         showToast("✅ Đã xóa điểm hạ tầng thành công!", "success");
-        
         veLaiTuyenAB();
-        // Zoom lại vị trí vừa xóa để người dùng thấy điểm đã biến mất
         map.setView([lat, lng], 19, { animate: true });
-      } catch (err) {
-        showToast("❌ Lỗi xóa điểm: " + err.message, "error");
-      }
+      } catch (err) { showToast("❌ Lỗi xóa điểm: " + err.message, "error"); }
       hideLoading();
     }
   } 
-  else if (action === 'EDIT') {
-    // Sử dụng hộp thoại một dòng chuyên nghiệp thay vì prompt cũ
-    let newTen = await showSingleInputDialog(`✏️ Nhập tên mới cho điểm hạ tầng [${ten}]:`, ten);
+  else if (action === 'ADD' || action === 'EDIT') {
+    showLoading("Đang nạp dữ liệu form...");
     
-    if (newTen !== null && newTen !== '' && newTen !== ten) {
-      let isConfirmed = await showConfirmDialog(`Xác nhận đổi tên điểm thành:<br><b style="color:#0d6efd;">${newTen}</b>?`, 'success');
-      if (!isConfirmed) return;
+    document.getElementById('diemActionType').value = action;
+    document.getElementById('diemEditId').value = id || '';
+    document.getElementById('diemModalTitle').innerText = (action === 'ADD') ? '📍 Thêm Điểm Hạ Tầng Mới' : `✏️ Sửa Điểm Hạ Tầng: ${ten}`;
 
-      showLoading("Đang cập nhật tên...");
-      try {
-        const { error } = await supabaseClient.from('diem_ha_tang').update({ ten: newTen }).eq('id_diem', id);
-        if (error) throw error;
-        
-        let localPt = globalDataPoints.find(p => String(p.id) === String(id));
-        if (localPt) localPt.ten = newTen;
-        
-        if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("SUA_TEN_DIEM", `Kỹ sư đổi tên điểm từ [${ten}] thành [${newTen}]`);
-        showToast("✅ Cập nhật tên điểm thành công!", "success");
-        
-        veLaiTuyenAB();
-        map.setView([lat, lng], 19, { animate: true });
-      } catch (err) {
-        showToast("❌ Lỗi cập nhật tên: " + err.message, "error");
-      }
-      hideLoading();
-    }
-  }
-  else if (action === 'ADD') {
-    // 1. Đổ tọa độ click chuột vào form
-    document.getElementById('diemLatInput').value = lat;
-    document.getElementById('diemLngInput').value = lng;
-    
-    // 2. Làm sạch form
-    document.getElementById('diemTen').value = '';
-    document.getElementById('diemLyTrinh').value = '';
-    document.getElementById('diemDuTru').value = 0;
-    document.getElementById('diemGhiChuInput').value = '';
-    document.getElementById('diemActionType').value = 'ADD';
-
-    // 3. Nạp danh sách Loại Điểm
+    let tenInput = document.getElementById('diemTen');
+    let lyTrinhInput = document.getElementById('diemLyTrinh');
+    let duTruInput = document.getElementById('diemDuTru');
+    let ghiChuInput = document.getElementById('diemGhiChuInput');
+    let latInput = document.getElementById('diemLatInput');
+    let lngInput = document.getElementById('diemLngInput');
     let loaiSelect = document.getElementById('diemLoaiSelect');
-    loaiSelect.innerHTML = '';
-    if (typeof rawLoaiDiemList !== 'undefined') {
-      rawLoaiDiemList.forEach(loai => {
-        loaiSelect.innerHTML += `<option value="${loai.id_loaidiem || loai.id}">${loai.ten_loai || loai.loai}</option>`;
-      });
-    }
+    let doanContainer = document.getElementById('diemDoanCheckboxList');
+    let tuyenSelect = document.getElementById('diemTuyenSelect');
 
-    // 4. Nạp danh sách Đoạn cáp
-    let doanSelect = document.getElementById('diemDoanSelect');
-    doanSelect.innerHTML = '';
-    let currentDoan = AppStore.getState().selectedDoanCap;
-    let doanList = AppStore.getState().doanCapList || rawDoanCapList;
-    
-    doanList.forEach(d => {
-      let selected = (String(d.id_doan_cap || d.id) === String(currentDoan)) ? 'selected' : '';
-      doanSelect.innerHTML += `<option value="${d.id_doan_cap || d.id}" ${selected}>${d.ten_doan_cap || d.ten_doancap}</option>`;
+    // 1. Xử lý tải Loại Điểm (Khắc phục lỗi chưa load)
+    if (!window.rawLoaiDiemList || window.rawLoaiDiemList.length === 0) {
+      try {
+        let { data: loaiData } = await supabaseClient.from('loai_diem').select('*');
+        window.rawLoaiDiemList = loaiData || [];
+      } catch(e) { console.error("Lỗi tải loại điểm:", e); }
+    }
+    loaiSelect.innerHTML = '';
+    (window.rawLoaiDiemList || []).forEach(loai => {
+      loaiSelect.innerHTML += `<option value="${loai.id_loaidiem || loai.id}">${loai.ten_loai || loai.loai}</option>`;
     });
 
-    // 5. Mở Modal
+    // 2. Nạp Tuyến hiện tại vào Form
+    let currentTuyen = AppStore.getState().selectedTuyen;
+    let tuyenList = AppStore.getState().tuyenList || window.rawTuyenList || [];
+    let curTuyenObj = tuyenList.find(t => String(t.id_tuyen_cap || t.id) === String(currentTuyen));
+    tuyenSelect.innerHTML = `<option value="${currentTuyen}">${curTuyenObj ? (curTuyenObj.ten_tuyen || curTuyenObj.ten_tuyencap || curTuyenObj.ten) : 'Chưa xác định'}</option>`;
+
+    // 3. Render danh sách Đoạn cáp thành Checkbox
+    let doanList = AppStore.getState().doanCapList || window.rawDoanCapList || [];
+    let doanCuaTuyen = doanList.filter(d => String(d.id_tuyen || d.tuyen_id || d.id_tuyen_cap) === String(currentTuyen));
+    
+    doanContainer.innerHTML = '';
+    doanCuaTuyen.forEach(d => {
+      let idDoan = d.id_doan_cap || d.id;
+      let tenDoan = d.ten_doan_cap || d.ten_doancap || d.ten;
+      doanContainer.innerHTML += `
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: #1e293b;">
+          <input type="checkbox" class="doan-checkbox" value="${idDoan}" style="width: 16px; height: 16px;">
+          ${tenDoan}
+        </label>
+      `;
+    });
+
+    // 4. Phân nhánh dữ liệu ADD / EDIT
+    if (action === 'ADD') {
+      latInput.value = lat; lngInput.value = lng;
+      tenInput.value = ''; lyTrinhInput.value = ''; duTruInput.value = 0; ghiChuInput.value = '';
+      
+      // Mặc định tick chọn Đoạn cáp đang thao tác trên thanh công cụ
+      let currentDoan = AppStore.getState().selectedDoanCap;
+      let cb = doanContainer.querySelector(`input[value="${currentDoan}"]`);
+      if (cb) cb.checked = true;
+      
+    } else if (action === 'EDIT') {
+      // Đổ dữ liệu cũ vào Form
+      let ptObj = globalDataPoints.find(p => String(p.id) === String(id));
+      if (ptObj) {
+        latInput.value = ptObj.lat || lat; lngInput.value = ptObj.lng || lng;
+        tenInput.value = ptObj.ten || ''; lyTrinhInput.value = ptObj.lyTrinh || '';
+        duTruInput.value = ptObj.duTru || 0; loaiSelect.value = ptObj.idLoaiDiem || 1;
+        ghiChuInput.value = (ptObj.ghiChu && ptObj.ghiChu !== 'undefined' && ptObj.ghiChu !== 'null') ? ptObj.ghiChu : '';
+      }
+
+      // Vấn đề cốt lõi: Truy vấn xem điểm này đang nằm trên những đoạn cáp nào để Tick sẵn
+      try {
+        let { data: linkedDoan } = await supabaseClient.from('doan_cap_diem').select('id_doan_cap').eq('id_diem', Number(id));
+        let linkedIds = (linkedDoan || []).map(d => String(d.id_doan_cap));
+        
+        doanContainer.querySelectorAll('.doan-checkbox').forEach(cb => {
+          if (linkedIds.includes(cb.value)) cb.checked = true;
+        });
+      } catch(e) { console.error("Lỗi lấy liên kết đoạn cáp:", e); }
+    }
+    
+    hideLoading();
     document.getElementById('diemHaTangModal').style.display = 'flex';
   }
 };
@@ -571,115 +588,122 @@ window.copyToClipboardTNN = function(text) {
  */
 window.saveDiemHatangFullAction = async function() {
   let action = document.getElementById('diemActionType').value;
-  if (action !== 'ADD') return; // Tương lai sẽ phát triển thêm EDIT sau
-
+  let idDiemEdit = document.getElementById('diemEditId').value;
+  
   let ten = document.getElementById('diemTen').value.trim();
   let idLoai = document.getElementById('diemLoaiSelect').value;
-  let idDoan = document.getElementById('diemDoanSelect').value;
   let lyTrinh = document.getElementById('diemLyTrinh').value.trim();
   let duTru = parseFloat(document.getElementById('diemDuTru').value) || 0;
   let ghiChu = document.getElementById('diemGhiChuInput').value.trim();
   let lat = parseFloat(document.getElementById('diemLatInput').value);
   let lng = parseFloat(document.getElementById('diemLngInput').value);
 
-  if (!ten) { showToast("⚠️ Vui lòng nhập tên điểm hạ tầng!", "error"); return; }
-  if (!idDoan || idDoan === 'ALL') { showToast("⚠️ Vui lòng chọn Đoạn cáp để liên kết!", "error"); return; }
+  // Lấy mảng ID của các Đoạn cáp được kỹ sư tick chọn
+  let checkedDoanIds = Array.from(document.querySelectorAll('#diemDoanCheckboxList .doan-checkbox:checked')).map(cb => cb.value);
 
-  showLoading("Đang khởi tạo điểm hạ tầng mới...");
+  if (!ten) { showToast("⚠️ Vui lòng nhập tên điểm hạ tầng!", "error"); return; }
+  if (checkedDoanIds.length === 0) { showToast("⚠️ Vui lòng chọn ít nhất 1 Đoạn cáp để liên kết!", "error"); return; }
+
+  let isConfirmed = await showConfirmDialog(`Bạn xác nhận ${action === 'ADD' ? 'THÊM MỚI' : 'CẬP NHẬT'} điểm hạ tầng này chứ?`, 'success');
+  if (!isConfirmed) return;
+
+  showLoading("Đang xử lý thuật toán không gian và lưu dữ liệu...");
 
   try {
-    // 1. LƯU VÀO BẢNG diem_ha_tang (Để lấy ID mới)
-    const { data: newDiem, error: errDiem } = await supabaseClient
-      .from('diem_ha_tang')
-      .insert([{
-        ten: ten,
-        id_loaidiem: Number(idLoai),
-        lat: lat,
-        long: lng,
-        ly_trinh: lyTrinh,
-        du_tru: duTru,
-        ghi_chu: ghiChu
-      }])
-      .select();
+    let idDiemTarget = null;
 
-    if (errDiem) throw errDiem;
-    let idDiemMoi = newDiem[0].id_diem;
-
-    // 2. LẤY DANH SÁCH ĐIỂM HIỆN TẠI CỦA ĐOẠN CÁP (Để tính thứ tự chèn)
-    const { data: currentPts, error: errPts } = await supabaseClient
-      .from('doan_cap_diem')
-      .select('id_diem, thu_tu, diem_ha_tang(lat, long)')
-      .eq('id_doan_cap', Number(idDoan))
-      .order('thu_tu', { ascending: true });
-
-    if (errPts) throw errPts;
-
-    let arrayDeUpsert = [];
-    let thuTuMoi = 1;
-
-    if (!currentPts || currentPts.length === 0) {
-      // Nhánh 1: Đoạn cáp này chưa có điểm nào -> Nó là điểm đầu tiên (thu_tu = 1)
-      arrayDeUpsert.push({ id_doan_cap: Number(idDoan), id_diem: idDiemMoi, thu_tu: 1 });
+    if (action === 'ADD') {
+      const { data: newDiem, error: errDiem } = await supabaseClient
+        .from('diem_ha_tang')
+        .insert([{ ten: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu }])
+        .select();
+      if (errDiem) throw errDiem;
+      idDiemTarget = newDiem[0].id_diem;
     } else {
-      // Nhánh 2: Tính toán hình học để chèn vào vị trí gần nhất
-      let insertIndex = currentPts.length; // Mặc định chèn vào cuối cùng
-      let minDistance = Infinity;
+      idDiemTarget = Number(idDiemEdit);
+      const { error: errUpdate } = await supabaseClient
+        .from('diem_ha_tang')
+        .update({ ten: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu })
+        .eq('id_diem', idDiemTarget);
+      if (errUpdate) throw errUpdate;
 
-      // Tìm đoạn thẳng (i đến i+1) gần với điểm mới click nhất
-      for (let i = 0; i < currentPts.length - 1; i++) {
-        let p1 = currentPts[i].diem_ha_tang;
-        let p2 = currentPts[i+1].diem_ha_tang;
-        
-        // Khoảng cách từ điểm click đến P1 và P2
-        let dToP1 = calculateHaversine(lat, lng, p1.lat, p1.long);
-        let dToP2 = calculateHaversine(lat, lng, p2.lat, p2.long);
-        let dP1P2 = calculateHaversine(p1.lat, p1.long, p2.lat, p2.long);
-
-        // Nếu điểm click nằm giữa P1 và P2 (cộng thêm 20m sai số GPS)
-        if (dToP1 + dToP2 <= dP1P2 + 20) {
-          if (dToP1 + dToP2 < minDistance) {
-            minDistance = dToP1 + dToP2;
-            insertIndex = i + 1; // Chèn vào sau P1 (tức là vị trí i+1)
-          }
-        }
-      }
-
-      // 3. TÁI TẠO LẠI MẢNG THỨ TỰ MỚI
-      // Đẩy các điểm cũ vào mảng, đến vị trí insertIndex thì nhét điểm mới vào
-      let counter = 1;
-      for (let i = 0; i < currentPts.length; i++) {
-        if (i === insertIndex) {
-          arrayDeUpsert.push({ id_doan_cap: Number(idDoan), id_diem: idDiemMoi, thu_tu: counter });
-          counter++;
-        }
-        arrayDeUpsert.push({ id_doan_cap: Number(idDoan), id_diem: currentPts[i].id_diem, thu_tu: counter });
-        counter++;
-      }
-      // Nếu chèn vào cuối cùng
-      if (insertIndex === currentPts.length) {
-        arrayDeUpsert.push({ id_doan_cap: Number(idDoan), id_diem: idDiemMoi, thu_tu: counter });
-      }
+      // Reset lại toàn bộ liên kết cũ của điểm này trong bảng doan_cap_diem
+      await supabaseClient.from('doan_cap_diem').delete().eq('id_diem', idDiemTarget);
     }
 
-    // 4. CẬP NHẬT ĐỒNG LOẠT VÀO BẢNG doan_cap_diem
-    const { error: errUpsert } = await supabaseClient
-      .from('doan_cap_diem')
-      .upsert(arrayDeUpsert);
+    // VÒNG LẶP TINH HOA: Tính toán thứ tự chèn độc lập cho TỪNG ĐOẠN CÁP ĐƯỢC TICK
+    for (let i = 0; i < checkedDoanIds.length; i++) {
+      let idDoan = Number(checkedDoanIds[i]);
 
-    if (errUpsert) throw errUpsert;
+      // Lấy toàn bộ mốc đang có trên đoạn cáp này (Loại trừ chính điểm đang sửa để tránh trùng lặp)
+      const { data: currentPts, error: errPts } = await supabaseClient
+        .from('doan_cap_diem')
+        .select('id_diem, thu_tu, diem_ha_tang(lat, long)')
+        .eq('id_doan_cap', idDoan)
+        .neq('id_diem', idDiemTarget) 
+        .order('thu_tu', { ascending: true });
 
-    // Thành công: Ghi Log, đóng cửa sổ, gọi hàm vẽ lại bản đồ
-    await ghiNhatKyThaoTac("THEM_DIEM", `Kỹ sư thêm mới điểm [${ten}] vào bản đồ`);
-    showToast(`✅ Đã thêm điểm [${ten}] vào bản đồ và tính toán Line thành công!`, "success");
-    
+      if (errPts) throw errPts;
+
+      let arrayDeUpsert = [];
+      let insertIndex = currentPts ? currentPts.length : 0; 
+      
+      if (currentPts && currentPts.length > 0) {
+        let minDistance = Infinity;
+        // Dò khoảng cách xem điểm mới click nằm gần đoạn cong nào nhất
+        for (let j = 0; j < currentPts.length - 1; j++) {
+          let p1 = currentPts[j].diem_ha_tang;
+          let p2 = currentPts[j+1].diem_ha_tang;
+          if (!p1 || !p2) continue;
+          
+          let dToP1 = calculateHaversine(lat, lng, p1.lat, p1.long);
+          let dToP2 = calculateHaversine(lat, lng, p2.lat, p2.long);
+          let dP1P2 = calculateHaversine(p1.lat, p1.long, p2.lat, p2.long);
+
+          // Nếu điểm click lọt thỏm giữa đoạn p1 -> p2 (cho phép sai số 20m)
+          if (dToP1 + dToP2 <= dP1P2 + 20) {
+            if (dToP1 + dToP2 < minDistance) {
+              minDistance = dToP1 + dToP2;
+              insertIndex = j + 1; // Nhét vào vị trí ngay sau P1
+            }
+          }
+        }
+
+        // Tái tạo mảng thứ tự đồng bộ mới
+        let counter = 1;
+        for (let j = 0; j < currentPts.length; j++) {
+          if (j === insertIndex) {
+            arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: counter });
+            counter++;
+          }
+          arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: currentPts[j].id_diem, thu_tu: counter });
+          counter++;
+        }
+        if (insertIndex === currentPts.length) { // Nếu nhét vào đuôi cáp
+          arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: counter });
+        }
+      } else {
+        // Trường hợp đoạn cáp trắng (chưa có điểm nào)
+        arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: 1 });
+      }
+
+      // Đẩy mảng thứ tự lên CSDL
+      const { error: errUpsert } = await supabaseClient.from('doan_cap_diem').upsert(arrayDeUpsert);
+      if (errUpsert) throw errUpsert;
+    }
+
+    // Hoàn tất luồng xử lý
+    await ghiNhatKyThaoTac(action === 'ADD' ? "THEM_DIEM" : "SUA_DIEM", `Kỹ sư ${action === 'ADD' ? 'thêm mới' : 'cập nhật'} điểm [${ten}] trên ${checkedDoanIds.length} đoạn cáp`);
+    showToast(`✅ Đã ${action === 'ADD' ? 'thêm' : 'cập nhật'} thành công!`, "success");
     document.getElementById('diemHaTangModal').style.display = 'none';
     
-    // Nạp lại bộ nhớ đệm đoạn cáp và vẽ lại
-    if (typeof taiDuLieuDoanCapDiem === 'function') await taiDuLieuDoanCapDiem(idDoan);
-    if (typeof taiDuLieuSupabase === 'function') taiDuLieuSupabase(false); // Cập nhật lại globalDataPoints ngầm
-    
+    // Yêu cầu tải lại View CSDL ngầm định và Vẽ lại để thấy sự thay đổi
+    if (typeof taiDuLieuSupabase === 'function') {
+       taiDuLieuSupabase(false); 
+    }
+
   } catch (err) {
-    showToast("❌ Lỗi thêm điểm: " + err.message, "error");
+    showToast("❌ Lỗi xử lý: " + err.message, "error");
     console.error(err);
   } finally {
     hideLoading();
