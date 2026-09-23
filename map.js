@@ -422,9 +422,7 @@ function veLaiTuyenAB() {
     bounds.push([mx.lat, mx.lng]);
     var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
     
-    var ghiChuBtn = `<button class="btn-small" style="background:#198754; margin-top:4px; color:white;" onclick="suaGhiChu('${mx.id}', '${mx.ghiChu}', ${mx.lat}, ${mx.lng})">📝 Ghi chú</button>`;
-    
-    // Giao diện Popup chuẩn hóa cho Măng xông
+      // Giao diện Popup chuẩn hóa cho Măng xông
     var popupHtml = `
       <div style="font-size: 12px; line-height: 1.6;">
         <b style="font-size: 14px; color: #198754;">${mx.ten}</b><br>
