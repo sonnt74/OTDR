@@ -651,10 +651,8 @@ window.copyToClipboardTNN = function(text) {
  * HÀM XỬ LÝ LƯU ĐIỂM HẠ TẦNG MỚI (BAO GỒM TÍNH TOÁN THỨ TỰ TỰ ĐỘNG)
  */
 // ==========================================================================
-// HÀM THỰC THI LƯU DỮ LIỆU ĐIỂM HẠ TẦNG (ĐÃ SỬA CỘT ten THÀNH ten_diem)
 // ==========================================================================
-// ==========================================================================
-// HÀM THỰC THI LƯU DỮ LIỆU ĐIỂM HẠ TẦNG (ĐÃ BỔ SUNG onConflict CHO KHÓA TỔ HỢP)
+// HÀM THỰC THI LƯU DỮ LIỆU ĐIỂM HẠ TẦNG (Đã sửa lỗi hiệu ứng flyTo mượt mà)
 // ==========================================================================
 window.saveDiemHatangFullAction = async function() {
   let action = document.getElementById('diemActionType').value;
@@ -697,11 +695,10 @@ window.saveDiemHatangFullAction = async function() {
         .eq('id_diem', idDiemTarget);
       if (errUpdate) throw errUpdate;
 
-      // Xóa liên kết cũ trong bảng doan_cap_diem để thiết lập lại theo các đoạn cáp mới tick
       await supabaseClient.from('doan_cap_diem').delete().eq('id_diem', idDiemTarget);
     }
 
-    // CHẠY VÒNG LẶP XỬ LÝ THỨ TỰ CHO TỪNG ĐOẠN CÁP ĐƯỢC TICK CHỌN
+    // VÒNG LẶP XỬ LÝ CHO TỪNG ĐOẠN CÁP
     for (let i = 0; i < checkedDoanIds.length; i++) {
       let idDoan = Number(checkedDoanIds[i]);
 
@@ -752,7 +749,6 @@ window.saveDiemHatangFullAction = async function() {
         arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: 1 });
       }
 
-      // SỬA QUAN TRỌNG: Thêm { onConflict: 'id_doan_cap,id_diem' } để Supabase hiểu cách cập nhật số thứ tự
       const { error: errUpsert } = await supabaseClient
         .from('doan_cap_diem')
         .upsert(arrayDeUpsert, { onConflict: 'id_doan_cap,id_diem' });
@@ -764,15 +760,21 @@ window.saveDiemHatangFullAction = async function() {
     showToast(`✅ Đã ${action === 'ADD' ? 'thêm' : 'cập nhật'} thành công!`, "success");
     document.getElementById('diemHaTangModal').style.display = 'none';
     
+    // Tải lại dữ liệu (Có thể làm ngắt quá trình vẽ bản đồ)
     if (typeof taiDuLieuSupabase === 'function') {
        taiDuLieuSupabase(false); 
     }
+
+    // SỬA LỖI: Dùng setTimeout để hoãn lệnh flyTo lại 300ms, chờ bản đồ vẽ xong mới thực hiện bay
     if (typeof map !== 'undefined') {
-       map.flyTo([lat, lng], 19, { 
-           animate: true, 
-           duration: 1.5 // Thời gian bay là 1.5 giây tạo cảm giác mượt mà
-       });
+       setTimeout(() => {
+           map.flyTo([lat, lng], 19, { 
+               animate: true, 
+               duration: 1.5
+           });
+       }, 300);
     }
+
   } catch (err) {
     showToast("❌ Lỗi xử lý: " + err.message, "error");
     console.error(err);
