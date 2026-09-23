@@ -428,16 +428,7 @@ function isMangXong(pt) {
   return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
 }
 // ==========================================================================
-// CÁC HÀM XỬ LÝ SỰ KIỆN NÚT BẤM TRÊN POPUP BẢN ĐỒ (SỬA TÊN, XÓA, GHI CHÚ)
-// ==========================================================================
-
-// ==========================================================================
-// CÁC HÀM XỬ LÝ SỰ KIỆN NÚT BẤM TRÊN POPUP BẢN ĐỒ (ĐÃ THÊM CONFIRM & ZOOM)
-// ==========================================================================
-
-// 1. Hàm xử lý Sửa tên và Xóa đối tượng hạ tầng
-// ==========================================================================
-// HÀM QUẢN LÝ CRUD ĐIỂM HẠ TẦNG (THÊM, SỬA, XÓA) - ĐÃ TỐI ƯU ĐỌC BỘ NHỚ RAM
+// HÀM QUẢN LÝ CRUD ĐIỂM HẠ TẦNG (THÊM, SỬA, XÓA) - TỐI ƯU TẢI TÊN LOẠI ĐIỂM
 // ==========================================================================
 window.moFormCrud = async function(action, id, ten, lat, lng) {
   // 1. XỬ LÝ XÓA ĐIỂM
@@ -478,10 +469,21 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
     let doanContainer = document.getElementById('diemDoanCheckboxList');
     let tuyenSelect = document.getElementById('diemTuyenSelect');
 
-    // BƯỚC A: LẤY DANH SÁCH LOẠI ĐIỂM TRỰC TIẾP TỪ BỘ NHỚ RAM (window.rawLoaiDiemList)
+    // BƯỚC A: LẤY DANH SÁCH LOẠI ĐIỂM (Ưu tiên RAM, nếu trống thì truy vấn trực tiếp DB)
     let dsLoai = window.rawLoaiDiemList || [];
-    
-    // Dự phòng an toàn (Fallback) nếu bộ nhớ RAM trống
+    if (dsLoai.length === 0 && typeof supabaseClient !== 'undefined') {
+      try {
+        let { data } = await supabaseClient.from('loai_diem').select('*');
+        if (data && data.length > 0) {
+          dsLoai = data;
+          window.rawLoaiDiemList = data;
+        }
+      } catch (e) {
+        console.warn("Không thể tải bảng loại điểm:", e);
+      }
+    }
+
+    // Dự phòng tĩnh an toàn tuyệt đối
     if (dsLoai.length === 0) {
       dsLoai = [
         { id_loaidiem: 1, ten_loai: 'Cột cáp' },
@@ -493,8 +495,14 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
 
     loaiSelect.innerHTML = '';
     dsLoai.forEach(loai => {
-      let loaiId = loai.id_loaidiem !== undefined ? loai.id_loaidiem : (loai.id !== undefined ? loai.id : 1);
-      let loaiName = loai.ten_loai || loai.loai || loai.ten || ('Loại ' + loaiId);
+      // In ra Console (F12) cấu trúc để kiểm tra tên cột thực tế nếu cần
+      console.log("Dữ liệu loại điểm từ CSDL:", loai);
+
+      let loaiId = loai.id_loaidiem !== undefined ? loai.id_loaidiem : (loai.id !== undefined ? loai.id : (loai.loai_id !== undefined ? loai.loai_id : 1));
+      
+      // Mở rộng toàn bộ các tên cột tên gọi có thể có trong Database
+      let loaiName = loai.ten_loai || loai.loai || loai.ten || loai.ten_loaidiem || loai.name || loai.ten_loai_diem || loai.mo_ta || ('Loại ' + loaiId);
+      
       loaiSelect.innerHTML += `<option value="${loaiId}">${loaiName}</option>`;
     });
 
@@ -548,7 +556,6 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
       duTruInput.value = 0; 
       ghiChuInput.value = '';
       
-      // Tự động tick chọn đoạn cáp đang làm việc hiện tại
       let currentDoan = AppStore.getState().selectedDoanCap;
       let cb = doanContainer.querySelector(`input[value="${currentDoan}"]`);
       if (cb) cb.checked = true;
@@ -565,7 +572,6 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
         ghiChuInput.value = (ptObj.ghiChu && ptObj.ghiChu !== 'undefined' && ptObj.ghiChu !== 'null') ? ptObj.ghiChu : '';
       }
 
-      // Truy vấn CSDL để đánh dấu (tick) các đoạn cáp mà điểm này đang thuộc về
       try {
         let { data: linkedDoan } = await supabaseClient.from('doan_cap_diem').select('id_doan_cap').eq('id_diem', Number(id));
         let linkedIds = (linkedDoan || []).map(d => String(d.id_doan_cap));
