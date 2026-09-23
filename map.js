@@ -146,7 +146,7 @@ function getDistanceAlongRoute(targetPt, pathPts) {
 }
 
 /**
- * HÀM XÂY DỰNG TUYẾN BACKBONE TUYẾN TÍNH (MỞ): Lấy chính xác từ doan_cap_diem, sắp xếp theo thu_tu từ 1 đến n
+ * HÀM XÂY DỰNG TUYẾN BACKBONE: Truy vấn trực tiếp từ doan_cap_diem và trả về danh sách điểm
  */
 async function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   if (!doanVal || doanVal === 'ALL') {
@@ -154,7 +154,7 @@ async function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   }
 
   try {
-    // 1. Truy vấn trực tiếp từ bảng trung gian doan_cap_diem theo id_doan_cap và sắp xếp tăng dần theo thu_tu
+    // 1. Truy vấn bảng trung gian doan_cap_diem, sắp xếp tăng dần theo thu_tu từ 1 đến n
     let { data: relationRows, error } = await supabaseClient
       .from('doan_cap_diem')
       .select('id_diem, thu_tu')
@@ -165,10 +165,10 @@ async function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
       return [];
     }
 
-    // 2. Trích xuất danh sách ID điểm theo đúng thứ tự thu_tu từ 1 đến n
+    // 2. Trích xuất danh sách ID điểm theo đúng thứ tự
     let orderedIds = relationRows.map(r => String(r.id_diem));
 
-    // 3. Map các ID này với danh sách điểm trong globalDataPoints để lấy tọa độ (lat, lng)
+    // 3. Map với globalDataPoints để lấy tọa độ (lat, lng)
     let orderedPoints = [];
     for (let id of orderedIds) {
       let pt = globalDataPoints.find(p => String(p.id) === id);
@@ -177,7 +177,6 @@ async function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
       }
     }
 
-    // Trả về mảng điểm tuyến tính (dừng ở điểm kết cuối n, không nối vòng)
     return orderedPoints;
 
   } catch (err) {
@@ -264,7 +263,10 @@ window.copyToClipboardTNN = function(text) {
     console.error('Lỗi copy: ', err);
   });
 };
-function veLaiTuyenAB() {
+/**
+ * HÀM VẼ LẠI TUYẾN A-B: Giữ nguyên vẹn toàn bộ tính năng giao diện, chuẩn hóa async/await để đọc đúng dữ liệu từ bảng doan_cap_diem
+ */
+async function veLaiTuyenAB() {
   if (!map) return;
   if (typeof capLayer !== 'undefined' && capLayer) {
     capLayer.clearLayers();
@@ -279,7 +281,8 @@ function veLaiTuyenAB() {
   var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
   var doanVal = document.getElementById('selectDoanCap') ? document.getElementById('selectDoanCap').value : 'ALL';
 
-  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  // DÙNG 'await' ĐỂ CHỜ LẤY DỮ LIỆU CHUẨN TỪ BẢNG TRUNG GIAN doan_cap_diem
+  var backbone = await getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
   if (!backbone || backbone.length === 0) return;
 
   precalculateRouteDataForPoints(backbone, backbone);
