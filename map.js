@@ -457,11 +457,11 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
     }
   } 
   else if (action === 'ADD' || action === 'EDIT') {
-    showLoading("Đang tải dữ liệu biểu mẫu...");
+    showLoading("Đang tải biểu mẫu...");
     
     document.getElementById('diemActionType').value = action;
     document.getElementById('diemEditId').value = id || '';
-    document.getElementById('diemModalTitle').innerText = (action === 'ADD') ? '📍 Thêm Điểm Hạ Tầng Mới' : `✏️ Sửa Điểm Hạ Tầng: ${ten}`;
+    document.getElementById('diemModalTitle').innerText = (action === 'ADD') ? '📍 Thêm Điểm Hạ Tầng Mới' : `✏️ Sửa Điểm: ${ten}`;
 
     let tenInput = document.getElementById('diemTen');
     let lyTrinhInput = document.getElementById('diemLyTrinh');
@@ -473,18 +473,25 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
     let doanContainer = document.getElementById('diemDoanCheckboxList');
     let tuyenSelect = document.getElementById('diemTuyenSelect');
 
-    // 1. TẢI CƯỠNG BỨC DANH SÁCH LOẠI ĐIỂM (Đảm bảo không bao giờ bị rỗng)
+    // 1. TẢI CƯỠNG BỨC DANH SÁCH LOẠI ĐIỂM (CHỐNG LỖI RỖNG)
+    let dsLoai = [];
     try {
       let { data: loaiData, error: loaiErr } = await supabaseClient.from('loai_diem').select('*');
-      if (!loaiErr && loaiData) {
+      if (!loaiErr && loaiData && loaiData.length > 0) {
+        dsLoai = loaiData;
         window.rawLoaiDiemList = loaiData;
+      } else if (window.rawLoaiDiemList && window.rawLoaiDiemList.length > 0) {
+        dsLoai = window.rawLoaiDiemList;
       }
-    } catch(e) { console.error("Lỗi tải loại điểm:", e); }
+    } catch(e) {
+      dsLoai = window.rawLoaiDiemList || [];
+    }
 
     loaiSelect.innerHTML = '';
-    let dsLoai = window.rawLoaiDiemList || [];
     dsLoai.forEach(loai => {
-      loaiSelect.innerHTML += `<option value="${loai.id_loaidiem || loai.id}">${loai.ten_loai || loai.loai}</option>`;
+      let loaiId = loai.id_loaidiem || loai.id || loai.loai_id;
+      let loaiName = loai.ten_loai || loai.loai || loai.ten || ('Loại ' + loaiId);
+      loaiSelect.innerHTML += `<option value="${loaiId}">${loaiName}</option>`;
     });
 
     // 2. Hiển thị thông tin Tuyến hiện tại
@@ -493,10 +500,9 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
     let curTuyenObj = tuyenList.find(t => String(t.id_tuyen_cap || t.id || t.id_tuyen) === String(currentTuyen));
     tuyenSelect.innerHTML = `<option value="${currentTuyen}">${curTuyenObj ? (curTuyenObj.ten_tuyen || curTuyenObj.ten_tuyencap || curTuyenObj.ten) : 'Tuyến hiện tại'}</option>`;
 
-    // 3. LẤY TOÀN BỘ ĐOẠN CÁP HỢP LỆ VÀ NHÓM THEO TUYẾN (Giải quyết triệt để vấn đề dùng chung tuyến khác)
+    // 3. LẤY TOÀN BỘ ĐOẠN CÁP HỢP LỆ VÀ NHÓM THEO TUYẾN
     let doanList = (typeof getFilteredDoanList === 'function') ? getFilteredDoanList() : (AppStore.getState().doanCapList || window.rawDoanCapList || []);
     
-    // Gom nhóm đoạn cáp theo ID Tuyến
     let groupedDoanByTuyen = {};
     doanList.forEach(d => {
       let idTuyen = String(d.id_tuyen || d.tuyen_id || d.id_tuyen_cap || 'khac');
@@ -514,27 +520,26 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
         let idDoan = d.id_doan_cap || d.id;
         let tenDoan = d.ten_doan_cap || d.ten_doancap || d.ten;
         return `
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 11px; color: #1e293b; margin-left: 12px; margin-bottom: 2px;">
-            <input type="checkbox" class="doan-checkbox" value="${idDoan}" style="width: 15px; height: 15px;">
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px; color: #1e293b; margin-left: 10px; margin-bottom: 1px;">
+            <input type="checkbox" class="doan-checkbox" value="${idDoan}" style="width: 14px; height: 14px;">
             ${tenDoan}
           </label>
         `;
       }).join('');
 
       doanContainer.innerHTML += `
-        <div style="margin-bottom: 6px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px;">
+        <div style="margin-bottom: 4px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 2px;">
           <b style="font-size: 11px; color: #0d6efd;">🛣️ Tuyến: ${tuyenName}</b>
           ${htmlCheckboxes}
         </div>
       `;
     });
 
-    // 4. Phân nhánh điền dữ liệu cho ADD / EDIT
+    // 4. Phân nhánh dữ liệu ADD / EDIT
     if (action === 'ADD') {
       latInput.value = lat; lngInput.value = lng;
       tenInput.value = ''; lyTrinhInput.value = ''; duTruInput.value = 0; ghiChuInput.value = '';
       
-      // Mặc định tick chọn Đoạn cáp đang thao tác hiện tại
       let currentDoan = AppStore.getState().selectedDoanCap;
       let cb = doanContainer.querySelector(`input[value="${currentDoan}"]`);
       if (cb) cb.checked = true;
@@ -548,7 +553,6 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
         ghiChuInput.value = (ptObj.ghiChu && ptObj.ghiChu !== 'undefined' && ptObj.ghiChu !== 'null') ? ptObj.ghiChu : '';
       }
 
-      // Truy vấn CSDL để tìm tất cả các đoạn cáp (bất kể thuộc tuyến nào) đang chứa điểm này để Tick sẵn
       try {
         let { data: linkedDoan } = await supabaseClient.from('doan_cap_diem').select('id_doan_cap').eq('id_diem', Number(id));
         let linkedIds = (linkedDoan || []).map(d => String(d.id_doan_cap));
