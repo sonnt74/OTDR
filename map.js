@@ -322,24 +322,42 @@ function veLaiTuyenAB() {
   var bounds = [];
   var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
 
-  function taoNutHanhDong(id, ten, lat, lng) {
-    // 1. Nút quản trị (Chỉ hiện khi có quyền isDraggable)
+ function taoNutHanhDong(ptObj) {
+    let id = ptObj.id;
+    let ten = ptObj.ten;
+    let lat = ptObj.lat;
+    let lng = ptObj.lng;
+    let ghichuAn = ptObj.ghichu_an;
+
+    // 1. Kiểm tra quyền xem ghi chú ẩn (Thông tin mật)
+    let hasQuyenGhiChuAn = (currentUser.xem_ghichu_an === true || currentUser.xem_ghichu_an === 1);
+
+    // 2. Nút Ghi chú mật (Chỉ hiện nếu có quyền)
+    var btnGhiChuAn = '';
+    if (hasQuyenGhiChuAn) {
+      let safeNote = ghichuAn ? String(ghichuAn).replace(/'/g, "\\'") : 'Chưa có thông tin ghi chú nội bộ.';
+      btnGhiChuAn = `<button class="btn-small" style="background:#f59e0b; color:white; flex: 1; margin-right: 0;" onclick="xemGhiChuAnTaiDiem('${safeNote}')">📝 Mật</button>`;
+    }
+
+    // 3. Nút quản trị (Sửa đổi thành "Sửa" thay vì "Sửa tên")
     var btnAdmin = isDraggable ? 
-      `<button class="btn-small btn-success" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa </button>
-       <button class="btn-small del" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>` : '';
+      `<button class="btn-small btn-success" style="flex: 1; margin-right: 0;" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa</button>
+       <button class="btn-small del" style="flex: 1; margin-right: 0;" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>` : '';
     
-    // 2. Nút tiện ích (Luôn hiện cho tất cả mọi người)
+    // 4. Nút tiện ích (Căn đều bằng Flexbox)
     var btnTienIch = `
-      <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="btn-small" style="background:#0dcaf0; color:black; text-decoration:none;">🗺️ Chỉ đường</a>
-      <button class="btn-small" style="background:#6c757d; color:white;" onclick="copyToClipboardTNN('${lat.toFixed(6)}, ${lng.toFixed(6)}')">📋 Tọa độ</button>
+      <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="btn-small" style="background:#0dcaf0; color:black; text-decoration:none; flex: 1; margin-right: 0; display: flex; align-items: center; justify-content: center;">🗺️ Map</a>
+      <button class="btn-small" style="background:#6c757d; color:white; flex: 1; margin-right: 0;" onclick="copyToClipboardTNN('${lat.toFixed(6)},${lng.toFixed(6)}')">📋 Tọa độ</button>
     `;
 
-    // 3. Gom nhóm bằng Flexbox
+    // 5. Gom nhóm bố cục (Chia 2 dòng gọn gàng, nút tự co giãn đều nhau)
+    let row1 = (btnGhiChuAn || btnAdmin) ? `<div style="display:flex; gap:4px; width: 100%; margin-bottom:4px;">${btnGhiChuAn}${btnAdmin}</div>` : '';
+    let row2 = `<div style="display:flex; gap:4px; width: 100%;">${btnTienIch}</div>`;
+
     return `
       <hr style="margin:6px 0; border:0; border-top:1px dashed #ccc;">
-      <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:4px;">
-        ${btnAdmin}
-        ${btnTienIch}
+      <div style="display:flex; flex-direction:column; margin-top:4px;">
+        ${row1}${row2}
       </div>`;
   }
 
@@ -386,7 +404,7 @@ function veLaiTuyenAB() {
         📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b><br>
         📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText}</b>
       </div>
-    ` + taoNutHanhDong(pt.id, pt.ten, pt.lat, pt.lng);
+    ` + taoNutHanhDong(pt);
     
     marker.bindPopup(popupHtml);
     marker.on('dragend', e => handleDragEnd(e, pt));
@@ -410,7 +428,7 @@ function veLaiTuyenAB() {
         📏 Cự ly từ Trạm A: <b>${mx.distanceFromAText}</b><br>
       </div>
       <div style="margin-top:4px;">${ghiChuBtn}</div>
-    ` + taoNutHanhDong(mx.id, mx.ten, mx.lat, mx.lng);
+    ` + taoNutHanhDong(mx);
 
     mxMarker.bindPopup(popupHtml);
     mxMarker.on('dragend', e => handleDragEnd(e, mx));
@@ -753,5 +771,13 @@ window.saveDiemHatangFullAction = async function() {
     console.error(err);
   } finally {
     hideLoading();
+  }
+};
+// Hàm hiển thị nội dung ghi chú ẩn chung cho mọi điểm
+window.xemGhiChuAnTaiDiem = function(noiDung) {
+  if (typeof showConfirmDialog === 'function') {
+    showConfirmDialog(`<b>Thông tin mật (Ghi chú ẩn):</b><br/><br/>${noiDung}`, 'info');
+  } else {
+    alert("Ghi chú ẩn:\n\n" + noiDung);
   }
 };
