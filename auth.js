@@ -23,7 +23,7 @@ function khoiPhucPhiênDangNhap() {
           idDai: data.id_dai || null,
           idTram: data.id_tram || null,
           can_edit_map: !!data.can_edit_map,
-          canEditMap: !!data.can_edit_map
+          xem_ghichu_an: data.xem_ghichu_an
         };
 
         if (typeof AppStore !== 'undefined' && AppStore.setState) {
@@ -114,7 +114,7 @@ async function handleCustomLogin() {
       idDai: data.id_dai || null,       
       idTram: data.id_tram || null,     
       can_edit_map: !!data.can_edit_map,
-      canEditMap: !!data.can_edit_map   
+      xem_ghichu_an: data.xem_ghichu_an   
     };
 
     localStorage.setItem('tnn_user', JSON.stringify(window.currentUser));
