@@ -612,37 +612,6 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
   }
 };
 
-// 2. Hàm xử lý Ghi chú riêng cho Măng xông (Đã bổ sung lat, lng)
-window.suaGhiChu = async function(id, oldNote, lat, lng) {
-  let currentNote = (oldNote === 'undefined' || oldNote === 'null') ? '' : oldNote;
-  
-  // Gọi hộp thoại nhập liệu nhiều dòng chuyên nghiệp
-  let newNote = await showTextareaDialog(`📝 Cập nhật thông tin ghi chú Măng xông:`, currentNote);
-  
-  if (newNote !== null && newNote !== currentNote) { 
-    let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu nội dung ghi chú này không?`, 'success');
-    if (!isConfirmed) return;
-
-    showLoading("Đang lưu ghi chú...");
-    try {
-      const { error } = await supabaseClient.from('diem_ha_tang').update({ ghi_chu: newNote }).eq('id_diem', id);
-      if (error) throw error;
-      
-      let localPt = globalDataPoints.find(p => String(p.id) === String(id));
-      if (localPt) localPt.ghiChu = newNote;
-      
-      if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("SUA_GHI_CHU", `Cập nhật ghi chú cho MX ID: ${id}`);
-      showToast("✅ Lưu thông tin ghi chú thành công!", "success");
-      
-      veLaiTuyenAB();
-      map.setView([lat, lng], 19, { animate: true });
-    } catch (err) {
-      showToast("❌ Lỗi lưu ghi chú: " + err.message, "error");
-    }
-    hideLoading();
-  }
-};
-
 // Hàm tiện ích: Sao chép nội dung vào bộ nhớ tạm (Dành cho nút Tọa độ)
 window.copyToClipboardTNN = function(text) {
   navigator.clipboard.writeText(text).then(function() {
@@ -794,38 +763,72 @@ window.saveDiemHatangFullAction = async function() {
     hideLoading();
   }
 };
-// Hàm hiển thị nội dung ghi chú ẩn chung cho mọi điểm
 // ==========================================================================
-// HÀM XEM THÔNG TIN MẬT (Lấy trực tiếp từ CSDL - Bảo mật tuyệt đối)
+// HÀM XEM & SỬA THÔNG TIN MẬT (Dùng chung cho mọi điểm hạ tầng)
 // ==========================================================================
 window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
-  // Bật hiệu ứng loading để kỹ sư biết hệ thống đang lấy dữ liệu
   if (typeof showLoading === 'function') showLoading("Đang tải thông tin mật...");
 
   try {
-    // Gọi Supabase lấy đúng 1 trường 'ghichu_an' của điểm này
+    // 1. Gọi Supabase lấy nội dung mật hiện tại
     const { data, error } = await supabaseClient
       .from('diem_ha_tang')
       .select('ghichu_an')
       .eq('id_diem', idDiem)
-      .single(); // single() đảm bảo chỉ lấy 1 dòng kết quả
+      .single();
 
     if (error) throw error;
 
-    // Xử lý dữ liệu trả về
-    let noiDung = data.ghichu_an;
-    if (!noiDung || noiDung.trim() === '' || noiDung === 'null') {
-        noiDung = "<i>Chưa có thông tin ghi chú nội bộ cho điểm này.</i>";
-    } else {
-        // Chuyển ký tự xuống dòng (\n) thành thẻ <br> để hiển thị đẹp trên HTML
-        noiDung = noiDung.replace(/\n/g, '<br/>');
+    // Tắt loading sau khi tải xong dữ liệu để mở hộp thoại
+    if (typeof hideLoading === 'function') hideLoading();
+
+    // 2. Xử lý dữ liệu (nếu rỗng thì gán chuỗi rỗng để đưa vào ô nhập)
+    let noiDungHienTai = data.ghichu_an;
+    if (!noiDungHienTai || noiDungHienTai === 'null') {
+        noiDungHienTai = "";
     }
 
-    // Hiển thị hộp thoại
-    if (typeof showConfirmDialog === 'function') {
-      showConfirmDialog(`<b>Thông tin mật - [${tenDiem}]:</b><br/><br/>${noiDung}`, 'info');
+    // 3. Mở Form cho phép chỉnh sửa bằng hàm có sẵn của hệ thống
+    if (typeof showTextareaDialog === 'function') {
+      
+      // showTextareaDialog nhận vào nội dung cũ và một hàm callback khi bấm nút Lưu
+      showTextareaDialog(noiDungHienTai, async function(noiDungMoi) {
+        
+        // Bật loading quá trình lưu
+        if (typeof showLoading === 'function') showLoading("Đang lưu thông tin mật...");
+
+        try {
+          // Lệnh UPDATE ghi đè nội dung mới lên Supabase
+          const { error: errUpdate } = await supabaseClient
+            .from('diem_ha_tang')
+            .update({ ghichu_an: noiDungMoi })
+            .eq('id_diem', idDiem);
+            
+          if (errUpdate) throw errUpdate;
+          
+          // Báo thành công
+          if (typeof showToast === 'function') {
+              showToast("✅ Đã lưu thông tin mật thành công!", "success");
+          }
+
+          // (Tùy chọn) Ghi lại lịch sử hệ thống nếu bạn đang dùng tính năng này
+          if (typeof ghiNhatKyThaoTac === 'function') {
+              ghiNhatKyThaoTac("SUA_MAT", `Kỹ sư cập nhật Ghi chú mật điểm [${tenDiem}]`);
+          }
+
+        } catch (err) {
+          console.error("Lỗi cập nhật Ghi chú mật:", err);
+          if (typeof showToast === 'function') {
+              showToast("❌ Lỗi khi lưu: " + err.message, "error");
+          }
+        } finally {
+          if (typeof hideLoading === 'function') hideLoading();
+        }
+      });
+      
     } else {
-      alert(`Ghi chú ẩn [${tenDiem}]:\n\n${noiDung.replace(/<br\/>/g, '\n')}`);
+      // Trường hợp dự phòng nếu UI lỗi không tìm thấy showTextareaDialog
+      alert("Hệ thống chưa tìm thấy giao diện Textarea để sửa!");
     }
 
   } catch (err) {
@@ -833,8 +836,6 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
     if (typeof showToast === 'function') {
       showToast("❌ Không thể tải thông tin mật. Lỗi mạng hoặc phiên đăng nhập!", "error");
     }
-  } finally {
-    // Tắt loading
     if (typeof hideLoading === 'function') hideLoading();
   }
 };
