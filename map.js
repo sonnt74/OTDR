@@ -630,6 +630,9 @@ window.copyToClipboardTNN = function(text) {
 /**
  * HÀM XỬ LÝ LƯU ĐIỂM HẠ TẦNG MỚI (BAO GỒM TÍNH TOÁN THỨ TỰ TỰ ĐỘNG)
  */
+// ==========================================================================
+// HÀM THỰC THI LƯU DỮ LIỆU ĐIỂM HẠ TẦNG (ĐÃ SỬA CỘT ten THÀNH ten_diem)
+// ==========================================================================
 window.saveDiemHatangFullAction = async function() {
   let action = document.getElementById('diemActionType').value;
   let idDiemEdit = document.getElementById('diemEditId').value;
@@ -657,25 +660,27 @@ window.saveDiemHatangFullAction = async function() {
     let idDiemTarget = null;
 
     if (action === 'ADD') {
+      // SỬA: Đổi 'ten' thành 'ten_diem' cho khớp với cấu trúc bảng diem_ha_tang trong CSDL
       const { data: newDiem, error: errDiem } = await supabaseClient
         .from('diem_ha_tang')
-        .insert([{ ten: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu }])
+        .insert([{ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu }])
         .select();
       if (errDiem) throw errDiem;
       idDiemTarget = newDiem[0].id_diem;
     } else {
       idDiemTarget = Number(idDiemEdit);
+      // SỬA: Đổi 'ten' thành 'ten_diem' khi cập nhật
       const { error: errUpdate } = await supabaseClient
         .from('diem_ha_tang')
-        .update({ ten: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu })
+        .update({ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu })
         .eq('id_diem', idDiemTarget);
       if (errUpdate) throw errUpdate;
 
-      // Xóa liên kết cũ trong bảng doan_cap_diem để tiến hành thiết lập lại theo các đoạn cáp mới tick
+      // Xóa liên kết cũ trong bảng doan_cap_diem để thiết lập lại theo các đoạn cáp mới tick
       await supabaseClient.from('doan_cap_diem').delete().eq('id_diem', idDiemTarget);
     }
 
-    // CHẠY VÒNG LẶP XỬ LÝ CHO TỪNG ĐOẠN CÁP ĐƯỢC TICK CHỌN
+    // CHẠY VÒNG LẶP XỬ LÝ THỨ TỰ CHO TỪNG ĐOẠN CÁP ĐƯỢC TICK CHỌN
     for (let i = 0; i < checkedDoanIds.length; i++) {
       let idDoan = Number(checkedDoanIds[i]);
 
