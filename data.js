@@ -453,7 +453,7 @@ function capNhatComboDiemA() {
   var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
   var combo = document.getElementById('comboDiemA');
   if (!combo) return;
-  combo.innerHTML = '<option value="DEFAULT">📍 Trạm Gốc (TNN)</option>';
+  combo.innerHTML = '<option value="DEFAULT">📍 Trạm VT A </option>';
   globalDataPoints.filter(pt => isMangXong(pt) && (tuyenVal === 'ALL' || String(pt.idTuyen) === String(tuyenVal))).forEach(mx => {
     combo.innerHTML += `<option value="${mx.ten}">🔀 ${mx.ten}</option>`;
   });
@@ -477,7 +477,7 @@ function datLichTuXoaMarkerTimKiem() {
 }
 
 function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo, shareType) {
-  var message = `[TNN NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n` +
+  var message = `[NET1] THÔNG BÁO SỰ CỐ CÁP QUANG\n` +
                 `- Tọa độ: ${lat}, ${lng}\n` +
                 `- Cự ly đo OTDR: ${khoangCachKm} km\n` +
                 `- Lý trình QL: ${lyTrinhText}\n` +
@@ -678,7 +678,7 @@ function timLyTrinhBanDo() {
   
   var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
                      `- Vị trí: <b>${bestDescription}</b><br>` +
-                     `- Cự ly cáp tới Trạm TNN: <b>${distStr}</b><br>` ;
+                     `- Cự ly cáp tới Trạm VT A: <b>${distStr}</b><br>` ;
                      
   foundMarkerLayer.bindPopup(popupContent).openPopup();
   datLichTuXoaMarkerTimKiem();
