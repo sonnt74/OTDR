@@ -160,6 +160,7 @@ async function taiDiemTheoVungXem() {
           loai: pt.loai || 'Điểm',
           lyTrinh: pt.ly_trinh || '',
           duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
+          ghichu_an: pt.ghichu_an || '',
           // Lấy đúng STT từ DB, nếu không có mặc định là 1 (Không ép măng xông thành 9999 nữa)
           stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1
         };
