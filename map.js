@@ -430,6 +430,9 @@ function isMangXong(pt) {
 // ==========================================================================
 // HÀM QUẢN LÝ CRUD ĐIỂM HẠ TẦNG (THÊM, SỬA, XÓA) - TỐI ƯU TẢI TÊN LOẠI ĐIỂM
 // ==========================================================================
+// ==========================================================================
+// HÀM QUẢN LÝ CRUD ĐIỂM HẠ TẦNG (THÊM, SỬA, XÓA) - ĐÃ DỌN DẸP & CHUẨN HÓA TÊN CỘT
+// ==========================================================================
 window.moFormCrud = async function(action, id, ten, lat, lng) {
   // 1. XỬ LÝ XÓA ĐIỂM
   if (action === 'DELETE') {
@@ -469,7 +472,7 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
     let doanContainer = document.getElementById('diemDoanCheckboxList');
     let tuyenSelect = document.getElementById('diemTuyenSelect');
 
-    // BƯỚC A: LẤY DANH SÁCH LOẠI ĐIỂM (Ưu tiên RAM, nếu trống thì truy vấn trực tiếp DB)
+    // BƯỚC A: LẤY DANH SÁCH LOẠI ĐIỂM TỪ RAM HOẶC TRUY VẤN DB NẾU TRỐNG
     let dsLoai = window.rawLoaiDiemList || [];
     if (dsLoai.length === 0 && typeof supabaseClient !== 'undefined') {
       try {
@@ -483,25 +486,22 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
       }
     }
 
-    // Dự phòng tĩnh an toàn tuyệt đối
+    // Dự phòng tĩnh an toàn
     if (dsLoai.length === 0) {
       dsLoai = [
-        { id_loaidiem: 1, ten_loai: 'Cột cáp' },
-        { id_loaidiem: 2, ten_loai: 'Bể cáp' },
-        { id_loaidiem: 3, ten_loai: 'Mốc tuyến' },
-        { id_loaidiem: 4, ten_loai: 'Măng xông' }
+        { id_loaidiem: 1, ten_loaidiem: 'Cột cáp' },
+        { id_loaidiem: 2, ten_loaidiem: 'Bể cáp' },
+        { id_loaidiem: 3, ten_loaidiem: 'Mốc tuyến' },
+        { id_loaidiem: 4, ten_loaidiem: 'Măng xông' }
       ];
     }
 
     loaiSelect.innerHTML = '';
     dsLoai.forEach(loai => {
-      // In ra Console (F12) cấu trúc để kiểm tra tên cột thực tế nếu cần
-      console.log("Dữ liệu loại điểm từ CSDL:", loai);
-
-      let loaiId = loai.id_loaidiem !== undefined ? loai.id_loaidiem : (loai.id !== undefined ? loai.id : (loai.loai_id !== undefined ? loai.loai_id : 1));
+      let loaiId = loai.id_loaidiem !== undefined ? loai.id_loaidiem : (loai.id !== undefined ? loai.id : 1);
       
-      // Mở rộng toàn bộ các tên cột tên gọi có thể có trong Database
-      let loaiName = loai.ten_loai || loai.loai || loai.ten || loai.ten_loaidiem || loai.name || loai.ten_loai_diem || loai.mo_ta || ('Loại ' + loaiId);
+      // Ưu tiên đọc đúng tên cột 'ten_loaidiem' từ CSDL của bạn, kết hợp các tên dự phòng khác
+      let loaiName = loai.ten_loaidiem || loai.ten_loai || loai.loai || loai.ten || loai.name || ('Loại ' + loaiId);
       
       loaiSelect.innerHTML += `<option value="${loaiId}">${loaiName}</option>`;
     });
