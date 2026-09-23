@@ -7,7 +7,30 @@ console.log("auth.js đang được tải...");
 document.addEventListener('DOMContentLoaded', function() {
   khoiPhucPhiênDangNhap();
 });
+// Giả sử đây là câu lệnh hiện tại của bạn
+// const { data, error } = await supabaseClient.from('tai_khoan').select('*').eq('ten_dang_nhap', username).single();
 
+if (data) {
+    // =====================================================================
+    // THÊM ĐOẠN MÃ NÀY ĐỂ ĐẢM BẢO MAP.JS NHẬN ĐƯỢC QUYỀN
+    // =====================================================================
+    
+    // 1. Lưu toàn bộ dữ liệu tài khoản vào biến toàn cục window
+    window.currentUser = data;
+
+    // 2. Dự phòng: Nếu hệ thống bạn đang dùng Zustand/AppStore để quản lý State
+    if (typeof AppStore !== 'undefined') {
+        AppStore.setState({ currentUser: data });
+    }
+
+    // 3. IN RA CONSOLE ĐỂ KIỂM CHỨNG TẬN MẮT (F12 -> tab Console)
+    console.log("✅ Đăng nhập thành công! Thông tin tài khoản:", window.currentUser);
+    console.log("🔍 Quyền xem ghi chú ẩn (xem_ghichu_an):", window.currentUser.xem_ghichu_an);
+    
+    // =====================================================================
+    
+    // (Phần code cũ của bạn: ẩn form đăng nhập, load bản đồ... vẫn giữ nguyên ở đây)
+}
 function khoiPhucPhiênDangNhap() {
   var savedUser = localStorage.getItem('tnn_user');
   if (savedUser) {
