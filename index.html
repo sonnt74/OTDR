@@ -4,7 +4,7 @@
   <base target="_top">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>Hệ Thống GIS & Định Vị Cáp OTDR - TNN NET1</title>
+  <title>Hệ Thống GIS & Định Vị Cáp OTDR - NET1</title>
   
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
@@ -111,26 +111,26 @@
         <button id="adminMobileBtn" class="btn-action btn-success" style="flex: 1; padding: 5px 0; font-size: 10px; display: none;" onclick="openModal('adminMasterModal', 'tab-accounts')">⚙️ Quản trị</button>
       </div>
       
-      <div class="form-group"><label>1. Chọn Đài VT:</label><select id="selectDai" onchange="onDaiChange()"></select></div>
-      <div class="form-group"><label>2. Chọn Trạm VT:</label><select id="selectTram" onchange="onTramChange()"></select></div>
-      <div class="form-group"><label>3. Chọn Tuyến Cáp:</label><select id="selectTuyen" onchange="onTuyenChange()"></select></div>
-      <div class="form-group"><label>4. Chọn Đoạn Cáp:</label><select id="selectDoanCap" onchange="onDoanCapChange()"></select></div>
-      
-      <div class="form-group"><label>5. Nguồn điểm đo:</label><select id="comboDiemA" onchange="onDiemAChange()"></select></div>
+      <div class="form-group"><label>    Chọn Đài VT:</label><select id="selectDai" onchange="onDaiChange()"></select></div>
+      <div class="form-group"><label>    Chọn Trạm VT:</label><select id="selectTram" onchange="onTramChange()"></select></div>
+      <div class="form-group"><label>    Chọn Tuyến Cáp:</label><select id="selectTuyen" onchange="onTuyenChange()"></select></div>
+      <div class="form-group"><label>    Chọn Đoạn Cáp:</label><select id="selectDoanCap" onchange="onDoanCapChange()"></select></div>
+           
+      <div class="form-group"><label>    Nguồn điểm đo:</label><select id="comboDiemA" onchange="onDiemAChange()"></select></div>
       
       <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
         <div class="checkbox-group" style="flex: 1.2; display: flex; align-items: center; gap: 4px;">
           <input type="checkbox" id="chkNghichHuong" onchange="onDiemAChange()" style="margin:0; width: auto;">
           <label style="margin:0; cursor:pointer; font-size: 11px;" for="chkNghichHuong">Đo ngược hướng</label>
         </div>
-        <div class="form-group" style="flex: 1; margin:0;"><label style="margin-bottom:2px;">Hệ số chùng:</label><input type="number" id="txtDoChung" value="1.075" step="0.001"></div>
+        <div class="form-group" style="flex: 1; margin:0;"><label style="margin-bottom:2px;">Hệ số chùng cáp:</label><input type="number" id="txtDoChung" value="1.075" step="0.001"></div>
       </div>
 
       <div class="form-group"><label style="color: var(--primary-blue);">Cự ly đo OTDR (km):</label><input type="number" id="txtKcOtdr" value="3.5" step="0.1"></div>
       <div class="form-group"><button class="btn-action" style="padding: 6px;" onclick="timViTriDut()">🔍 PHÂN TÍCH VỊ TRÍ SỰ CỐ</button></div>
       
       <div class="form-group" style="border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 4px; background: #f8fafc; padding: 6px; border-radius: 6px;">
-        <label style="color: var(--primary-blue);">8. Tìm nhanh Lý trình (QL):</label>
+        <label style="color: var(--primary-blue);"> Tìm nhanh Lý trình (QL):</label>
         <div style="display: flex; gap: 4px; margin-top: 4px;">
           <input type="text" id="txtTimLyTrinh" placeholder="VD: 54+100" style="margin:0;">
           <button class="btn-action btn-success" style="width: auto; padding: 2px 10px; margin:0;" onclick="timLyTrinhBanDo()">🔍</button>
@@ -185,7 +185,7 @@
             <b style="font-size:13px; color:var(--text-main);">Danh sách Tài khoản:</b>
             <button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien()">+ Thêm tài khoản</button>
           </div>
-          <div class="table-responsive"><table class="table-data"><thead><tr><th>Tài khoản</th><th>Vai trò</th><th>Đài</th><th>Trạm</th><th>Map?</th><th>Thao tác</th></tr></thead><tbody id="masterAccountTableBody"></tbody></table></div>
+          <div class="table-responsive"><table class="table-data"><thead><tr><th>Tài khoản</th><th>Họ tên</th><th>Số điện thoại</th><th>Vai trò</th><th>Đài</th><th>Trạm</th><th>Thao tác</th></tr></thead><tbody id="masterAccountTableBody"></tbody></table></div>
         </div>
         
         <div id="tab-dai" class="tab-pane">
@@ -236,6 +236,8 @@
         <div class="form-group"><label>Mật khẩu mới:</label><input type="text" id="newMemberPass"></div>
         <div class="form-group"><label>Vai trò:</label><select id="newMemberRole"><option value="nhan_vien">Nhân viên</option><option value="admin_tram">Admin Trạm</option><option value="admin_dai">Admin Đài</option><option value="admin_sys">Admin Hệ thống</option></select></div>
         <div class="checkbox-group" style="margin: 10px 0;"><input type="checkbox" id="newMemberCanEdit"><label for="newMemberCanEdit" style="cursor:pointer; font-weight:600; font-size:11px;">Cho phép chỉnh sửa Bản đồ</label></div>
+        <div class="form-group"><label>Họ và tên:</label><input type="text" id="newMemberTenAccount" placeholder="VD: Nguyễn Văn A"></div>
+        <div class="form-group"><label>Số điện thoại:</label><input type="text" id="newMemberSoDT" placeholder="VD: 0912345678"></div>
         <div class="form-group"><label>Đài:</label><select id="newMemberDai"></select></div>
         <div class="form-group"><label>Trạm:</label><select id="newMemberTram"></select></div>
         <button class="btn-action btn-success" style="margin-top:4px;" onclick="saveAccountAction()">LƯU TÀI KHOẢN</button>
@@ -253,7 +255,69 @@
       </div>
     </div>
   </div>
+<!-- MODAL THÊM / SỬA ĐIỂM HẠ TẦNG (SIÊU GỌN - KHÔNG CẦN SCROLL) -->
+<div id="diemHaTangModal" class="app-modal" style="z-index: 3500;">
+  <div class="modal-content" style="max-width: 420px; padding: 12px; border-radius: 12px;">
+    <div class="modal-header" style="padding: 6px 8px; margin-bottom: 6px; font-size: 13px; border-bottom: 1px solid #cbd5e1;">
+      <span id="diemModalTitle">📍 Quản Lý Điểm Hạ Tầng</span>
+    </div>
+    <div class="modal-body" style="padding: 0; display: flex; flex-direction: column; gap: 4px; overflow: visible;">
+      <input type="hidden" id="diemActionType">
+      <input type="hidden" id="diemEditId">
+      
+      <div class="form-group" style="margin-bottom: 4px;">
+        <label style="font-size: 10px; margin-bottom: 1px;">Tên điểm hạ tầng:</label>
+        <input type="text" id="diemTen" placeholder="VD: Cột 01, Bể cáp B02..." style="padding: 4px 6px; font-size: 11px;">
+      </div>
 
+      <div style="display: flex; gap: 6px; margin-bottom: 4px;">
+        <div class="form-group" style="flex: 1; margin: 0;">
+          <label style="font-size: 10px; margin-bottom: 1px;">Loại điểm:</label>
+          <select id="diemLoaiSelect" style="padding: 4px 6px; font-size: 11px;"></select>
+        </div>
+        <div class="form-group" style="flex: 1; margin: 0;">
+          <label style="font-size: 10px; margin-bottom: 1px;">Tuyến cáp:</label>
+          <select id="diemTuyenSelect" disabled style="background:#e2e8f0; padding: 4px 6px; font-size: 11px;"></select>
+        </div>
+      </div>
+      
+      <div class="form-group" style="margin-bottom: 4px;">
+        <label style="font-size: 10px; margin-bottom: 1px;">Thuộc Đoạn Cáp (Chọn nhiều, nhóm theo tuyến):</label>
+        <div id="diemDoanCheckboxList" style="max-height: 85px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 6px; background: #f8fafc; display: flex; flex-direction: column; gap: 2px;"></div>
+      </div>
+
+      <div style="display: flex; gap: 6px; margin-bottom: 4px;">
+        <div class="form-group" style="flex: 1.5; margin: 0;">
+          <label style="font-size: 10px; margin-bottom: 1px;">Lý trình:</label>
+          <input type="text" id="diemLyTrinh" placeholder="VD: 1+250" style="padding: 4px 6px; font-size: 11px;">
+        </div>
+        <div class="form-group" style="flex: 1; margin: 0;">
+          <label style="font-size: 10px; margin-bottom: 1px;">Dự trữ (m):</label>
+          <input type="number" id="diemDuTru" value="0" step="0.1" style="padding: 4px 6px; font-size: 11px;">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 4px;">
+        <label style="font-size: 10px; margin-bottom: 1px;">Tọa độ (Lat, Lng):</label>
+        <div style="display:flex; gap:4px;">
+          <input type="text" id="diemLatInput" readonly style="background:#f1f5f9; padding: 4px 6px; font-size: 11px;">
+          <input type="text" id="diemLngInput" readonly style="background:#f1f5f9; padding: 4px 6px; font-size: 11px;">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 6px;">
+        <label style="font-size: 10px; margin-bottom: 1px;">Ghi chú:</label>
+        <textarea id="diemGhiChuInput" rows="2" style="width:100%; padding:4px 6px; border:1px solid #cbd5e1; border-radius:4px; font-size:11px; box-sizing:border-box; resize: none;" placeholder="Nhập ghi chú..."></textarea>
+      </div>
+      
+      <!-- NÚT LƯU VÀ NÚT ĐÓNG BÊN DƯỚI -->
+      <div style="display: flex; gap: 8px; margin-top: 2px;">
+        <button class="btn-action btn-success" style="flex: 1; padding: 6px; font-size: 11px; margin: 0;" onclick="saveDiemHatangFullAction()">💾 LƯU THÔNG TIN</button>
+        <button class="btn-action" style="flex: 1; background: #64748b; padding: 6px; font-size: 11px; margin: 0;" onclick="document.getElementById('diemHaTangModal').style.display='none'">❌ ĐÓNG</button>
+      </div>
+    </div>
+  </div>
+</div>
 <!-- 1. Các thư viện bên ngoài -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>

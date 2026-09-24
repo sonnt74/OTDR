@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, BẢO MẬT 2 LỚP & SỬA LỖI DATABASE CONSTRAINT
+// TỆP ADMIN.JS - QUẢN TRỊ 5 TAB, BẢO MẬT 2 LỚP & CHUẨN HÓA PHÂN QUYỀN TRẠM
 // ==========================================================================
 
 function openModal(modalId, tabId) {
@@ -56,12 +56,18 @@ function getCurrentUser() {
 
 function getRoleAccess() {
   var user = getCurrentUser();
-  var r = (user.role || '').toLowerCase();
+  var r = (user.role || '').toLowerCase().trim();
+  
+  var isSys = r.includes('sys') || r === 'admin_sys';
+  var isDai = r.includes('dai') || r === 'admin_dai';
+  var isTram = r.includes('tram') || r === 'admin_tram';
+  var isMember = r === 'nhan_vien' || r === 'member' || (!isSys && !isDai && !isTram);
+
   return {
-    isSys: r.includes('sys') || r === 'admin_sys',
-    isDai: r.includes('dai') || r === 'admin_dai',
-    isTram: r.includes('tram') || r === 'admin_tram',
-    isMember: r === 'member' || r === 'nhan_vien' || !r,
+    isSys: isSys,
+    isDai: isDai,
+    isTram: isTram,
+    isMember: isMember,
     idDai: String(user.id_dai || user.idDai || ''),
     idTram: String(user.id_tram || user.idTram || ''),
     account: user.account
@@ -79,33 +85,37 @@ function getSafeDataList(keyNames) {
 }
 
 // ==========================================================================
-// BỘ LỌC PHÂN QUYỀN
+// BỘ LỌC PHÂN QUYỀN CHUẨN HÓA (DÙNG CHUNG CHO BẢNG QUẢN TRỊ VÀ BẢN ĐỒ)
 // ==========================================================================
-// 1. Lọc danh sách Tài khoản theo phân cấp
+
 function getFilteredUsers() {
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
   var access = getRoleAccess();
 
   if (access.isSys) return users;
   if (access.isDai) {
-    // Admin đài thấy user thuộc đài mình hoặc thuộc các trạm nằm trong đài mình
     var tramIdsInDai = getFilteredTramList().map(t => String(t.id_tram || t.id));
     return users.filter(u => String(u.id_dai) === access.idDai || tramIdsInDai.includes(String(u.id_tram)));
   }
   if (access.isTram) {
     return users.filter(u => String(u.id_tram) === access.idTram);
   }
-  return users.filter(u => u.account === access.account);
+  if (access.isMember) {
+    return users.filter(u => {
+      if (access.idTram && u.id_tram && String(u.id_tram) === String(access.idTram)) return true;
+      return String(u.account).toLowerCase() === String(access.account).toLowerCase();
+    });
+  }
+  return [];
 }
 
-// 2. Lọc danh sách Đài theo phân cấp
 function getFilteredDaiList() {
   var daiList = getSafeDataList(['rawDaiList', 'daiList', 'dai_vt']);
   var access = getRoleAccess();
 
   if (access.isSys) return daiList;
   if (access.isDai) return daiList.filter(d => String(d.id_dai || d.id) === access.idDai);
-  if (access.isTram) {
+  if (access.isTram || access.isMember) {
     var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
     var myTram = tramList.find(t => String(t.id_tram || t.id) === access.idTram);
     var parentDaiId = myTram ? String(myTram.id_dai || myTram.dai_id) : null;
@@ -114,18 +124,31 @@ function getFilteredDaiList() {
   return [];
 }
 
-// 3. Lọc danh sách Trạm theo phân cấp
 function getFilteredTramList() {
   var tramList = getSafeDataList(['rawTramList', 'tramList', 'tram_vt']);
   var access = getRoleAccess();
 
   if (access.isSys) return tramList;
   if (access.isDai) return tramList.filter(t => String(t.id_dai || t.dai_id) === access.idDai);
-  if (access.isTram) return tramList.filter(t => String(t.id_tram || t.id) === access.idTram);
-  return tramList;
+  if (access.isTram || access.isMember) return tramList.filter(t => String(t.id_tram || t.id) === access.idTram);
+  return [];
 }
 
-// 4. Lọc danh sách Tuyến cáp theo phân cấp (Admin đài/trạm chỉ thấy tuyến qua đoạn tuyến thuộc quản lý)
+function getFilteredDoanList() {
+  var doanList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
+  var access = getRoleAccess();
+
+  if (access.isSys) return doanList;
+  if (access.isDai) {
+    var tramIdsInDai = getFilteredTramList().map(t => String(t.id_tram || t.id));
+    return doanList.filter(d => tramIdsInDai.includes(String(d.id_tram || d.tram_id)));
+  }
+  if (access.isTram || access.isMember) {
+    return doanList.filter(d => String(d.id_tram || d.tram_id) === access.idTram);
+  }
+  return [];
+}
+
 function getFilteredTuyenList() {
   var tuyenList = getSafeDataList(['rawTuyenList', 'tuyenList', 'tuyen_cap']);
   var access = getRoleAccess();
@@ -138,20 +161,13 @@ function getFilteredTuyenList() {
   return tuyenList.filter(t => validTuyenIds.includes(String(t.id_tuyen_cap || t.id_tuyen || t.id)));
 }
 
-// 5. Lọc danh sách Đoạn tuyến theo phân cấp
-function getFilteredDoanList() {
-  var doanList = getSafeDataList(['rawDoanList', 'doanCapList', 'doan_cap', 'rawDoanCapList']);
-  var access = getRoleAccess();
-
-  if (access.isSys) return doanList;
-  if (access.isDai) {
-    var tramIdsInDai = getFilteredTramList().map(t => String(t.id_tram || t.id));
-    return doanList.filter(d => tramIdsInDai.includes(String(d.id_tram || d.tram_id)));
-  }
-  if (access.isTram) {
-    return doanList.filter(d => String(d.id_tram || d.tram_id) === access.idTram);
-  }
-  return doanList;
+// Cầu nối dữ liệu sạch cho Bản đồ / Bảng điều khiển chính
+function getMapDataFiltered() {
+  return {
+    tramList: getFilteredTramList(),
+    doanList: getFilteredDoanList(),
+    tuyenList: getFilteredTuyenList()
+  };
 }
 
 function getDaiName(idDai) {
@@ -183,7 +199,7 @@ function renderAllAdminTables() {
   renderMasterDoanTable();
 }
 
-/** 1. RENDER BẢNG TÀI KHOẢN (Cho phép admin_tram quản lý user trong trạm) */
+/** 1. RENDER BẢNG TÀI KHOẢN */
 function renderMasterAccountTable() {
   var tbody = document.getElementById('masterAccountTableBody');
   if (!tbody) return;
@@ -192,14 +208,15 @@ function renderMasterAccountTable() {
   
   var addBtn = document.querySelector('#tab-accounts button.btn-success');
   if (addBtn) {
-    // Sys, Đài, Trạm đều được phép thêm user trong phạm vi của mình
     addBtn.style.display = access.isMember ? 'none' : 'inline-block';
   }
 
   tbody.innerHTML = users.map(u => {
     var accName = u.account || 'Tài khoản';
+    var tenAcc = u.ten_account ? u.ten_account : '<span style="color:#999; font-style:italic;">Chưa cập nhật</span>';
+    var soDt = u.so_dt ? u.so_dt : '<span style="color:#999; font-style:italic;">Chưa có</span>';
+    var roleVal = u.role || 'nhan_vien';
     
-    // Quyền sửa/xóa user: Sys toàn quyền, Đài sửa user trong đài, Trạm sửa user trong trạm mình
     var canModify = access.isSys || 
                     (access.isDai && String(u.id_dai) === access.idDai) || 
                     (access.isTram && String(u.id_tram) === access.idTram);
@@ -207,80 +224,18 @@ function renderMasterAccountTable() {
     return `
       <tr>
         <td><b>${accName}</b></td>
-        <td><span style="background:#0ea5e9; color:#fff; padding:2px 6px; border-radius:4px; font-size:11px;">${u.role || 'nhan_vien'}</span></td>
+        <td>👤 ${tenAcc}</td>
+        <td>📞 ${soDt}</td>
+        <td><span style="background:#0ea5e9; color:#fff; padding:2px 6px; border-radius:4px; font-size:11px;">${roleVal}</span></td>
         <td>🏢 ${u.ten_dai || getDaiName(u.id_dai)}</td>
         <td>📡 ${u.ten_tram || getTramName(u.id_tram)}</td>
-        <td>${u.can_edit_map ? '✅ Có' : '❌ Không'}</td>
         <td>
           ${canModify ? `<button class="btn-small btn-success" onclick="chuanBiFormThemThanhVien('${accName}')">✏️ Sửa</button>` : ''}
           ${(access.isSys || (access.isDai && canModify)) ? `<button class="btn-small del" onclick="deleteAdminRecord('tai_khoan', '${accName}')">🗑️ Xóa</button>` : ''}
         </td>
       </tr>
     `;
-  }).join('') || '<tr><td colspan="6" style="text-align:center; padding:15px;">Không có dữ liệu tài khoản</td></tr>';
-}
-
-/** HÀM LƯU TÀI KHOẢN (THÊM HOẶC CẬP NHẬT) */
-async function saveAccountAction() {
-  var accountInput = document.getElementById('newMemberAccount');
-  var accVal = accountInput ? accountInput.value.trim() : '';
-  var password = document.getElementById('newMemberPass').value.trim();
-  var access = getRoleAccess();
-  
-  if (!accVal) { 
-    if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên tài khoản!", "error");
-    return; 
-  }
-
-  // Hộp thoại xác thực 2 lớp tùy chỉnh
-  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu thông tin tài khoản <b>${accVal}</b> không?`, 'success');
-  if (!isConfirmed) return;
-
-  var selectedRole = document.getElementById('newMemberRole').value;
-  var selectedDai = document.getElementById('newMemberDai').value;
-  var selectedTram = document.getElementById('newMemberTram').value;
-
-  // Lấy dữ liệu user cũ trong bộ nhớ để phòng trường hợp giữ nguyên mật khẩu
-  var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
-  var existingUser = users.find(u => u.account === accVal);
-
-  // Xây dựng payload chính xác, tuyệt đối không dùng trường email hay trường lạ
-  var payload = {
-    account: accVal,
-    role: selectedRole,
-    can_edit_map: document.getElementById('newMemberCanEdit').checked,
-    id_dai: (access.isDai && !access.isSys) ? Number(access.idDai) : (selectedDai ? Number(selectedDai) : null),
-    id_tram: (access.isTram && !access.isSys && !access.isDai) ? Number(access.idTram) : (selectedTram ? Number(selectedTram) : null)
-  };
-
-  // Xử lý mật khẩu thông minh: Nếu có nhập pass mới thì dùng, nếu không thì giữ pass cũ
-  if (password) {
-    payload.password = password;
-  } else if (existingUser && existingUser.password) {
-    payload.password = existingUser.password;
-  }
-
-  try {
-    showLoading("Đang lưu tài khoản...");
-    var { data, error } = await supabaseClient.from('tai_khoan').upsert([payload]).select();
-    if (error) throw error;
-    
-    // Cập nhật trực tiếp vào danh sách cục bộ trên RAM
-    if (data && data.length > 0) {
-      var idx = users.findIndex(u => u.account === accVal);
-      if (idx >= 0) users[idx] = data[0]; else users.push(data[0]);
-      window.rawUserList = users;
-      AppStore.setState({ rawUserList: users });
-    }
-
-    if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
-    document.getElementById('addMemberModal').style.display = 'none';
-    renderAllAdminTables();
-    hideLoading();
-  } catch (err) { 
-    hideLoading();
-    if (typeof showToast === 'function') showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
-  }
+  }).join('') || '<tr><td colspan="7" style="text-align:center; padding:15px;">Không có dữ liệu tài khoản</td></tr>';
 }
 
 /** 2. BẢNG ĐÀI VIỄN THÔNG */
@@ -375,11 +330,12 @@ function renderMasterDoanTable() {
 }
 
 // ==========================================================================
-// CÁC FORM THÊM/SỬA (ĐÃ BỔ SUNG CỘT TÊN ĐOẠN CÁP TRÁNH LỖI NOT-NULL)
+// CÁC FORM THÊM / SỬA VÀ THỰC THI DỮ LIỆU
 // ==========================================================================
-
 function chuanBiFormThemThanhVien(accToEdit) {
   var accountInput = document.getElementById('newMemberAccount');
+  var tenAccountInput = document.getElementById('newMemberTenAccount');
+  var soDtInput = document.getElementById('newMemberSoDT');
   var passInput = document.getElementById('newMemberPass');
   var roleSelect = document.getElementById('newMemberRole');
   var canEditCheck = document.getElementById('newMemberCanEdit');
@@ -388,7 +344,7 @@ function chuanBiFormThemThanhVien(accToEdit) {
 
   var access = getRoleAccess();
 
-  // 1. Lọc động danh sách quyền: Admin Đài không được tạo Admin Hệ thống
+  // Load danh sách vai trò theo quyền
   if (roleSelect) {
     let roleHtml = `<option value="nhan_vien">Nhân viên</option>`;
     if (access.isSys) {
@@ -403,53 +359,69 @@ function chuanBiFormThemThanhVien(accToEdit) {
     roleSelect.innerHTML = roleHtml;
   }
 
-  // 2. Load danh sách Đài và tự động Khóa nếu là Admin Đài
-  var daiList = getFilteredDaiList();
+  // Load danh sách Đài
+  var daiList = (typeof getFilteredDaiList === 'function') ? getFilteredDaiList() : rawDaiList;
   if (daiSelect) {
     daiSelect.innerHTML = '<option value="">-- Chọn Đài --</option>';
     daiList.forEach(d => { 
       daiSelect.innerHTML += `<option value="${d.id_dai || d.id}">${d.ten_dai || d.ten}</option>`; 
     });
-    
     if (access.isDai && !access.isSys) {
       daiSelect.value = access.idDai;
-      daiSelect.disabled = true; // Khóa cứng không cho đổi sang Đài khác
+      daiSelect.disabled = true; 
     } else {
       daiSelect.disabled = false;
     }
   }
 
-  // 3. Load danh sách Trạm
-  var tramList = getFilteredTramList();
+  // Load danh sách Trạm
+  var tramList = (typeof getFilteredTramList === 'function') ? getFilteredTramList() : rawTramList;
   if (tramSelect) {
     tramSelect.innerHTML = '<option value="">-- Chọn Trạm --</option>';
     tramList.forEach(t => { 
       tramSelect.innerHTML += `<option value="${t.id_tram || t.id}">${t.ten_tram || t.ten}</option>`; 
     });
+    if (access.isTram && !access.isSys && !access.isDai) {
+      tramSelect.value = access.idTram;
+      tramSelect.disabled = true; 
+    } else {
+      tramSelect.disabled = false;
+    }
   }
 
-  // 4. Xử lý logic Nạp dữ liệu Sửa hoặc Làm mới form Thêm
+  // KIỂM TRA: NẾU LÀ CHẾ ĐỘ SỬA -> LOAD DỮ LIỆU LÊN FORM
   if (accToEdit && accountInput) {
     accountInput.value = accToEdit; 
-    accountInput.disabled = true; // Không cho phép sửa tên tài khoản
-    if (passInput) passInput.value = '';
+    accountInput.readOnly = true; // Khóa tên tài khoản không cho sửa
+    accountInput.style.backgroundColor = "#e2e8f0";
+    if (passInput) passInput.value = ''; // Để trống mật khẩu, nếu không nhập gì thì giữ mk cũ
 
     var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
     var uObj = users.find(u => u.account === accToEdit);
     
+    // Nạp chính xác dữ liệu của user vào Form
     if (uObj) {
+      if (tenAccountInput) tenAccountInput.value = uObj.ten_account || '';
+      if (soDtInput) soDtInput.value = uObj.so_dt || '';
       if (roleSelect) roleSelect.value = uObj.role || 'nhan_vien';
       if (canEditCheck) canEditCheck.checked = !!uObj.can_edit_map;
       if (daiSelect) daiSelect.value = uObj.id_dai || (access.isDai ? access.idDai : '');
-      if (tramSelect) tramSelect.value = uObj.id_tram || '';
+      if (tramSelect) tramSelect.value = uObj.id_tram || (access.isTram ? access.idTram : '');
     }
   } else {
-    if (accountInput) { accountInput.value = ''; accountInput.disabled = false; }
+    // KIỂM TRA: NẾU LÀ THÊM MỚI -> LÀM TRỐNG FORM
+    if (accountInput) { 
+      accountInput.value = ''; 
+      accountInput.readOnly = false; 
+      accountInput.style.backgroundColor = "#ffffff";
+    }
+    if (tenAccountInput) tenAccountInput.value = '';
+    if (soDtInput) soDtInput.value = '';
     if (passInput) passInput.value = '';
     if (roleSelect) roleSelect.value = 'nhan_vien';
     if (canEditCheck) canEditCheck.checked = false;
     if (daiSelect) daiSelect.value = access.isDai ? access.idDai : '';
-    if (tramSelect) tramSelect.value = '';
+    if (tramSelect) tramSelect.value = access.isTram ? access.idTram : '';
   }
 
   var modal = document.getElementById('addMemberModal');
@@ -528,56 +500,68 @@ function moFormThemDoan(id) {
   var tramList = getFilteredTramList();
   var tramOptions = tramList.map(tr => `<option value="${tr.id_tram || tr.id}" ${String(tr.id_tram || tr.id) === String(item.id_tram || item.tram_id) ? 'selected' : ''}>${tr.ten_tram || tr.ten}</option>`).join('');
 
-  // SỬA LỖI: Bổ sung trường nhập Tên Đoạn Cáp
   document.getElementById('auxFormFields').innerHTML = `
     <div class="form-group"><label>Mã đoạn cáp:</label><input type="text" id="auxMaDoan" value="${item.ma_doancap || item.ma_doan || ''}" placeholder="VD: D01"></div>
-    <div class="form-group"><label>Tên đoạn cáp:</label><input type="text" id="auxTenDoan" value="${item.ten_doan_cap || item.ten_doancap || item.ten || ''}" placeholder="VD: Đoạn từ TNN - Cột 1"></div>
+    <div class="form-group"><label>Tên đoạn cáp:</label><input type="text" id="auxTenDoan" value="${item.ten_doan_cap || item.ten_doancap || item.ten || ''}" placeholder="VD: Đoạn từ Trạm - Cột 1"></div>
     <div class="form-group"><label>Thuộc Tuyến:</label><select id="auxIdTuyen"><option value="">-- Chọn Tuyến --</option>${tuyenOptions}</select></div>
     <div class="form-group"><label>Thuộc Trạm:</label><select id="auxIdTram"><option value="">-- Chọn Trạm --</option>${tramOptions}</select></div>
   `;
   document.getElementById('genericAuxModal').style.display = 'flex';
 }
 
-// ==========================================================================
-// CÁC HÀM GHI/XÓA CÓ XÁC THỰC 2 LỚP BẰNG CUSTOM CONFIRM DIALOG
-// ==========================================================================
-
-// ==========================================================================
-// HÀM LƯU TÀI KHOẢN (THÊM / SỬA) ĐÃ LOẠI BỎ HOÀN TOÀN CÁC TRƯỜNG DƯ THỪA
-// ==========================================================================
 async function saveAccountAction() {
   var accountInput = document.getElementById('newMemberAccount');
-  var accVal = accountInput ? accountInput.value.trim() : '';
-  var password = document.getElementById('newMemberPass').value.trim();
-  var access = getRoleAccess();
+  var isEditing = accountInput ? accountInput.readOnly : false;
   
-  if (!accVal) { 
-    if (typeof showToast === 'function') showToast("⚠️ Vui lòng nhập tên tài khoản!", "error");
-    return; 
-  }
-
-  // Hộp thoại xác thực 2 lớp tùy chỉnh an toàn
-  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu thông tin tài khoản <b>${accVal}</b> không?`, 'success');
-  if (!isConfirmed) return;
-
+  // Thu thập dữ liệu từ Form
+  var accVal = accountInput ? accountInput.value.trim() : '';
+  var tenAccVal = document.getElementById('newMemberTenAccount').value.trim();
+  var soDtVal = document.getElementById('newMemberSoDT').value.trim();
+  var password = document.getElementById('newMemberPass').value.trim();
   var selectedRole = document.getElementById('newMemberRole').value;
   var selectedDai = document.getElementById('newMemberDai').value;
   var selectedTram = document.getElementById('newMemberTram').value;
+  var access = getRoleAccess();
+  
+  // KHỐNG CHẾ NHẬP LIỆU: Bật cảnh báo và dừng lưu nếu thiếu bất kỳ trường nào
+  if (!accVal) { showToast("⚠️ Vui lòng nhập Tên tài khoản!", "error"); return; }
+  if (!tenAccVal) { showToast("⚠️ Vui lòng nhập Họ và tên!", "error"); return; }
+  if (!soDtVal) { showToast("⚠️ Vui lòng nhập Số điện thoại!", "error"); return; }
+  
+  // Mật khẩu bắt buộc nhập khi thêm mới. Khi sửa, nếu để trống thì giữ nguyên mật khẩu cũ
+  if (!isEditing && !password) { 
+    showToast("⚠️ Vui lòng khởi tạo Mật khẩu cho tài khoản mới!", "error"); return; 
+  }
+  
+  // Khống chế Đài/Trạm (Trừ tài khoản admin hệ thống tối cao)
+  if (selectedRole !== 'admin_sys') {
+    if (!selectedDai && !access.isDai) { showToast("⚠️ Vui lòng chọn Đài viễn thông!", "error"); return; }
+    if (!selectedTram && !access.isTram) { showToast("⚠️ Vui lòng chọn Trạm viễn thông!", "error"); return; }
+  }
 
-  // Lấy danh sách user cũ để giữ lại mật khẩu nếu không nhập mật khẩu mới
+  // Xử lý kiểm tra trùng lặp tài khoản khi Thêm mới
   var users = getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']);
   var existingUser = users.find(u => u.account === accVal);
 
-  // Xây dựng payload chuẩn xác 100% với các cột thực tế của bảng tai_khoan
+  if (!isEditing && existingUser) {
+    showToast(`❌ Tên tài khoản "${accVal}" đã tồn tại! Vui lòng chọn tên khác.`, "error");
+    return;
+  }
+
+  let actionTitle = isEditing ? `Cập nhật thông tin tài khoản <b>${accVal}</b>` : `Thêm mới tài khoản <b>${accVal}</b>`;
+  let isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn ${actionTitle} không?`, 'success');
+  if (!isConfirmed) return;
+
   var payload = {
     account: accVal,
+    ten_account: tenAccVal,
+    so_dt: soDtVal,
     role: selectedRole,
     can_edit_map: document.getElementById('newMemberCanEdit').checked,
     id_dai: (access.isDai && !access.isSys) ? Number(access.idDai) : (selectedDai ? Number(selectedDai) : null),
     id_tram: (access.isTram && !access.isSys && !access.isDai) ? Number(access.idTram) : (selectedTram ? Number(selectedTram) : null)
   };
 
-  // Xử lý mật khẩu: Nếu nhập mới thì lưu, nếu để trống thì giữ nguyên mật khẩu cũ
   if (password) {
     payload.password = password;
   } else if (existingUser && existingUser.password) {
@@ -586,26 +570,23 @@ async function saveAccountAction() {
 
   try {
     showLoading("Đang lưu tài khoản...");
-    
-    // Thực hiện upsert lên Supabase chỉ với các trường hợp lệ
     var { data, error } = await supabaseClient.from('tai_khoan').upsert([payload]).select();
     if (error) throw error;
     
-    // Cập nhật mảng cục bộ trên RAM để giao diện đổi ngay lập tức
     if (data && data.length > 0) {
       var idx = users.findIndex(u => u.account === accVal);
       if (idx >= 0) users[idx] = data[0]; else users.push(data[0]);
       window.rawUserList = users;
-      AppStore.setState({ rawUserList: users });
+      if (typeof AppStore !== 'undefined') AppStore.setState({ rawUserList: users });
     }
 
-    if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin tài khoản thành công!", "success");
+    showToast("✅ Lưu tài khoản thành công!", "success");
     document.getElementById('addMemberModal').style.display = 'none';
     renderAllAdminTables();
     hideLoading();
   } catch (err) { 
     hideLoading();
-    if (typeof showToast === 'function') showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
+    showToast("❌ Lỗi không ghi được tài khoản: " + err.message, "error");
   }
 }
 
@@ -634,7 +615,6 @@ async function saveAuxRecord() {
     itemName = payload.ten_tuyen;
     if (!payload.ten_tuyen) { showToast("⚠️ Vui lòng nhập tên Tuyến cáp!", "error"); return; }
   } else if (tableType === 'doan_cap') {
-    // SỬA LỖI: Thu thập tên đoạn cáp để gửi lên Database
     pkCol = 'id_doan_cap';
     payload.ma_doancap = document.getElementById('auxMaDoan').value.trim();
     payload.ten_doan_cap = document.getElementById('auxTenDoan').value.trim();
@@ -646,7 +626,6 @@ async function saveAuxRecord() {
 
   if (recordId && recordId !== '') { payload[pkCol] = Number(recordId); }
 
-  // XÁC THỰC 2 LỚP TRƯỚC KHI GHI
   let isConfirmed = await showConfirmDialog(`Xác nhận lưu thay đổi cho mục:<br><b>${itemName}</b>?`, 'success');
   if (!isConfirmed) return;
 
@@ -691,7 +670,6 @@ async function saveAuxRecord() {
 }
 
 async function deleteAdminRecord(tableName, idItem) {
-  // XÁC THỰC 2 LỚP TRƯỚC KHI XÓA (Cảnh báo màu đỏ)
   let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn bản ghi <b>ID: ${idItem}</b> này khỏi hệ thống không?`, 'danger');
   if (!isConfirmed) return;
 
