@@ -506,192 +506,245 @@ function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo,
   }
 }
 
-function timViTriDut() {
+// =========================================================
+// CHÈN VÀO DATA.JS (PHẦN 6: OTDR VÀ TÌM LÝ TRÌNH)
+// =========================================================
+
+// HÀM TIỆN ÍCH: Nhận diện bối cảnh thông minh (Context-Aware)
+function chonDoanCapPhanTich(callback) {
+  var doanVal = document.getElementById('selectDoanCap').value;
+  // Trạng thái 1: Kỹ sư đang chọn 1 đoạn cụ thể -> Tính toán ngay
+  if (doanVal !== 'ALL') { 
+    callback(doanVal); 
+    return; 
+  }
+
+  // Trạng thái 2: Bản đồ đang vẽ Toàn cảnh -> Bật Form hỏi
+  var tuyenVal = document.getElementById('selectTuyen').value;
+  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
+  var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
   
+  var matchedDoan = doanCapList.filter(d => {
+    var isTuyenMatch = (tuyenVal === 'ALL') ? true : (String(d.id_tuyen || d.tuyen_id || d.id_tuyen_cap) === String(tuyenVal));
+    var isTramMatch = (tramVal === 'ALL') ? true : (String(d.id_tram || d.tram_id) === String(tramVal));
+    return isTuyenMatch && isTramMatch;
+  });
+
+  if (matchedDoan.length === 0) { showToast("Không có đoạn cáp nào!", "error"); return; }
+  if (matchedDoan.length === 1) { callback(matchedDoan[0].id_doan_cap || matchedDoan[0].id); return; }
+
+  let overlay = document.getElementById('custom-segment-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'custom-segment-overlay';
+    overlay.style.cssText = "display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.7); z-index: 9999999; justify-content: center; align-items: center; backdrop-filter: blur(3px);";
+    document.body.appendChild(overlay);
+  }
+
+  let optsHtml = matchedDoan.map(d => `<option value="${d.id_doan_cap || d.id}">${d.ten_doan_cap || d.ma_doancap}</option>`).join('');
+  overlay.innerHTML = `
+    <div class="confirm-box" style="width: 90%; max-width: 380px; text-align: left; background: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+      <div style="margin-bottom: 12px; font-size: 14px; font-weight: bold; color: #0d6efd;">🔀 Chọn Đoạn Cáp Phân Tích</div>
+      <div style="font-size: 13px; color: #64748b; margin-bottom: 12px;">Bản đồ đang hiển thị toàn cảnh. Vui lòng chọn nhánh cáp muốn phân tích:</div>
+      <select id="modalSelectDoan" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; margin-bottom: 16px;">${optsHtml}</select>
+      <div style="display: flex; gap: 8px;">
+        <button id="btnCancelSeg" style="flex: 1; padding: 8px; border-radius: 6px; background: #64748b; color: white; border: none; font-weight: bold; cursor: pointer;">Hủy bỏ</button>
+        <button id="btnConfirmSeg" style="flex: 1; padding: 8px; border-radius: 6px; background: #198754; color: white; border: none; font-weight: bold; cursor: pointer;">Phân tích</button>
+      </div>
+    </div>`;
+  overlay.style.display = 'flex';
+  document.getElementById('btnCancelSeg').onclick = () => overlay.style.display = 'none';
+  document.getElementById('btnConfirmSeg').onclick = () => { overlay.style.display = 'none'; callback(document.getElementById('modalSelectDoan').value); };
+}
+
+// HÀM TÌM ĐIỂM ĐỨT CÁP HOÀN CHỈNH
+function timViTriDut() {
   var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value), kcOtdrMeters = kcOtdrKm * 1000; 
   if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { showToast("Nhập cự ly đo hợp lệ!", "error"); return; }
   
-  var tuyenVal = document.getElementById('selectTuyen').value;
-  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
-  var doanVal = document.getElementById('selectDoanCap').value;
-  
-  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
-  precalculateRouteDataForPoints(backbone, backbone);
-
-  if (backbone.length < 2) { showToast("Tuyến cáp chưa đủ dữ liệu!", "error"); return; }
-
-  var routeStops = [];
-  backbone.forEach(p => routeStops.push({ pt: p, dist: p.distanceFromAMeters, duTru: p.duTru || 0, isMX: isMangXong(p) }));
-  routeStops.sort((a, b) => a.dist - b.dist);
-
-  var targetLat = backbone[backbone.length - 1].lat, targetLng = backbone[backbone.length - 1].lng;
-  var prevMXName = "Chưa xác định", nextMXName = "Chưa xác định";
-  var prevMXDistText = "", nextMXDistText = "";
-  var interpolatedLyTrinhText = "Đang xác định...";
-
-  for (var i = 0; i < routeStops.length - 1; i++) {
-    var segStartDist = routeStops[i].dist;
-    var segEndDist = routeStops[i+1].dist;
+  chonDoanCapPhanTich(function(targetDoanVal) {
+    var tuyenVal = document.getElementById('selectTuyen').value;
+    var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
     
-    if (kcOtdrMeters <= segEndDist) {
-      var segOptDist = segEndDist - segStartDist;
-      var ratio = (segOptDist > 0) ? ((kcOtdrMeters - segStartDist) / segOptDist) : 0;
-      
-      targetLat = routeStops[i].pt.lat + ratio * (routeStops[i+1].pt.lat - routeStops[i].pt.lat);
-      targetLng = routeStops[i].pt.lng + ratio * (routeStops[i+1].pt.lng - routeStops[i].pt.lng);
-      
-      var lt1 = routeStops[i].pt.calculatedLyTrinhMeters;
-      var lt2 = routeStops[i+1].pt.calculatedLyTrinhMeters;
-      if (lt1 !== undefined && lt2 !== undefined) {
-        var interMeters = Math.round(lt1 + ratio * (lt2 - lt1));
-        var km = Math.floor(interMeters / 1000);
-        var m = interMeters % 1000;
-        interpolatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}`;
-      }
+    var backbone = getMasterRouteBackbone(tuyenVal, tramVal, targetDoanVal);
+    precalculateRouteDataForPoints(backbone, backbone);
 
-      for (var j = i; j >= 0; j--) {
-        if (routeStops[j].isMX) {
-          prevMXName = routeStops[j].pt.ten;
-          var distPrev = Math.round(kcOtdrMeters - routeStops[j].dist);
-          prevMXDistText = (distPrev >= 1000) ? (distPrev / 1000).toFixed(2) + " km" : distPrev + " m";
-          break;
+    if (backbone.length < 2) { showToast("Tuyến cáp chưa đủ dữ liệu!", "error"); return; }
+
+    var routeStops = [];
+    backbone.forEach(p => routeStops.push({ pt: p, dist: p.distanceFromAMeters, duTru: p.duTru || 0, isMX: isMangXong(p) }));
+    routeStops.sort((a, b) => a.dist - b.dist);
+
+    var targetLat = backbone[backbone.length - 1].lat, targetLng = backbone[backbone.length - 1].lng;
+    var prevMXName = "Chưa xác định", nextMXName = "Chưa xác định";
+    var prevMXDistText = "", nextMXDistText = "";
+    var interpolatedLyTrinhText = "Đang xác định...";
+
+    for (var i = 0; i < routeStops.length - 1; i++) {
+      var segStartDist = routeStops[i].dist;
+      var segEndDist = routeStops[i+1].dist;
+      
+      if (kcOtdrMeters <= segEndDist) {
+        var segOptDist = segEndDist - segStartDist;
+        var ratio = (segOptDist > 0) ? ((kcOtdrMeters - segStartDist) / segOptDist) : 0;
+        
+        targetLat = routeStops[i].pt.lat + ratio * (routeStops[i+1].pt.lat - routeStops[i].pt.lat);
+        targetLng = routeStops[i].pt.lng + ratio * (routeStops[i+1].pt.lng - routeStops[i].pt.lng);
+        
+        var lt1 = routeStops[i].pt.calculatedLyTrinhMeters;
+        var lt2 = routeStops[i+1].pt.calculatedLyTrinhMeters;
+        if (lt1 !== undefined && lt2 !== undefined) {
+          var interMeters = Math.round(lt1 + ratio * (lt2 - lt1));
+          var km = Math.floor(interMeters / 1000);
+          var m = interMeters % 1000;
+          interpolatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}`;
         }
-      }
 
-      for (var k = i + 1; k < routeStops.length; k++) { 
-        if (routeStops[k].isMX) { 
-          nextMXName = routeStops[k].pt.ten;
-          var distNext = Math.round(routeStops[k].dist - kcOtdrMeters);
-          nextMXDistText = (distNext >= 1000) ? (distNext / 1000).toFixed(2) + " km" : distNext + " m";
-          break; 
-        } 
+        for (var j = i; j >= 0; j--) {
+          if (routeStops[j].isMX) {
+            prevMXName = routeStops[j].pt.ten;
+            var distPrev = Math.round(kcOtdrMeters - routeStops[j].dist);
+            prevMXDistText = (distPrev >= 1000) ? (distPrev / 1000).toFixed(2) + " km" : distPrev + " m";
+            break;
+          }
+        }
+
+        for (var k = i + 1; k < routeStops.length; k++) { 
+          if (routeStops[k].isMX) { 
+            nextMXName = routeStops[k].pt.ten;
+            var distNext = Math.round(routeStops[k].dist - kcOtdrMeters);
+            nextMXDistText = (distNext >= 1000) ? (distNext / 1000).toFixed(2) + " km" : distNext + " m";
+            break; 
+          } 
+        }
+        break;
       }
-      break;
     }
-  }
 
-  if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
-  map.setView([targetLat, targetLng], 19, { animate: true });
-  
-  var faultIcon = L.divIcon({ html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>', iconSize: [28, 28] });
-  var faultMarker = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
-  foundMarkerLayer = faultMarker;
+    if (typeof foundMarkerLayer !== 'undefined' && foundMarkerLayer) map.removeLayer(foundMarkerLayer);
+    map.setView([targetLat, targetLng], 19, { animate: true });
+    
+    var faultIcon = L.divIcon({ html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>', iconSize: [28, 28] });
+    var faultMarker = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
+    foundMarkerLayer = faultMarker;
 
-  var prevMXFullInfo = prevMXName + (prevMXDistText ? ` (cách ${prevMXDistText})` : '');
-  var nextMXFullInfo = nextMXName + (nextMXDistText ? ` (cách ${nextMXDistText})` : '');
+    var prevMXFullInfo = prevMXName + (prevMXDistText ? ` (cách ${prevMXDistText})` : '');
+    var nextMXFullInfo = nextMXName + (nextMXDistText ? ` (cách ${nextMXDistText})` : '');
 
-  var shareButtonsHtml = `
-    <div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">
-      <b>Chia sẻ sự cố nhanh:</b><br>
-      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'copy')">📋 Copy</button>
-      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'zalo')" style="background:#0068ff; color:white;">💬 Zalo App</button>
-      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'viber')" style="background:#6f42c1; color:white;">📱 Viber</button>
-    </div>`;
-  
-  var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>` +
-                  `Cự đoạn đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
-                  `📍 Lý trình QL: <b>${interpolatedLyTrinhText}</b><br>` +
-                  `🔀 MX trước: <b>${prevMXFullInfo}</b><br>` +
-                  `🔀 MX sau: <b>${nextMXFullInfo}</b><br>` +
-                  `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='btn-info' style='background:#0d6efd; color:white;'>🗺️ Dẫn đường GMaps</a>` +
-                  shareButtonsHtml;
-  
-  faultMarker.bindPopup(popupHtml).openPopup();
-  var panel = document.getElementById('control-panel');
-  if (panel) panel.style.display = 'none';
-  datLichTuXoaMarkerTimKiem();
+    var shareButtonsHtml = `
+      <div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">
+        <b>Chia sẻ sự cố nhanh:</b><br>
+        <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'copy')">📋 Copy</button>
+        <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'zalo')" style="background:#0068ff; color:white;">💬 Zalo App</button>
+      </div>`;
+    
+    var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>` +
+                    `Cự đoạn đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
+                    `📍 Lý trình QL: <b>${interpolatedLyTrinhText}</b><br>` +
+                    `🔀 MX trước: <b>${prevMXFullInfo}</b><br>` +
+                    `🔀 MX sau: <b>${nextMXFullInfo}</b><br>` +
+                    `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='btn-info' style='background:#0d6efd; color:white;'>🗺️ Dẫn đường GMaps</a>` +
+                    shareButtonsHtml;
+    
+    faultMarker.bindPopup(popupHtml).openPopup();
+    var panel = document.getElementById('control-panel');
+    if (panel) panel.style.display = 'none';
+    if (typeof datLichTuXoaMarkerTimKiem === 'function') datLichTuXoaMarkerTimKiem();
+  });
 }
 
+// HÀM TÌM LÝ TRÌNH HOÀN CHỈNH
 function timLyTrinhBanDo() {
- 
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var parsedTarget = parseLyTrinhWithSuffix(txt);
   var targetMeters = parsedTarget ? parsedTarget.meters : null;
   
   if (targetMeters === null || isNaN(targetMeters)) {
-    showToast("Sai định dạng lý trình! Vui lòng nhập theo mẫu: 54+100 hoặc km 54+100", "error");
+    showToast("Sai định dạng lý trình! Vui lòng nhập theo mẫu: 54+100", "error");
     return;
   }
   
-  var pts = getPointsCuaTuyenHienTai();
-  if (pts.length < 2) {
-    showToast("Vui lòng chọn tuyến cáp trước khi tìm kiếm!", "error");
-    return;
-  }
+  chonDoanCapPhanTich(function(targetDoanVal) {
+    var tuyenVal = document.getElementById('selectTuyen').value;
+    var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
 
-  var isNghichHuong = (pts.length >= 2 && pts[1].calculatedLyTrinhMeters < pts[0].calculatedLyTrinhMeters);
-  var sortedPts = [...pts].sort((a, b) => isNghichHuong ? b.calculatedLyTrinhMeters - a.calculatedLyTrinhMeters : a.calculatedLyTrinhMeters - b.calculatedLyTrinhMeters);
-
-  var targetSeg = null;
-  var foundLat = null, foundLng = null, bestDescription = "";
-
-  for (var i = 0; i < sortedPts.length - 1; i++) {
-    var p1 = sortedPts[i];
-    var p2 = sortedPts[i+1];
-    var startLt = p1.calculatedLyTrinhMeters;
-    var endLt = p2.calculatedLyTrinhMeters;
+    var backbone = getMasterRouteBackbone(tuyenVal, tramVal, targetDoanVal);
+    var nonMxPts = backbone.filter(pt => !isMangXong(pt) && pt.idLoaiDiem !== 0);
+    var basePt = backbone.find(p => p.id === 'TNN_BASE' || Math.abs(p.lat - 21.593365) < 0.0001);
+    if (basePt && !nonMxPts.includes(basePt)) nonMxPts.unshift(basePt);
+    var pts = precalculateRouteDataForPoints(nonMxPts, backbone);
     
-    var minLt = Math.min(startLt, endLt);
-    var maxLt = Math.max(startLt, endLt);
-    
-    if (targetMeters >= minLt && targetMeters <= maxLt) {
-      var span = endLt - startLt;
-      var ratio = (span !== 0) ? (targetMeters - startLt) / span : 0;
-      
-      var testLat = p1.lat + ratio * (p2.lat - p1.lat);
-      var testLng = p1.lng + ratio * (p2.lng - p1.lng);
-      
-      var distToP1 = calculateHaversine(testLat, testLng, p1.lat, p1.lng);
-      var distToP2 = calculateHaversine(testLat, testLng, p2.lat, p2.lng);
-      var segmentRealLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
-
-      if (distToP1 <= segmentRealLen + 100 && distToP2 <= segmentRealLen + 100) {
-        targetSeg = { p1: p1, p2: p2 };
-        foundLat = testLat;
-        foundLng = testLng;
-        bestDescription = `Nằm giữa [${p1.ten}] và [${p2.ten}]`;
-        break;
-      }
-    }
-  }
-
-  if (!targetSeg) {
-    var closest = sortedPts.reduce((prev, curr) => Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev);
-    var deviationMeters = Math.abs(closest.calculatedLyTrinhMeters - targetMeters);
-    if (deviationMeters > 100) {
-      showToast(`Không tìm thấy vị trí lý trình ${txt} chính xác (Sai số quá ${Math.round(deviationMeters)}m).`, "error");
+    if (pts.length < 2) {
+      showToast("Đoạn cáp này chưa đủ điểm để tìm lý trình!", "error");
       return;
     }
-    foundLat = closest.lat;
-    foundLng = closest.lng;
-    bestDescription = `Gần điểm mốc: ${closest.ten} (Sai số ~${Math.round(deviationMeters)}m)`;
-  }
 
-  var selectTuyen = document.getElementById('selectTuyen');
-  var selectTram = document.getElementById('selectTram');
-  var selectDoanCap = document.getElementById('selectDoanCap');
-  
-  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
-  var tramVal = selectTram ? selectTram.value : 'ALL';
-  var doanVal = selectDoanCap ? selectDoanCap.value : 'ALL';
+    var isNghichHuong = (pts.length >= 2 && pts[1].calculatedLyTrinhMeters < pts[0].calculatedLyTrinhMeters);
+    var sortedPts = [...pts].sort((a, b) => isNghichHuong ? b.calculatedLyTrinhMeters - a.calculatedLyTrinhMeters : a.calculatedLyTrinhMeters - b.calculatedLyTrinhMeters);
 
-  var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, getMasterRouteBackbone(tuyenVal, tramVal, doanVal));
-  var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
+    var targetSeg = null;
+    var foundLat = null, foundLng = null, bestDescription = "";
 
-  if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
-  map.setView([foundLat, foundLng], 19, { animate: true });
-  
-  var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
-  foundMarkerLayer = L.marker([foundLat, foundLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
-  
-  var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
-                     `- Vị trí: <b>${bestDescription}</b><br>` +
-                     `- Cự ly cáp tới Trạm VT A: <b>${distStr}</b><br>` ;
-                     
-  foundMarkerLayer.bindPopup(popupContent).openPopup();
-  datLichTuXoaMarkerTimKiem();
-  var panel = document.getElementById('control-panel');
-  if (panel) panel.style.display = 'none';
+    for (var i = 0; i < sortedPts.length - 1; i++) {
+      var p1 = sortedPts[i];
+      var p2 = sortedPts[i+1];
+      var startLt = p1.calculatedLyTrinhMeters;
+      var endLt = p2.calculatedLyTrinhMeters;
+      
+      var minLt = Math.min(startLt, endLt);
+      var maxLt = Math.max(startLt, endLt);
+      
+      if (targetMeters >= minLt && targetMeters <= maxLt) {
+        var span = endLt - startLt;
+        var ratio = (span !== 0) ? (targetMeters - startLt) / span : 0;
+        
+        var testLat = p1.lat + ratio * (p2.lat - p1.lat);
+        var testLng = p1.lng + ratio * (p2.lng - p1.lng);
+        
+        var distToP1 = calculateHaversine(testLat, testLng, p1.lat, p1.lng);
+        var distToP2 = calculateHaversine(testLat, testLng, p2.lat, p2.lng);
+        var segmentRealLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
+
+        if (distToP1 <= segmentRealLen + 100 && distToP2 <= segmentRealLen + 100) {
+          targetSeg = { p1: p1, p2: p2 };
+          foundLat = testLat;
+          foundLng = testLng;
+          bestDescription = `Nằm giữa [${p1.ten}] và [${p2.ten}]`;
+          break;
+        }
+      }
+    }
+
+    if (!targetSeg) {
+      var closest = sortedPts.reduce((prev, curr) => Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev);
+      var deviationMeters = Math.abs(closest.calculatedLyTrinhMeters - targetMeters);
+      if (deviationMeters > 100) {
+        showToast(`Không tìm thấy lý trình (Sai số quá ${Math.round(deviationMeters)}m).`, "error");
+        return;
+      }
+      foundLat = closest.lat;
+      foundLng = closest.lng;
+      bestDescription = `Gần điểm mốc: ${closest.ten}`;
+    }
+
+    var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, backbone);
+    var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
+
+    if (typeof foundMarkerLayer !== 'undefined' && foundMarkerLayer) map.removeLayer(foundMarkerLayer);
+    map.setView([foundLat, foundLng], 19, { animate: true });
+    
+    var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
+    foundMarkerLayer = L.marker([foundLat, foundLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
+    
+    var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
+                       `- Vị trí: <b>${bestDescription}</b><br>` +
+                       `- Cự ly cáp tới Trạm VT A: <b>${distStr}</b><br>` ;
+                       
+    foundMarkerLayer.bindPopup(popupContent).openPopup();
+    if (typeof datLichTuXoaMarkerTimKiem === 'function') datLichTuXoaMarkerTimKiem();
+    var panel = document.getElementById('control-panel');
+    if (panel) panel.style.display = 'none';
+  });
 }
 
 function xoaTatCaDoiTuongMap() {
