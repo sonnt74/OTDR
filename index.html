@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <link rel="stylesheet" href="style.css">
 
   <style>
@@ -178,6 +179,7 @@
           <button class="tab-btn" onclick="switchAdminTab('tab-tram', this)">📡 Trạm VT</button>
           <button class="tab-btn" onclick="switchAdminTab('tab-tuyen', this)">🛤️ Tuyến Cáp</button>
           <button class="tab-btn" onclick="switchAdminTab('tab-doan', this)">🔗 Đoạn Tuyến</button>
+          <button id="tab-btn-excel" class="tab-btn" style="display: none; background: #10b981; color: white;" onclick="switchAdminTab('tab-excel', this)">💾 Dữ Liệu (Excel)</button>
         </div>
 
         <div id="tab-accounts" class="tab-pane active">
@@ -207,6 +209,55 @@
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><b style="font-size:13px; color:var(--text-main);">Đoạn Tuyến Cáp:</b><button class="btn-small btn-success" onclick="moFormThemDoan()">+ Thêm đoạn</button></div>
           <div class="table-responsive"><table class="table-data"><thead><tr><th>ID</th><th>Mã đoạn</th><th>Tuyến</th><th>Trạm</th><th>Thao tác</th></tr></thead><tbody id="masterDoanTableBody"></tbody></table></div>
         </div>
+
+        <!-- TAB 6: DỮ LIỆU EXCEL -->
+        <div id="tab-excel" class="tab-pane">
+          <div style="background: #fff3cd; color: #856404; padding: 10px; border-radius: 6px; margin-bottom: 12px; font-size: 12px; border: 1px solid #ffeeba;">
+            <b>⚠️ KHU VỰC ĐẶC QUYỀN (ADMIN SYS):</b> Thao tác Import sẽ ghi đè toàn bộ cột của bảng điểm hạ tầng. Vui lòng kiểm duyệt file Excel cẩn thận trước khi tải lên.
+          </div>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 15px;">
+            <!-- Xuất dữ liệu -->
+            <div style="flex: 1; min-width: 250px; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+              <b style="font-size:13px; color:var(--text-main); display: block; margin-bottom: 10px;">1. Xuất Dữ Liệu Toàn Bản Đồ</b>
+              <p style="font-size: 11px; color: #64748b; margin-bottom: 10px;">Xuất danh sách các điểm đang hiển thị trên bản đồ để tra cứu ID hoặc làm báo cáo.</p>
+              <button class="btn-action" style="background: #198754; width: auto; padding: 6px 15px;" onclick="xuatDuLieuExcelAdmin()">📊 Xuất Báo Cáo (Excel)</button>
+            </div>
+
+            <!-- Nhập dữ liệu -->
+            <div style="flex: 2; min-width: 300px; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; background: #f8fafc;">
+              <b style="font-size:13px; color:var(--primary-blue); display: block; margin-bottom: 10px;">2. Cập Nhật Dữ Liệu Theo Đoạn Cáp</b>
+              
+              <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <div class="form-group" style="flex: 1; margin: 0;">
+                  <label>Chọn Tuyến:</label>
+                  <select id="excelSelectTuyen" onchange="updateExcelDoanOptions()"></select>
+                </div>
+                <div class="form-group" style="flex: 1; margin: 0;">
+                  <label>Chọn Đoạn Cáp (Đích đến):</label>
+                  <select id="excelSelectDoan"></select>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 10px;">
+                <button class="btn-action" style="background: #f59e0b; flex: 1;" onclick="taiFileMauHoacDuLieuCu()">📥 Tải Dữ Liệu / File Mẫu</button>
+                <div style="flex: 1.5; background: #fff; border: 1px dashed #cbd5e1; padding: 6px; border-radius: 6px; text-align: center;">
+                  <input type="file" id="fileExcelUpload" accept=".xlsx, .xls" style="font-size: 11px; width: 100%;">
+                </div>
+              </div>
+
+              <button class="btn-action btn-success" style="width: 100%; font-size: 13px; padding: 8px;" onclick="kiemDuyetVaImportExcel()">🚀 KIỂM DUYỆT & ĐỒNG BỘ LÊN HỆ THỐNG</button>
+              
+              <div id="excelImportStatus" style="margin-top: 10px; padding: 10px; background: #e2e8f0; border-radius: 6px; font-size: 11px; display: none;">
+                <b id="excelStatusText">Đang chờ xử lý...</b>
+                <div style="width: 100%; background: #cbd5e1; height: 8px; border-radius: 4px; margin-top: 5px; overflow: hidden;">
+                  <div id="excelProgressBar" style="width: 0%; background: #10b981; height: 100%; transition: width 0.3s;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
       </div>
     </div>
   </div>
@@ -294,6 +345,19 @@
         <div class="form-group" style="flex: 1; margin: 0;">
           <label style="font-size: 10px; margin-bottom: 1px;">Dự trữ (m):</label>
           <input type="number" id="diemDuTru" value="0" step="0.1" style="padding: 4px 6px; font-size: 11px;">
+        </div>
+      </div>
+      <!-- THÊM MỚI: Hướng cáp & Ngày phát sinh -->
+      <div style="display: flex; gap: 6px; margin-bottom: 4px;">
+        <div class="form-group" style="flex: 1; margin: 0;">
+          <label style="font-size: 10px; margin-bottom: 1px;">Hướng cáp:</label>
+          <select id="diemHuongSelect" style="padding: 4px 6px; font-size: 11px;">
+             <option value="">-- Chọn hướng --</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex: 1; margin: 0;">
+          <label style="font-size: 10px; margin-bottom: 1px;">Ngày phát sinh:</label>
+          <input type="date" id="diemNgayPs" style="padding: 4px 6px; font-size: 11px;">
         </div>
       </div>
 

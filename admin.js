@@ -13,6 +13,13 @@ function openModal(modalId, tabId) {
   if (modalId === 'adminMasterModal') {
     renderAllAdminTables();
 
+    // BỔ SUNG: Kiểm tra quyền để bật/tắt nút Tab Excel cho Admin Sys
+    var access = getRoleAccess();
+    var excelTabBtn = document.getElementById('tab-btn-excel');
+    if (excelTabBtn) {
+       excelTabBtn.style.display = access.isSys ? 'inline-block' : 'none';
+    }
+
     if (tabId) {
       var btn = document.querySelector(`.admin-tabs .tab-btn[onclick*="${tabId}"]`);
       switchAdminTab(tabId, btn);
@@ -756,4 +763,236 @@ async function executeChangePassword() {
     hideLoading();
     showToast("❌ Lỗi đổi mật khẩu: " + err.message, "error");
   }
+}
+
+
+// ==========================================================================
+// MODULE QUẢN LÝ DỮ LIỆU EXCEL (IMPORT/EXPORT) CHO ADMIN SYS
+// ==========================================================================
+
+// 1. Khởi tạo danh sách Tuyến/Đoạn cho Tab Excel khi mở Modal
+document.addEventListener('DOMContentLoaded', function() {
+  var observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutation) {
+      if (mutation.target.id === 'adminMasterModal' && mutation.target.style.display === 'flex') {
+        loadExcelComboboxes();
+      }
+    });
+  });
+  var adminModal = document.getElementById('adminMasterModal');
+  if (adminModal) observer.observe(adminModal, { attributes: true, attributeFilter: ['style'] });
+});
+
+function loadExcelComboboxes() {
+  var tuyenList = (typeof getFilteredTuyenList === 'function') ? getFilteredTuyenList() : (window.rawTuyenList || []);
+  var selTuyen = document.getElementById('excelSelectTuyen');
+  if (selTuyen) {
+    selTuyen.innerHTML = '<option value="">-- Chọn Tuyến Cáp --</option>';
+    tuyenList.forEach(t => {
+      selTuyen.innerHTML += `<option value="${t.id_tuyen_cap || t.id}">${t.ten_tuyen || t.ten_tuyencap}</option>`;
+    });
+  }
+  updateExcelDoanOptions();
+}
+
+function updateExcelDoanOptions() {
+  var selTuyen = document.getElementById('excelSelectTuyen');
+  var selDoan = document.getElementById('excelSelectDoan');
+  if (!selTuyen || !selDoan) return;
+  
+  var doanList = (typeof getFilteredDoanList === 'function') ? getFilteredDoanList() : (window.rawDoanCapList || []);
+  var tuyenVal = selTuyen.value;
+  
+  selDoan.innerHTML = '<option value="">-- Chọn Đoạn Cáp --</option>';
+  if (tuyenVal) {
+    doanList.filter(d => String(d.id_tuyen || d.tuyen_id) === String(tuyenVal)).forEach(d => {
+      selDoan.innerHTML += `<option value="${d.id_doan_cap || d.id}">${d.ten_doan_cap || d.ma_doancap}</option>`;
+    });
+  }
+}
+
+// 2. Xuất dữ liệu toàn bản đồ
+function xuatDuLieuExcelAdmin() {
+  if (typeof globalDataPoints === 'undefined' || globalDataPoints.length === 0) {
+    showToast("⚠️ Không có dữ liệu trên bản đồ để xuất!", "error"); return;
+  }
+  showLoading("Đang tạo file báo cáo...");
+  try {
+    let excelData = globalDataPoints.map((pt, i) => ({
+      "STT": i + 1,
+      "ID Điểm": pt.id,
+      "Tên Điểm": pt.ten || "",
+      "Loại Điểm": pt.loai || "",
+      "Vĩ độ": pt.lat,
+      "Kinh độ": pt.lng,
+      "Lý Trình": pt.lyTrinh || "",
+      "Dự Trữ": pt.duTru || 0,
+      "Thuộc Tuyến": typeof getTuyenName === 'function' ? getTuyenName(pt.idTuyen) : pt.idTuyen,
+      "Thuộc Đoạn": pt.idDoanCap,
+      "Thuộc Trạm": typeof getTramName === 'function' ? getTramName(pt.idTram) : pt.idTram,
+      "Ghi Chú": pt.ghiChu || "",
+      "Ghi Chú Mật": pt.ghichu_an || ""
+    }));
+
+    let wb = XLSX.utils.book_new();
+    let ws = XLSX.utils.json_to_sheet(excelData);
+    ws['!cols'] = [{ wch: 5 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 8 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 25 }, { wch: 25 }];
+    XLSX.utils.book_append_sheet(wb, ws, "Diem_Ban_Do");
+    XLSX.writeFile(wb, `Bao_Cao_Diem_Ha_Tang_${new Date().getTime()}.xlsx`);
+    showToast("✅ Xuất báo cáo thành công!", "success");
+  } catch (e) {
+    console.error(e); showToast("❌ Lỗi xuất file!", "error");
+  } finally { hideLoading(); }
+}
+
+// 3. Tải File Mẫu hoặc Dữ Liệu Cũ
+async function taiFileMauHoacDuLieuCu() {
+  var idDoan = document.getElementById('excelSelectDoan').value;
+  if (!idDoan) { showToast("⚠️ Vui lòng chọn Đoạn Cáp trước khi tải mẫu!", "error"); return; }
+  
+  showLoading("Đang chuẩn bị file Excel...");
+  try {
+    // Truy vấn xem đoạn này đã có điểm nào chưa
+    let { data: pts } = await supabaseClient.from('doan_cap_diem')
+      .select('thu_tu, diem_ha_tang(*)')
+      .eq('id_doan_cap', Number(idDoan))
+      .order('thu_tu', { ascending: true });
+      
+    let excelData = [];
+    if (pts && pts.length > 0) {
+      // CÓ DỮ LIỆU: Tải dữ liệu cũ về cho Admin sửa
+      excelData = pts.map(p => {
+        let d = p.diem_ha_tang;
+        return {
+          "STT": p.thu_tu, "ID Điểm": d.id_diem, "Tên Điểm": d.ten_diem, "Loại Điểm (1:Cột,2:Bể,3:Mốc,4:MX)": d.id_loaidiem,
+          "Vĩ độ": d.lat, "Kinh độ": d.long, "Lý Trình": d.ly_trinh || "", "Dự Trữ": d.du_tru || 0,
+          "Tuyến Đường": d.duong || "", "Hướng": d.id_huong || "", "Cách Trạm": d.do_cach_tram || "", "Thuộc Trạm": d.id_tram || "",
+          "Ngày PS": d.ngay_ps || "", "Ghi Chú": d.ghi_chu || "", "Ghi Chú Mật": d.ghichu_an || ""
+        };
+      });
+      showToast(`📥 Đã tải ${pts.length} điểm cũ của đoạn cáp.`, "info");
+    } else {
+      // CHƯA CÓ DỮ LIỆU: Tải file mẫu trống
+      excelData = [{
+          "STT": 1, "ID Điểm": "", "Tên Điểm": "Cột 01A", "Loại Điểm (1:Cột,2:Bể,3:Mốc,4:MX)": 1,
+          "Vĩ độ": 21.5942, "Kinh độ": 105.8481, "Lý Trình": "1+200", "Dự Trữ": 15,
+          "Tuyến Đường": "", "Hướng": "", "Cách Trạm": "", "Thuộc Trạm": "",
+          "Ngày PS": "", "Ghi Chú": "Dòng mẫu (Hãy xóa đi)", "Ghi Chú Mật": "Chỉ Admin Sys mới thấy"
+      }];
+      showToast(`📥 Đã tạo file mẫu trống.`, "info");
+    }
+
+    let wb = XLSX.utils.book_new();
+    let ws = XLSX.utils.json_to_sheet(excelData);
+    XLSX.utils.book_append_sheet(wb, ws, "Data_Import");
+    XLSX.writeFile(wb, `Import_Doan_${idDoan}.xlsx`);
+  } catch (err) {
+    console.error(err); showToast("❌ Lỗi tạo file: " + err.message, "error");
+  } finally { hideLoading(); }
+}
+
+// 4. KIỂM DUYỆT VÀ IMPORT DỮ LIỆU (TUẦN TỰ & AN TOÀN 100%)
+async function kiemDuyetVaImportExcel() {
+  var idDoan = document.getElementById('excelSelectDoan').value;
+  var fileInput = document.getElementById('fileExcelUpload');
+  var statusBox = document.getElementById('excelImportStatus');
+  var statusText = document.getElementById('excelStatusText');
+  var progressBar = document.getElementById('excelProgressBar');
+
+  if (!idDoan) { showToast("⚠️ Vui lòng chọn Đoạn Cáp đích!", "error"); return; }
+  if (!fileInput.files || fileInput.files.length === 0) { showToast("⚠️ Vui lòng chọn file Excel để tải lên!", "error"); return; }
+
+  let file = fileInput.files[0];
+  let reader = new FileReader();
+
+  reader.onload = async function(e) {
+    try {
+      let data = new Uint8Array(e.target.result);
+      let workbook = XLSX.read(data, { type: 'array' });
+      let firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      let rows = XLSX.utils.sheet_to_json(firstSheet);
+
+      if (rows.length === 0) { showToast("⚠️ File Excel không có dữ liệu!", "error"); return; }
+
+      // BƯỚC 1: VALIDATE (KIỂM DUYỆT LOCAL)
+      for (let i = 0; i < rows.length; i++) {
+        let r = rows[i];
+        if (!r["Tên Điểm"]) { showToast(`❌ Lỗi Dòng ${i+2}: Thiếu Tên Điểm!`, "error"); return; }
+        if (isNaN(r["Vĩ độ"]) || isNaN(r["Kinh độ"])) { showToast(`❌ Lỗi Dòng ${i+2}: Tọa độ không hợp lệ!`, "error"); return; }
+        if (!r["Loại Điểm (1:Cột,2:Bể,3:Mốc,4:MX)"]) { showToast(`❌ Lỗi Dòng ${i+2}: Thiếu Loại Điểm!`, "error"); return; }
+      }
+
+      let isConfirmed = await showConfirmDialog(`File hợp lệ! Phát hiện <b>${rows.length}</b> bản ghi.<br>Xác nhận đồng bộ vào Đoạn cáp ID: ${idDoan}?`, 'success');
+      if (!isConfirmed) return;
+
+      // BƯỚC 2: TIẾN HÀNH ĐỒNG BỘ TUẦN TỰ (CHỐNG TIMEOUT SUPABASE)
+      statusBox.style.display = 'block';
+      progressBar.style.width = '0%';
+      let successCount = 0;
+
+      for (let i = 0; i < rows.length; i++) {
+        let row = rows[i];
+        statusText.innerText = `Đang xử lý: ${i+1} / ${rows.length} (${row["Tên Điểm"]})...`;
+        
+        let payloadDiem = {
+          ten_diem: row["Tên Điểm"],
+          lat: parseFloat(row["Vĩ độ"]),
+          long: parseFloat(row["Kinh độ"]),
+          id_loaidiem: parseInt(row["Loại Điểm (1:Cột,2:Bể,3:Mốc,4:MX)"]),
+          ly_trinh: row["Lý Trình"] || null,
+          du_tru: parseFloat(row["Dự Trữ"]) || 0,
+          duong: row["Tuyến Đường"] || null,
+          id_huong: row["Hướng"] || null,
+          do_cach_tram: row["Cách Trạm"] || null,
+          id_tram: row["Thuộc Trạm"] ? parseInt(row["Thuộc Trạm"]) : null,
+          ngay_ps: row["Ngày PS"] || null,
+          ghi_chu: row["Ghi Chú"] || null,
+          ghichu_an: row["Ghi Chú Mật"] || null
+        };
+
+        let currentIdDiem = row["ID Điểm"];
+
+        // 2.1: Ghi vào bảng diem_ha_tang (Insert nếu trống ID, Update nếu có ID)
+        let idDiemSauKhiGhi = null;
+        if (currentIdDiem && !isNaN(currentIdDiem)) {
+          // UPDATE
+          payloadDiem.id_diem = Number(currentIdDiem);
+          const { error: errUp } = await supabaseClient.from('diem_ha_tang').update(payloadDiem).eq('id_diem', payloadDiem.id_diem);
+          if (errUp) throw new Error(`Lỗi cập nhật ID ${payloadDiem.id_diem}: ${errUp.message}`);
+          idDiemSauKhiGhi = payloadDiem.id_diem;
+        } else {
+          // INSERT
+          const { data: newPt, error: errIns } = await supabaseClient.from('diem_ha_tang').insert([payloadDiem]).select();
+          if (errIns) throw new Error(`Lỗi thêm mới: ${errIns.message}`);
+          idDiemSauKhiGhi = newPt[0].id_diem;
+        }
+
+        // 2.2: Ghi vào bảng doan_cap_diem (Giao điểm dùng chung / chống trùng)
+        let thuTu = row["STT"] ? parseInt(row["STT"]) : (i + 1);
+        const { error: errLink } = await supabaseClient.from('doan_cap_diem').upsert(
+          { id_doan_cap: Number(idDoan), id_diem: idDiemSauKhiGhi, thu_tu: thuTu },
+          { onConflict: 'id_doan_cap, id_diem' }
+        );
+        if (errLink) throw new Error(`Lỗi liên kết Đoạn Cáp dòng ${i+2}: ${errLink.message}`);
+
+        // Cập nhật thanh tiến trình
+        successCount++;
+        progressBar.style.width = Math.round((successCount / rows.length) * 100) + '%';
+      }
+
+      statusText.innerText = `✅ Hoàn tất! Đã đồng bộ ${successCount} điểm hạ tầng.`;
+      showToast(`✅ Import thành công ${successCount} bản ghi!`, "success");
+      
+      // Ghi lịch sử & Làm mới bản đồ
+      if (typeof ghiNhatKyThaoTac === 'function') ghiNhatKyThaoTac("IMPORT_EXCEL", `Admin Import ${successCount} điểm vào Đoạn ID: ${idDoan}`);
+      if (typeof taiDuLieuSupabase === 'function') setTimeout(() => taiDuLieuSupabase(true), 1500);
+
+    } catch (error) {
+      console.error(error);
+      statusText.innerHTML = `<span style="color: red;">❌ Tiến trình dừng do lỗi: ${error.message}</span>`;
+      showToast("❌ Quá trình Import bị gián đoạn!", "error");
+    }
+  };
+  
+  reader.readAsArrayBuffer(file);
 }

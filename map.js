@@ -492,8 +492,17 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
     let latInput = document.getElementById('diemLatInput');
     let lngInput = document.getElementById('diemLngInput');
     let loaiSelect = document.getElementById('diemLoaiSelect');
+    let huongSelect = document.getElementById('diemHuongSelect'); // Lấy DOM hướng
+    let ngayPsInput = document.getElementById('diemNgayPs');      // Lấy DOM ngày
     let doanContainer = document.getElementById('diemDoanCheckboxList');
     let tuyenSelect = document.getElementById('diemTuyenSelect');
+    
+    // Nạp danh sách Hướng vào Combobox
+    let dsHuong = window.rawHuongList || [];
+    huongSelect.innerHTML = '<option value="">-- Không xác định --</option>';
+    dsHuong.forEach(h => {
+        huongSelect.innerHTML += `<option value="${h.id_huong || h.id}">${h.ten_huong || h.ten || h.name}</option>`;
+    });
 
     // BƯỚC A: LẤY DANH SÁCH LOẠI ĐIỂM TỪ RAM HOẶC TRUY VẤN DB NẾU TRỐNG
     let dsLoai = window.rawLoaiDiemList || [];
@@ -578,6 +587,8 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
       lyTrinhInput.value = ''; 
       duTruInput.value = 0; 
       ghiChuInput.value = '';
+      huongSelect.value = '';  // Thêm
+      ngayPsInput.value = '';  // Thêm
       
       let currentDoan = AppStore.getState().selectedDoanCap;
       let cb = doanContainer.querySelector(`input[value="${currentDoan}"]`);
@@ -593,6 +604,19 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
         duTruInput.value = ptObj.duTru || 0; 
         loaiSelect.value = ptObj.idLoaiDiem || 1;
         ghiChuInput.value = (ptObj.ghiChu && ptObj.ghiChu !== 'undefined' && ptObj.ghiChu !== 'null') ? ptObj.ghiChu : '';
+        let huongSelect = document.getElementById('diemHuongSelect');
+        if (huongSelect) {
+            huongSelect.value = (ptObj.idHuong !== null && ptObj.idHuong !== '') ? ptObj.idHuong : '';
+        }
+        let ngayPsInput = document.getElementById('diemNgayPs');
+        if (ngayPsInput) {
+            let dateVal = '';
+            // Cắt chuỗi để lấy đúng định dạng YYYY-MM-DD
+            if (ptObj.ngayPs && ptObj.ngayPs !== 'null' && ptObj.ngayPs !== '') {
+                dateVal = String(ptObj.ngayPs).split('T')[0]; 
+            }
+            ngayPsInput.value = dateVal;
+        }
       }
 
       try {
@@ -622,13 +646,6 @@ window.copyToClipboardTNN = function(text) {
 /**
  * HÀM XỬ LÝ LƯU ĐIỂM HẠ TẦNG MỚI (BAO GỒM TÍNH TOÁN THỨ TỰ TỰ ĐỘNG)
  */
-// ==========================================================================
-// ==========================================================================
-// HÀM THỰC THI LƯU DỮ LIỆU ĐIỂM HẠ TẦNG (Đã sửa lỗi hiệu ứng flyTo mượt mà)
-// ==========================================================================
-// ==========================================================================
-// HÀM THỰC THI LƯU DỮ LIỆU ĐIỂM HẠ TẦNG (Đã fix triệt để lỗi mất focus bản đồ)
-// ==========================================================================
 window.saveDiemHatangFullAction = async function() {
   let action = document.getElementById('diemActionType').value;
   let idDiemEdit = document.getElementById('diemEditId').value;
@@ -640,6 +657,13 @@ window.saveDiemHatangFullAction = async function() {
   let ghiChu = document.getElementById('diemGhiChuInput').value.trim();
   let lat = parseFloat(document.getElementById('diemLatInput').value);
   let lng = parseFloat(document.getElementById('diemLngInput').value);
+
+  // FIX: Lấy thêm giá trị Hướng và Ngày phát sinh từ giao diện
+  let idHuongSelect = document.getElementById('diemHuongSelect');
+  let idHuong = (idHuongSelect && idHuongSelect.value !== '') ? Number(idHuongSelect.value) : null;
+  
+  let ngayPsInput = document.getElementById('diemNgayPs');
+  let ngayPs = (ngayPsInput && ngayPsInput.value.trim() !== '') ? ngayPsInput.value : null;
 
   let checkedDoanIds = Array.from(document.querySelectorAll('#diemDoanCheckboxList .doan-checkbox:checked')).map(cb => cb.value);
 
@@ -653,11 +677,24 @@ window.saveDiemHatangFullAction = async function() {
 
   try {
     let idDiemTarget = null;
+    
+    // Gói dữ liệu hoàn chỉnh để chèn hoặc sửa
+    let payload = { 
+        ten_diem: ten, 
+        id_loaidiem: Number(idLoai), 
+        lat: lat, 
+        long: lng, 
+        ly_trinh: lyTrinh, 
+        du_tru: duTru, 
+        ghi_chu: ghiChu,
+        id_huong: idHuong,
+        ngay_ps: ngayPs
+    };
 
     if (action === 'ADD') {
       const { data: newDiem, error: errDiem } = await supabaseClient
         .from('diem_ha_tang')
-        .insert([{ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu }])
+        .insert([{ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu, id_huong: idHuong, ngay_ps: ngayPs }])
         .select();
       if (errDiem) throw errDiem;
       idDiemTarget = newDiem[0].id_diem;
@@ -665,7 +702,7 @@ window.saveDiemHatangFullAction = async function() {
       idDiemTarget = Number(idDiemEdit);
       const { error: errUpdate } = await supabaseClient
         .from('diem_ha_tang')
-        .update({ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu })
+        .update({ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu, id_huong: idHuong, ngay_ps: ngayPs })
         .eq('id_diem', idDiemTarget);
       if (errUpdate) throw errUpdate;
 
@@ -729,30 +766,20 @@ window.saveDiemHatangFullAction = async function() {
       if (errUpsert) throw errUpsert;
     }
 
-    await ghiNhatKyThaoTac(action === 'ADD' ? "THEM_DIEM" : "SUA_DIEM", `Kỹ sư ${action === 'ADD' ? 'thêm mới' : 'cập nhật'} điểm [${ten}] trên ${checkedDoanIds.length} đoạn cáp`);
+    if (typeof ghiNhatKyThaoTac === 'function') ghiNhatKyThaoTac(action === 'ADD' ? "THEM_DIEM" : "SUA_DIEM", `Kỹ sư ${action === 'ADD' ? 'thêm mới' : 'cập nhật'} điểm [${ten}] trên ${checkedDoanIds.length} đoạn cáp`);
     showToast(`✅ Đã ${action === 'ADD' ? 'thêm' : 'cập nhật'} thành công!`, "success");
     document.getElementById('diemHaTangModal').style.display = 'none';
     
-    // BẮT ĐẦU VÙNG XỬ LÝ FIX LỖI BẢN ĐỒ
-    // 1. Gọi API tải lại dữ liệu (Cố gắng đợi nếu hàm có hỗ trợ async)
     if (typeof taiDuLieuSupabase === 'function') {
        try { await taiDuLieuSupabase(false); } catch(e) { taiDuLieuSupabase(false); }
     }
 
-    // 2. Đặt bộ đếm thời gian 1.2 giây để đảm bảo API đã lấy xong và vẽ lại xong
     if (typeof map !== 'undefined') {
        setTimeout(() => {
-           // Lệnh cực kỳ quan trọng: Dừng ngay lập tức mọi hiệu ứng auto-zoom của hàm vẽ lại
            map.stop(); 
-           
-           // Thực hiện bay về điểm vừa thao tác
-           map.flyTo([lat, lng], 19, { 
-               animate: true, 
-               duration: 1.5 
-           });
-       }, 1200); // 1200ms (1.2s) là khoảng thời gian rất an toàn
+           map.flyTo([lat, lng], 19, { animate: true, duration: 1.5 });
+       }, 1200); 
     }
-    // KẾT THÚC VÙNG FIX LỖI
 
   } catch (err) {
     showToast("❌ Lỗi xử lý: " + err.message, "error");
@@ -762,13 +789,12 @@ window.saveDiemHatangFullAction = async function() {
   }
 };
 // ==========================================================================
-// HÀM XEM & SỬA THÔNG TIN MẬT (Đã fix lỗi thứ tự tham số hiển thị giao diện)
+// HÀM XEM & SỬA THÔNG TIN MẬT (Đã fix chuẩn Promise để lưu dữ liệu)
 // ==========================================================================
 window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
   if (typeof showLoading === 'function') showLoading("Đang tải thông tin mật...");
 
   try {
-    // 1. Gọi Supabase lấy nội dung mật hiện tại
     const { data, error } = await supabaseClient
       .from('diem_ha_tang')
       .select('ghichu_an')
@@ -778,63 +804,42 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
     if (error) throw error;
     if (typeof hideLoading === 'function') hideLoading();
 
-    // 2. Bộ lọc làm sạch dữ liệu
     let noiDungHienTai = data.ghichu_an;
-    
-    if (!noiDungHienTai || 
-        String(noiDungHienTai).trim() === '' || 
-        String(noiDungHienTai).trim() === 'null' ||
-        String(noiDungHienTai).includes('<i>Chưa có thông tin')) {
-        
+    if (!noiDungHienTai || String(noiDungHienTai).trim() === '' || String(noiDungHienTai).trim() === 'null') {
         noiDungHienTai = ""; 
     } else {
         noiDungHienTai = String(noiDungHienTai).replace(/<br\s*[\/]?>/gi, '\n');
     }
 
-    // 3. Mở Form cho phép chỉnh sửa
     if (typeof showTextareaDialog === 'function') {
-      
-      // SỬA LỖI TẠI ĐÂY: Thêm Tiêu đề vào tham số đầu tiên, lùi noiDungHienTai về tham số thứ 2
       let tieuDeHopThoai = `📝 Ghi chú mật - [${tenDiem}]`;
       
-      showTextareaDialog(tieuDeHopThoai, noiDungHienTai, async function(noiDungMoi) {
-        
+      // FIX: Gọi hàm bằng await và hứng kết quả trả về
+      let noiDungMoi = await showTextareaDialog(tieuDeHopThoai, noiDungHienTai);
+      
+      // Nếu người dùng bấm "Lưu ghi chú" (không bấm Hủy)
+      if (noiDungMoi !== null) {
         if (typeof showLoading === 'function') showLoading("Đang lưu thông tin mật...");
-
         try {
-          // Lệnh UPDATE ghi đè nội dung mới lên Supabase
           const { error: errUpdate } = await supabaseClient
             .from('diem_ha_tang')
             .update({ ghichu_an: noiDungMoi })
             .eq('id_diem', idDiem);
             
           if (errUpdate) throw errUpdate;
-          
-          if (typeof showToast === 'function') {
-              showToast("✅ Đã lưu thông tin mật thành công!", "success");
-          }
-          if (typeof ghiNhatKyThaoTac === 'function') {
-              ghiNhatKyThaoTac("SUA_MAT", `Kỹ sư cập nhật Ghi chú mật điểm [${tenDiem}]`);
-          }
+          if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin mật thành công!", "success");
+          if (typeof ghiNhatKyThaoTac === 'function') ghiNhatKyThaoTac("SUA_MAT", `Kỹ sư cập nhật Ghi chú mật điểm [${tenDiem}]`);
         } catch (err) {
           console.error("Lỗi cập nhật Ghi chú mật:", err);
-          if (typeof showToast === 'function') {
-              showToast("❌ Lỗi khi lưu: " + err.message, "error");
-          }
+          if (typeof showToast === 'function') showToast("❌ Lỗi khi lưu: " + err.message, "error");
         } finally {
           if (typeof hideLoading === 'function') hideLoading();
         }
-      });
-      
-    } else {
-      alert("Hệ thống chưa tìm thấy giao diện Textarea để sửa!");
+      }
     }
-
   } catch (err) {
     console.error("Lỗi lấy thông tin mật:", err);
-    if (typeof showToast === 'function') {
-      showToast("❌ Không thể tải thông tin mật. Lỗi mạng hoặc phiên đăng nhập!", "error");
-    }
+    if (typeof showToast === 'function') showToast("❌ Không thể tải thông tin mật!", "error");
     if (typeof hideLoading === 'function') hideLoading();
   }
 };
