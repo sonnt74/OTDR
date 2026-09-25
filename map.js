@@ -882,3 +882,30 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
     if (typeof hideLoading === 'function') hideLoading();
   }
 };
+// =========================================================
+// HỖ TRỢ ĐỌC CHECKLIST AN TOÀN CHO BẢN ĐỒ
+// =========================================================
+function toggleAllCheckboxes(containerId, isChecked) {
+  var container = document.getElementById(containerId);
+  if(!container) return;
+  var checkboxes = container.querySelectorAll('input[type="checkbox"]');
+  checkboxes.forEach(cb => cb.checked = isChecked);
+}
+
+function checkSelectAll(containerId, chkAllId) {
+  var container = document.getElementById(containerId);
+  var chkAll = document.getElementById(chkAllId);
+  if(!container || !chkAll) return;
+  var allCbs = container.querySelectorAll('input[type="checkbox"]:not(#'+chkAllId+')');
+  var allChecked = Array.from(allCbs).every(cb => cb.checked);
+  chkAll.checked = allChecked;
+}
+
+function getCheckedValues(containerId) {
+  var container = document.getElementById(containerId);
+  if(!container) return [];
+  var checkboxes = container.querySelectorAll('input[type="checkbox"]:not([id^="chkAll"])');
+  var vals = [];
+  checkboxes.forEach(cb => { if(cb.checked) vals.push(cb.value); });
+  return vals;
+}
