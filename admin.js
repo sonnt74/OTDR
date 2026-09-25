@@ -13,6 +13,13 @@ function openModal(modalId, tabId) {
   if (modalId === 'adminMasterModal') {
     renderAllAdminTables();
 
+    // BỔ SUNG: Kiểm tra quyền để bật/tắt nút Tab Excel cho Admin Sys
+    var access = getRoleAccess();
+    var excelTabBtn = document.getElementById('tab-btn-excel');
+    if (excelTabBtn) {
+       excelTabBtn.style.display = access.isSys ? 'inline-block' : 'none';
+    }
+
     if (tabId) {
       var btn = document.querySelector(`.admin-tabs .tab-btn[onclick*="${tabId}"]`);
       switchAdminTab(tabId, btn);
