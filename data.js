@@ -348,46 +348,7 @@ function onDaiChange() {
 }
 
 function updateTuyenOptions() {
-  var selectTuyen = document.getElementById('selectTuyen');
-  var selectTram = document.getElementById('selectTram');
-  if (!selectTuyen) return;
-
-  var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
-  var state = AppStore.getState();
-  
-  var doanCapList = state.doanCapList || rawDoanCapList || [];
-  var tuyenList = state.tuyenList || rawTuyenList || [];
-
-  var filteredTuyenList = [];
-
-  if (tramVal === 'ALL') {
-    filteredTuyenList = tuyenList;
-  } else {
-    var matchedTuyenIds = doanCapList
-      .filter(d => {
-        var dTramId = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']);
-        return dTramId === tramVal;
-      })
-      .map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']));
-    
-    filteredTuyenList = tuyenList.filter(t => {
-      var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
-      return matchedTuyenIds.includes(tId);
-    });
-  }
-
-  selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
-  filteredTuyenList.forEach(t => {
-    var tuyenId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
-    var tuyenMa = t.ma_tuyencap || t.ten_tuyen || t.ten || ("Tuyến " + tuyenId);
-    selectTuyen.innerHTML += `<option value="${tuyenId}">${tuyenMa}</option>`;
-  });
-
-  if (selectTuyen.options.length > 1) {
-    selectTuyen.selectedIndex = 1;
-  }
-
-  onTuyenChange();
+  onTramChange();
 }
 
 function onDoanCapChange() { 
@@ -537,20 +498,39 @@ function getCheckedValues(containerId) {
 // 2. NẠP DỮ LIỆU CASCADING VÀO CHECKLIST
 // =========================================================
 function onTramChange() {
-  var tramVal = document.getElementById('selectTram').value;
+  var selectTram = document.getElementById('selectTram');
+  var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
+  
+  AppStore.setState({ selectedTram: tramVal, selectedDai: document.getElementById('selectDai') ? document.getElementById('selectDai').value : 'ALL' });
+
   var tuyenList = (typeof AppStore !== 'undefined' && AppStore.getState().tuyenList) ? AppStore.getState().tuyenList : (window.rawTuyenList || []);
-  
-  // Lọc tuyến theo Trạm (Giữ nguyên logic RBAC nếu có)
-  var filteredTuyen = (tramVal === 'ALL') ? tuyenList : tuyenList.filter(t => String(t.id_tram || t.tram_id) === String(tramVal));
-  
+  var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
+
+  // Lọc tuyến theo Trạm thông qua các đoạn cáp thuộc trạm đó hoặc thuộc tính trạm của tuyến
+  var filteredTuyen = [];
+  if (tramVal === 'ALL') {
+    filteredTuyen = tuyenList;
+  } else {
+    var matchedTuyenIds = doanCapList
+      .filter(d => getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']) === tramVal)
+      .map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']));
+    
+    filteredTuyen = tuyenList.filter(t => {
+      var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
+      return matchedTuyenIds.includes(tId) || getSafeStrId(t, ['id_tram', 'tram_id']) === tramVal;
+    });
+  }
+
   var khayTuyen = document.getElementById('khayChonTuyen');
   if (khayTuyen) {
     if (filteredTuyen.length === 0) {
-      khayTuyen.innerHTML = '<div style="color: #94a3b8;">Không có tuyến cáp nào</div>';
+      khayTuyen.innerHTML = '<div style="color: #94a3b8; font-style: italic;">Không có tuyến cáp nào</div>';
     } else {
       let html = `<label class="checklist-item" style="font-weight:bold; color:#0d6efd;"><input type="checkbox" id="chkAllTuyen" onchange="toggleAllCheckboxes('khayChonTuyen', this.checked); onTuyenChange();"> ☑️ Chọn tất cả Tuyến</label>`;
       filteredTuyen.forEach(t => {
-         html += `<label class="checklist-item"><input type="checkbox" value="${t.id_tuyen}" onchange="checkSelectAll('khayChonTuyen', 'chkAllTuyen'); onTuyenChange();"> ${t.ten_tuyen}</label>`;
+         var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
+         var tName = t.ten_tuyen || t.ten_tuyencap || t.ten || ("Tuyến " + tId);
+         html += `<label class="checklist-item"><input type="checkbox" value="${tId}" onchange="checkSelectAll('khayChonTuyen', 'chkAllTuyen'); onTuyenChange();"> ${tName}</label>`;
       });
       khayTuyen.innerHTML = html;
     }
