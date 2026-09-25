@@ -777,13 +777,12 @@ window.saveDiemHatangFullAction = async function() {
   }
 };
 // ==========================================================================
-// HÀM XEM & SỬA THÔNG TIN MẬT (Đã fix lỗi thứ tự tham số hiển thị giao diện)
+// HÀM XEM & SỬA THÔNG TIN MẬT (Đã fix chuẩn Promise để lưu dữ liệu)
 // ==========================================================================
 window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
   if (typeof showLoading === 'function') showLoading("Đang tải thông tin mật...");
 
   try {
-    // 1. Gọi Supabase lấy nội dung mật hiện tại
     const { data, error } = await supabaseClient
       .from('diem_ha_tang')
       .select('ghichu_an')
@@ -793,63 +792,42 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
     if (error) throw error;
     if (typeof hideLoading === 'function') hideLoading();
 
-    // 2. Bộ lọc làm sạch dữ liệu
     let noiDungHienTai = data.ghichu_an;
-    
-    if (!noiDungHienTai || 
-        String(noiDungHienTai).trim() === '' || 
-        String(noiDungHienTai).trim() === 'null' ||
-        String(noiDungHienTai).includes('<i>Chưa có thông tin')) {
-        
+    if (!noiDungHienTai || String(noiDungHienTai).trim() === '' || String(noiDungHienTai).trim() === 'null') {
         noiDungHienTai = ""; 
     } else {
         noiDungHienTai = String(noiDungHienTai).replace(/<br\s*[\/]?>/gi, '\n');
     }
 
-    // 3. Mở Form cho phép chỉnh sửa
     if (typeof showTextareaDialog === 'function') {
-      
-      // SỬA LỖI TẠI ĐÂY: Thêm Tiêu đề vào tham số đầu tiên, lùi noiDungHienTai về tham số thứ 2
       let tieuDeHopThoai = `📝 Ghi chú mật - [${tenDiem}]`;
       
-      showTextareaDialog(tieuDeHopThoai, noiDungHienTai, async function(noiDungMoi) {
-        
+      // FIX: Gọi hàm bằng await và hứng kết quả trả về
+      let noiDungMoi = await showTextareaDialog(tieuDeHopThoai, noiDungHienTai);
+      
+      // Nếu người dùng bấm "Lưu ghi chú" (không bấm Hủy)
+      if (noiDungMoi !== null) {
         if (typeof showLoading === 'function') showLoading("Đang lưu thông tin mật...");
-
         try {
-          // Lệnh UPDATE ghi đè nội dung mới lên Supabase
           const { error: errUpdate } = await supabaseClient
             .from('diem_ha_tang')
             .update({ ghichu_an: noiDungMoi })
             .eq('id_diem', idDiem);
             
           if (errUpdate) throw errUpdate;
-          
-          if (typeof showToast === 'function') {
-              showToast("✅ Đã lưu thông tin mật thành công!", "success");
-          }
-          if (typeof ghiNhatKyThaoTac === 'function') {
-              ghiNhatKyThaoTac("SUA_MAT", `Kỹ sư cập nhật Ghi chú mật điểm [${tenDiem}]`);
-          }
+          if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin mật thành công!", "success");
+          if (typeof ghiNhatKyThaoTac === 'function') ghiNhatKyThaoTac("SUA_MAT", `Kỹ sư cập nhật Ghi chú mật điểm [${tenDiem}]`);
         } catch (err) {
           console.error("Lỗi cập nhật Ghi chú mật:", err);
-          if (typeof showToast === 'function') {
-              showToast("❌ Lỗi khi lưu: " + err.message, "error");
-          }
+          if (typeof showToast === 'function') showToast("❌ Lỗi khi lưu: " + err.message, "error");
         } finally {
           if (typeof hideLoading === 'function') hideLoading();
         }
-      });
-      
-    } else {
-      alert("Hệ thống chưa tìm thấy giao diện Textarea để sửa!");
+      }
     }
-
   } catch (err) {
     console.error("Lỗi lấy thông tin mật:", err);
-    if (typeof showToast === 'function') {
-      showToast("❌ Không thể tải thông tin mật. Lỗi mạng hoặc phiên đăng nhập!", "error");
-    }
+    if (typeof showToast === 'function') showToast("❌ Không thể tải thông tin mật!", "error");
     if (typeof hideLoading === 'function') hideLoading();
   }
 };
