@@ -304,28 +304,34 @@ function veLaiTuyenAB() {
   if (typeof mxLayer !== 'undefined' && mxLayer) mxLayer.clearLayers();
   markersLayer.clearLayers(); polylinesLayer.clearLayers();
 
-  var selectTuyen = document.getElementById('selectTuyen');
-  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
-  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
-  var doanVal = document.getElementById('selectDoanCap') ? document.getElementById('selectDoanCap').value : 'ALL';
-
-  // 1. TẠO BẢNG MÀU CHO CÁC ĐƯỜNG CÁP
-  var colorPalette = ['#0d6efd', '#dc3545', '#198754', '#f59e0b', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
-
-  // 2. XÁC ĐỊNH DANH SÁCH ĐOẠN CÁP CẦN VẼ
+  // [ĐIỂM NÂNG CẤP 1]: Tích hợp đọc danh sách Checklist
   var danhSachDoanCanVe = [];
-  if (doanVal === 'ALL') {
-    var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
-    danhSachDoanCanVe = doanCapList.filter(d => {
-      var isTuyenMatch = (tuyenVal === 'ALL') ? true : (String(d.id_tuyen || d.tuyen_id || d.id_tuyen_cap) === String(tuyenVal));
-      var isTramMatch = (tramVal === 'ALL') ? true : (String(d.id_tram || d.tram_id) === String(tramVal));
-      return isTuyenMatch && isTramMatch;
-    }).map(d => d.id_doan_cap || d.id);
+  if (typeof getCheckedValues === 'function' && document.getElementById('khayChonDoanCap')) {
+    // Đọc ID đoạn cáp từ các ô Checkbox đang được đánh dấu tích
+    danhSachDoanCanVe = getCheckedValues('khayChonDoanCap');
   } else {
-    danhSachDoanCanVe = [doanVal];
+    // Fallback: Giữ nguyên 100% logic đọc thẻ <select> cũ của bạn để an toàn
+    var selectTuyen = document.getElementById('selectTuyen');
+    var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
+    var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
+    var doanVal = document.getElementById('selectDoanCap') ? document.getElementById('selectDoanCap').value : 'ALL';
+
+    if (doanVal === 'ALL') {
+      var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
+      danhSachDoanCanVe = doanCapList.filter(d => {
+        var isTuyenMatch = (tuyenVal === 'ALL') ? true : (String(d.id_tuyen || d.tuyen_id || d.id_tuyen_cap) === String(tuyenVal));
+        var isTramMatch = (tramVal === 'ALL') ? true : (String(d.id_tram || d.tram_id) === String(tramVal));
+        return isTuyenMatch && isTramMatch;
+      }).map(d => d.id_doan_cap || d.id);
+    } else {
+      danhSachDoanCanVe = [doanVal];
+    }
   }
 
   if (danhSachDoanCanVe.length === 0) return;
+
+  // 1. TẠO BẢNG MÀU CHO CÁC ĐƯỜNG CÁP
+  var colorPalette = ['#0d6efd', '#dc3545', '#198754', '#f59e0b', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
 
   var bounds = [];
   var drawnMarkerIds = new Set(); // Bẫy khử trùng lặp Marker
@@ -334,7 +340,7 @@ function veLaiTuyenAB() {
   var currentUser = (typeof AppStore !== 'undefined' && AppStore.getState().currentUser) ? AppStore.getState().currentUser : (window.currentUser || {});
   var isDraggable = (currentUser.canEditMap || (currentUser.role || '').toLowerCase().includes('admin') || (currentUser.role || '').toLowerCase().includes('sys'));
 
-  // HÀM TẠO NÚT BẤM POPUP (Giữ nguyên 100% logic phân quyền)
+  // HÀM TẠO NÚT BẤM POPUP (Giữ nguyên 100% logic phân quyền của bạn)
   function taoNutHanhDong(ptObj) {
     let id = ptObj.id || ptObj.id_diem;
     let ten = ptObj.ten || ptObj.ten_diem || 'Điểm hạ tầng';
@@ -370,7 +376,7 @@ function veLaiTuyenAB() {
       </div>`;
   }
 
-  // HÀM LƯU TỌA ĐỘ KHI KÉO THẢ (Giữ nguyên 100%)
+  // HÀM LƯU TỌA ĐỘ KHI KÉO THẢ (Giữ nguyên 100% của bạn)
   async function handleDragEnd(e, ptObj) {
     var newPos = e.target.getLatLng();
     var isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu tọa độ mới cho điểm [${ptObj.ten}] không?`);
@@ -400,7 +406,8 @@ function veLaiTuyenAB() {
   danhSachDoanCanVe.forEach((idDoanHienTai, idx) => {
     var currentColor = colorPalette[idx % colorPalette.length];
 
-    var backbone = getMasterRouteBackbone(tuyenVal, tramVal, idDoanHienTai);
+    // [ĐIỂM NÂNG CẤP 2]: Truyền ALL cho Tuyến/Trạm vì idDoanHienTai đã là định danh tuyệt đối
+    var backbone = getMasterRouteBackbone('ALL', 'ALL', idDoanHienTai);
     if (!backbone || backbone.length === 0) return;
     
     precalculateRouteDataForPoints(backbone, backbone);
@@ -411,11 +418,11 @@ function veLaiTuyenAB() {
     
     var pts = precalculateRouteDataForPoints(nonMxPts, backbone);
     
-    // VẼ BỂ, CỘT, MỐC
+    // VẼ BỂ, CỘT, MỐC (Giữ nguyên của bạn)
     pts.forEach((pt, index) => {
       bounds.push([pt.lat, pt.lng]);
       
-      if (drawnMarkerIds.has(pt.id)) return; // Bỏ qua nếu đã vẽ
+      if (drawnMarkerIds.has(pt.id)) return;
       drawnMarkerIds.add(pt.id);
 
       var markerClass = 'marker-loai-1'; 
@@ -441,12 +448,12 @@ function veLaiTuyenAB() {
       markersLayer.addLayer(marker);
     });
 
-    // VẼ MĂNG XÔNG
+    // VẼ MĂNG XÔNG (Giữ nguyên của bạn)
     var mxList = backbone.filter(p => isMangXong(p));
     mxList.forEach(mx => {
       bounds.push([mx.lat, mx.lng]);
       
-      if (drawnMarkerIds.has(mx.id)) return; // Bỏ qua nếu đã vẽ
+      if (drawnMarkerIds.has(mx.id)) return;
       drawnMarkerIds.add(mx.id);
 
       var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="marker-loai-4"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
@@ -465,14 +472,14 @@ function veLaiTuyenAB() {
       mxLayer.addLayer(mxMarker);
     });
 
-    // VẼ POLYLINE MÀU SẮC RIÊNG
+    // VẼ POLYLINE MÀU SẮC RIÊNG (Giữ nguyên của bạn)
     var lineCoordinates = backbone.map(p => [p.lat, p.lng]);
     if (lineCoordinates.length > 1) {
         polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: currentColor, weight: 4, opacity: 0.85 }));
     }
   });
 
-  if (bounds.length > 0 && tuyenVal !== 'ALL') map.fitBounds(bounds, { padding: [40, 40] });
+  if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] }); // Tự động zoom theo bounds
 }
 window.veLaiTuyenAB = veLaiTuyenAB;
 
