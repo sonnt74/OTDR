@@ -114,8 +114,17 @@
       
       <div class="form-group"><label>    Chọn Đài VT:</label><select id="selectDai" onchange="onDaiChange()"></select></div>
       <div class="form-group"><label>    Chọn Trạm VT:</label><select id="selectTram" onchange="onTramChange()"></select></div>
-      <div class="form-group"><label>    Chọn Tuyến Cáp:</label><select id="selectTuyen" onchange="onTuyenChange()"></select></div>
-      <div class="form-group"><label>    Chọn Đoạn Cáp:</label><select id="selectDoanCap" onchange="onDoanCapChange()"></select></div>
+      <!-- BỘ LỌC TUYẾN CÁP DẠNG CHECKLIST -->
+      <label style="font-weight: bold; margin-top: 10px;">Tuyến Cáp:</label>
+      <div id="khayChonTuyen" class="checklist-box">
+        <div style="color: #94a3b8; font-style: italic;">Vui lòng chọn Trạm...</div>
+      </div>
+      
+      <!-- BỘ LỌC ĐOẠN CÁP DẠNG CHECKLIST -->
+      <label style="font-weight: bold;">Đoạn Cáp:</label>
+      <div id="khayChonDoanCap" class="checklist-box">
+        <div style="color: #94a3b8; font-style: italic;">Vui lòng chọn Tuyến...</div>
+      </div>
            
       <div class="form-group"><label>    Nguồn điểm đo:</label><select id="comboDiemA" onchange="onDiemAChange()"></select></div>
       
