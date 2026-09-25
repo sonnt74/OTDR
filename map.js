@@ -492,8 +492,17 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
     let latInput = document.getElementById('diemLatInput');
     let lngInput = document.getElementById('diemLngInput');
     let loaiSelect = document.getElementById('diemLoaiSelect');
+    let huongSelect = document.getElementById('diemHuongSelect'); // Lấy DOM hướng
+    let ngayPsInput = document.getElementById('diemNgayPs');      // Lấy DOM ngày
     let doanContainer = document.getElementById('diemDoanCheckboxList');
     let tuyenSelect = document.getElementById('diemTuyenSelect');
+    
+    // Nạp danh sách Hướng vào Combobox
+    let dsHuong = window.rawHuongList || [];
+    huongSelect.innerHTML = '<option value="">-- Không xác định --</option>';
+    dsHuong.forEach(h => {
+        huongSelect.innerHTML += `<option value="${h.id_huong || h.id}">${h.ten_huong || h.ten || h.name}</option>`;
+    });
 
     // BƯỚC A: LẤY DANH SÁCH LOẠI ĐIỂM TỪ RAM HOẶC TRUY VẤN DB NẾU TRỐNG
     let dsLoai = window.rawLoaiDiemList || [];
@@ -578,6 +587,8 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
       lyTrinhInput.value = ''; 
       duTruInput.value = 0; 
       ghiChuInput.value = '';
+      huongSelect.value = '';  // Thêm
+      ngayPsInput.value = '';  // Thêm
       
       let currentDoan = AppStore.getState().selectedDoanCap;
       let cb = doanContainer.querySelector(`input[value="${currentDoan}"]`);
@@ -592,6 +603,8 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
         lyTrinhInput.value = ptObj.lyTrinh || '';
         duTruInput.value = ptObj.duTru || 0; 
         loaiSelect.value = ptObj.idLoaiDiem || 1;
+        huongSelect.value = ptObj.idHuong || ''; // Đổ dữ liệu Hướng
+        ngayPsInput.value = ptObj.ngayPs || '';  // Đổ dữ liệu Ngày PS
         ghiChuInput.value = (ptObj.ghiChu && ptObj.ghiChu !== 'undefined' && ptObj.ghiChu !== 'null') ? ptObj.ghiChu : '';
       }
 
@@ -635,6 +648,8 @@ window.saveDiemHatangFullAction = async function() {
   
   let ten = document.getElementById('diemTen').value.trim();
   let idLoai = document.getElementById('diemLoaiSelect').value;
+  let idHuong = document.getElementById('diemHuongSelect').value || null; // Lấy Hướng
+  let ngayPs = document.getElementById('diemNgayPs').value || null;       // Lấy Ngày PS
   let lyTrinh = document.getElementById('diemLyTrinh').value.trim();
   let duTru = parseFloat(document.getElementById('diemDuTru').value) || 0;
   let ghiChu = document.getElementById('diemGhiChuInput').value.trim();
@@ -657,7 +672,7 @@ window.saveDiemHatangFullAction = async function() {
     if (action === 'ADD') {
       const { data: newDiem, error: errDiem } = await supabaseClient
         .from('diem_ha_tang')
-        .insert([{ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu }])
+        .insert([{ ten_diem: ten, id_loaidiem: Number(idLoai), id_huong: idHuong ? Number(idHuong) : null, ngay_ps: ngayPs, lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu }])
         .select();
       if (errDiem) throw errDiem;
       idDiemTarget = newDiem[0].id_diem;
@@ -665,7 +680,7 @@ window.saveDiemHatangFullAction = async function() {
       idDiemTarget = Number(idDiemEdit);
       const { error: errUpdate } = await supabaseClient
         .from('diem_ha_tang')
-        .update({ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu })
+        .update({ ten_diem: ten, id_loaidiem: Number(idLoai), id_huong: idHuong ? Number(idHuong) : null, ngay_ps: ngayPs, lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu })
         .eq('id_diem', idDiemTarget);
       if (errUpdate) throw errUpdate;
 
