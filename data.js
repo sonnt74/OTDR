@@ -3,7 +3,7 @@
 // ==========================================================================
 
 var autoClearMarkerTimer = null; 
-var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], rawLoaiDiemList = [], rawUserList = [];
+var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], rawLoaiDiemList = [], rawUserList = [], rawHuongList = [];
 
 // SỬA LỖI: Thêm cờ kiểm soát luồng khởi tạo để chống load bản đồ nhiều lần
 var isSyncingMaster = false; 
@@ -69,13 +69,14 @@ async function taiDuLieuSupabase(forceRefresh = false) {
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
       if (!localMaster || forceRefresh) showLoading("Đang nạp danh mục máy chủ...");
 
-      let [daiRes, tramRes, tuyenRes, doanRes, loaiRes, userRes] = await Promise.all([
+      let [daiRes, tramRes, tuyenRes, doanRes, loaiRes, userRes, huongRes] = await Promise.all([
         supabaseClient.from('dai_vt').select('*'),
         supabaseClient.from('tram_vt').select('*'),
         supabaseClient.from('tuyen_cap').select('*'),
         supabaseClient.from('v_doan_cap_full').select('*'), 
         supabaseClient.from('loai_diem').select('*'),
-        supabaseClient.from('tai_khoan').select('*')
+        supabaseClient.from('tai_khoan').select('*'),
+        supabaseClient.from('huong').select('*') // Lấy thêm bảng hướng
       ]);
 
       rawDaiList = daiRes.data || rawDaiList;
@@ -84,9 +85,10 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       rawDoanCapList = doanRes.data || rawDoanCapList;
       rawLoaiDiemList = loaiRes.data || rawLoaiDiemList;
       rawUserList = userRes.data || rawUserList;
+      rawHuongList = huongRes.data || rawHuongList;
 
       if (typeof idbLuuMaster === 'function') {
-        await idbLuuMaster({ rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList, rawUserList });
+        await idbLuuMaster({ rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList, rawUserList, rawHuongList });
       }
 
       AppStore.setState({
@@ -160,6 +162,8 @@ async function taiDiemTheoVungXem() {
           loai: pt.loai || 'Điểm',
           lyTrinh: pt.ly_trinh || '',
           duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
+          idHuong: pt.id_huong || null, // Bổ sung Hướng
+          ngayPs: pt.ngay_ps || '',     // Bổ sung Ngày PS
           ghichu_an: pt.ghichu_an || '',
           // Lấy đúng STT từ DB, nếu không có mặc định là 1 (Không ép măng xông thành 9999 nữa)
           stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1
@@ -219,6 +223,8 @@ async function taiDiemTheoTuyen(idTuyen) {
           idLoaiDiem: pt.id_loaidiem || 1,
           loai: pt.loai || 'Điểm',
           lyTrinh: pt.ly_trinh || '',
+          idHuong: pt.id_huong || null, // Bổ sung Hướng
+          ngayPs: pt.ngay_ps || '',     // Bổ sung Ngày PS
           duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
           // Lấy đúng STT từ DB, nếu không có mặc định là 1 (Không ép măng xông thành 9999 nữa)
           stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1
