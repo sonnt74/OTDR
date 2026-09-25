@@ -464,22 +464,21 @@ html, body {
   border-radius: 6px; font-weight: bold; cursor: pointer; flex: 1; 
 }
 /* ==========================================================================
-   8. BỘ MÀU SẮC ĐA DẠNG CHO MARKER THEO LOẠI ĐIỂM
-   Hướng dẫn tự đổi màu: Bạn chỉ cần thay đổi mã màu HEX (VD: #0d6efd) ở thuộc tính background-color
+   8. GIAO DIỆN CHECKLIST & MÀU MARKER THEO LOẠI (NÂNG CẤP)
    ========================================================================== */
-.marker-loai-1 { 
-  background-color: #0d6efd; /* Màu Xanh dương (Dành cho Cột cáp) */ 
-  border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.4); width: 10px; height: 10px; 
+/* Khay chứa Checklist có thanh cuộn */
+.checklist-box { 
+  max-height: 150px; overflow-y: auto; border: 1px solid #cbd5e1; 
+  padding: 8px; border-radius: 6px; background: #f8fafc; 
+  font-size: 13px; margin-bottom: 12px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
 }
-.marker-loai-2 { 
-  background-color: #795548; /* Màu Nâu đất (Dành cho Bể cáp ngầm) */ 
-  border: 2px solid #fff; border-radius: 2px; box-shadow: 0 0 3px rgba(0,0,0,0.4); width: 12px; height: 12px; 
+.checklist-item { 
+  display: flex; align-items: center; margin-bottom: 6px; cursor: pointer; color: #334155;
 }
-.marker-loai-3 { 
-  background-color: #9c27b0; /* Màu Tím (Dành cho Mốc tuyến) */ 
-  border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.4); width: 11px; height: 11px; 
-}
-.marker-loai-4 { 
-  background-color: #198754; /* Màu Xanh lá (Dành cho Măng xông) */ 
-  border: 2px solid #fff; transform: rotate(45deg); box-shadow: 0 0 5px rgba(0,0,0,0.4); width: 12px; height: 12px; 
-}
+.checklist-item input { margin-right: 8px; cursor: pointer; transform: scale(1.1); }
+
+/* Bảng màu Marker theo chuẩn GIS */
+.marker-loai-1 { background-color: #0d6efd; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.4); width: 10px; height: 10px; } /* Cột */
+.marker-loai-2 { background-color: #795548; border: 2px solid #fff; border-radius: 2px; box-shadow: 0 0 3px rgba(0,0,0,0.4); width: 12px; height: 12px; } /* Bể */
+.marker-loai-3 { background-color: #9c27b0; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.4); width: 11px; height: 11px; } /* Mốc */
+.marker-loai-4 { background-color: #198754; border: 2px solid #fff; transform: rotate(45deg); box-shadow: 0 0 5px rgba(0,0,0,0.4); width: 12px; height: 12px; } /* Măng xông */
