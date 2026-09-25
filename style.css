@@ -468,7 +468,7 @@ html, body {
    ========================================================================== */
 /* Khay chứa Checklist có thanh cuộn */
 .checklist-box { 
-  max-height: 150px; overflow-y: auto; border: 1px solid #cbd5e1; 
+  max-height: 100px; overflow-y: auto; border: 1px solid #cbd5e1; 
   padding: 8px; border-radius: 6px; background: #f8fafc; 
   font-size: 13px; margin-bottom: 12px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
 }
