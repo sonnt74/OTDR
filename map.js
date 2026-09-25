@@ -603,9 +603,9 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
         lyTrinhInput.value = ptObj.lyTrinh || '';
         duTruInput.value = ptObj.duTru || 0; 
         loaiSelect.value = ptObj.idLoaiDiem || 1;
-        huongSelect.value = ptObj.idHuong || ''; // Đổ dữ liệu Hướng
-        ngayPsInput.value = ptObj.ngayPs || '';  // Đổ dữ liệu Ngày PS
         ghiChuInput.value = (ptObj.ghiChu && ptObj.ghiChu !== 'undefined' && ptObj.ghiChu !== 'null') ? ptObj.ghiChu : '';
+        if (document.getElementById('diemHuongSelect')) document.getElementById('diemHuongSelect').value = ptObj.idHuong;
+        if (document.getElementById('diemNgayPs')) document.getElementById('diemNgayPs').value = ptObj.ngayPs;
       }
 
       try {
@@ -635,26 +635,24 @@ window.copyToClipboardTNN = function(text) {
 /**
  * HÀM XỬ LÝ LƯU ĐIỂM HẠ TẦNG MỚI (BAO GỒM TÍNH TOÁN THỨ TỰ TỰ ĐỘNG)
  */
-// ==========================================================================
-// ==========================================================================
-// HÀM THỰC THI LƯU DỮ LIỆU ĐIỂM HẠ TẦNG (Đã sửa lỗi hiệu ứng flyTo mượt mà)
-// ==========================================================================
-// ==========================================================================
-// HÀM THỰC THI LƯU DỮ LIỆU ĐIỂM HẠ TẦNG (Đã fix triệt để lỗi mất focus bản đồ)
-// ==========================================================================
 window.saveDiemHatangFullAction = async function() {
   let action = document.getElementById('diemActionType').value;
   let idDiemEdit = document.getElementById('diemEditId').value;
   
   let ten = document.getElementById('diemTen').value.trim();
   let idLoai = document.getElementById('diemLoaiSelect').value;
-  let idHuong = document.getElementById('diemHuongSelect').value || null; // Lấy Hướng
-  let ngayPs = document.getElementById('diemNgayPs').value || null;       // Lấy Ngày PS
   let lyTrinh = document.getElementById('diemLyTrinh').value.trim();
   let duTru = parseFloat(document.getElementById('diemDuTru').value) || 0;
   let ghiChu = document.getElementById('diemGhiChuInput').value.trim();
   let lat = parseFloat(document.getElementById('diemLatInput').value);
   let lng = parseFloat(document.getElementById('diemLngInput').value);
+
+  // FIX: Lấy thêm giá trị Hướng và Ngày phát sinh từ giao diện
+  let idHuongSelect = document.getElementById('diemHuongSelect');
+  let idHuong = (idHuongSelect && idHuongSelect.value) ? Number(idHuongSelect.value) : null;
+  
+  let ngayPsInput = document.getElementById('diemNgayPs');
+  let ngayPs = (ngayPsInput && ngayPsInput.value) ? ngayPsInput.value : null;
 
   let checkedDoanIds = Array.from(document.querySelectorAll('#diemDoanCheckboxList .doan-checkbox:checked')).map(cb => cb.value);
 
@@ -668,11 +666,24 @@ window.saveDiemHatangFullAction = async function() {
 
   try {
     let idDiemTarget = null;
+    
+    // Gói dữ liệu hoàn chỉnh để chèn hoặc sửa
+    let payload = { 
+        ten_diem: ten, 
+        id_loaidiem: Number(idLoai), 
+        lat: lat, 
+        long: lng, 
+        ly_trinh: lyTrinh, 
+        du_tru: duTru, 
+        ghi_chu: ghiChu,
+        id_huong: idHuong,
+        ngay_ps: ngayPs
+    };
 
     if (action === 'ADD') {
       const { data: newDiem, error: errDiem } = await supabaseClient
         .from('diem_ha_tang')
-        .insert([{ ten_diem: ten, id_loaidiem: Number(idLoai), id_huong: idHuong ? Number(idHuong) : null, ngay_ps: ngayPs, lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu }])
+        .insert([payload])
         .select();
       if (errDiem) throw errDiem;
       idDiemTarget = newDiem[0].id_diem;
@@ -680,7 +691,7 @@ window.saveDiemHatangFullAction = async function() {
       idDiemTarget = Number(idDiemEdit);
       const { error: errUpdate } = await supabaseClient
         .from('diem_ha_tang')
-        .update({ ten_diem: ten, id_loaidiem: Number(idLoai), id_huong: idHuong ? Number(idHuong) : null, ngay_ps: ngayPs, lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu })
+        .update(payload)
         .eq('id_diem', idDiemTarget);
       if (errUpdate) throw errUpdate;
 
@@ -744,30 +755,20 @@ window.saveDiemHatangFullAction = async function() {
       if (errUpsert) throw errUpsert;
     }
 
-    await ghiNhatKyThaoTac(action === 'ADD' ? "THEM_DIEM" : "SUA_DIEM", `Kỹ sư ${action === 'ADD' ? 'thêm mới' : 'cập nhật'} điểm [${ten}] trên ${checkedDoanIds.length} đoạn cáp`);
+    if (typeof ghiNhatKyThaoTac === 'function') ghiNhatKyThaoTac(action === 'ADD' ? "THEM_DIEM" : "SUA_DIEM", `Kỹ sư ${action === 'ADD' ? 'thêm mới' : 'cập nhật'} điểm [${ten}] trên ${checkedDoanIds.length} đoạn cáp`);
     showToast(`✅ Đã ${action === 'ADD' ? 'thêm' : 'cập nhật'} thành công!`, "success");
     document.getElementById('diemHaTangModal').style.display = 'none';
     
-    // BẮT ĐẦU VÙNG XỬ LÝ FIX LỖI BẢN ĐỒ
-    // 1. Gọi API tải lại dữ liệu (Cố gắng đợi nếu hàm có hỗ trợ async)
     if (typeof taiDuLieuSupabase === 'function') {
        try { await taiDuLieuSupabase(false); } catch(e) { taiDuLieuSupabase(false); }
     }
 
-    // 2. Đặt bộ đếm thời gian 1.2 giây để đảm bảo API đã lấy xong và vẽ lại xong
     if (typeof map !== 'undefined') {
        setTimeout(() => {
-           // Lệnh cực kỳ quan trọng: Dừng ngay lập tức mọi hiệu ứng auto-zoom của hàm vẽ lại
            map.stop(); 
-           
-           // Thực hiện bay về điểm vừa thao tác
-           map.flyTo([lat, lng], 19, { 
-               animate: true, 
-               duration: 1.5 
-           });
-       }, 1200); // 1200ms (1.2s) là khoảng thời gian rất an toàn
+           map.flyTo([lat, lng], 19, { animate: true, duration: 1.5 });
+       }, 1200); 
     }
-    // KẾT THÚC VÙNG FIX LỖI
 
   } catch (err) {
     showToast("❌ Lỗi xử lý: " + err.message, "error");
