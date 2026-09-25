@@ -604,8 +604,19 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
         duTruInput.value = ptObj.duTru || 0; 
         loaiSelect.value = ptObj.idLoaiDiem || 1;
         ghiChuInput.value = (ptObj.ghiChu && ptObj.ghiChu !== 'undefined' && ptObj.ghiChu !== 'null') ? ptObj.ghiChu : '';
-        if (document.getElementById('diemHuongSelect')) document.getElementById('diemHuongSelect').value = ptObj.idHuong;
-        if (document.getElementById('diemNgayPs')) document.getElementById('diemNgayPs').value = ptObj.ngayPs;
+        let huongSelect = document.getElementById('diemHuongSelect');
+        if (huongSelect) {
+            huongSelect.value = (ptObj.idHuong !== null && ptObj.idHuong !== '') ? ptObj.idHuong : '';
+        }
+        let ngayPsInput = document.getElementById('diemNgayPs');
+        if (ngayPsInput) {
+            let dateVal = '';
+            // Cắt chuỗi để lấy đúng định dạng YYYY-MM-DD
+            if (ptObj.ngayPs && ptObj.ngayPs !== 'null' && ptObj.ngayPs !== '') {
+                dateVal = String(ptObj.ngayPs).split('T')[0]; 
+            }
+            ngayPsInput.value = dateVal;
+        }
       }
 
       try {
@@ -649,10 +660,10 @@ window.saveDiemHatangFullAction = async function() {
 
   // FIX: Lấy thêm giá trị Hướng và Ngày phát sinh từ giao diện
   let idHuongSelect = document.getElementById('diemHuongSelect');
-  let idHuong = (idHuongSelect && idHuongSelect.value) ? Number(idHuongSelect.value) : null;
+  let idHuong = (idHuongSelect && idHuongSelect.value !== '') ? Number(idHuongSelect.value) : null;
   
   let ngayPsInput = document.getElementById('diemNgayPs');
-  let ngayPs = (ngayPsInput && ngayPsInput.value) ? ngayPsInput.value : null;
+  let ngayPs = (ngayPsInput && ngayPsInput.value.trim() !== '') ? ngayPsInput.value : null;
 
   let checkedDoanIds = Array.from(document.querySelectorAll('#diemDoanCheckboxList .doan-checkbox:checked')).map(cb => cb.value);
 
@@ -683,7 +694,7 @@ window.saveDiemHatangFullAction = async function() {
     if (action === 'ADD') {
       const { data: newDiem, error: errDiem } = await supabaseClient
         .from('diem_ha_tang')
-        .insert([payload])
+        .insert([{ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu, id_huong: idHuong, ngay_ps: ngayPs }])
         .select();
       if (errDiem) throw errDiem;
       idDiemTarget = newDiem[0].id_diem;
@@ -691,7 +702,7 @@ window.saveDiemHatangFullAction = async function() {
       idDiemTarget = Number(idDiemEdit);
       const { error: errUpdate } = await supabaseClient
         .from('diem_ha_tang')
-        .update(payload)
+        .update({ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu, id_huong: idHuong, ngay_ps: ngayPs })
         .eq('id_diem', idDiemTarget);
       if (errUpdate) throw errUpdate;
 
