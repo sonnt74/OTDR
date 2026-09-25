@@ -12,7 +12,13 @@ function openModal(modalId, tabId) {
 
   if (modalId === 'adminMasterModal') {
     renderAllAdminTables();
-
+    
+    // THÊM: Kiểm tra quyền để bật/tắt nút Tab Excel
+    var access = getRoleAccess();
+    var excelTabBtn = document.getElementById('tab-btn-excel');
+    if (excelTabBtn) {
+       excelTabBtn.style.display = access.isSys ? 'inline-block' : 'none';
+    }
     if (tabId) {
       var btn = document.querySelector(`.admin-tabs .tab-btn[onclick*="${tabId}"]`);
       switchAdminTab(tabId, btn);
@@ -758,18 +764,13 @@ async function executeChangePassword() {
   }
 }
 
-
 // ==========================================================================
-// MODULE QUẢN LÝ DỮ LIỆU EXCEL (IMPORT/EXPORT) CHO ADMIN SYS
+// MODULE QUẢN LÝ DỮ LIỆU EXCEL (IMPORT/EXPORT MULTI-SHEET) CHO ADMIN SYS
 // ==========================================================================
-
-// 1. Khởi tạo danh sách Tuyến/Đoạn cho Tab Excel khi mở Modal
 document.addEventListener('DOMContentLoaded', function() {
   var observer = new MutationObserver(function(mutations) {
     mutations.forEach(function(mutation) {
-      if (mutation.target.id === 'adminMasterModal' && mutation.target.style.display === 'flex') {
-        loadExcelComboboxes();
-      }
+      if (mutation.target.id === 'adminMasterModal' && mutation.target.style.display === 'flex') loadExcelComboboxes();
     });
   });
   var adminModal = document.getElementById('adminMasterModal');
@@ -781,9 +782,7 @@ function loadExcelComboboxes() {
   var selTuyen = document.getElementById('excelSelectTuyen');
   if (selTuyen) {
     selTuyen.innerHTML = '<option value="">-- Chọn Tuyến Cáp --</option>';
-    tuyenList.forEach(t => {
-      selTuyen.innerHTML += `<option value="${t.id_tuyen_cap || t.id}">${t.ten_tuyen || t.ten_tuyencap}</option>`;
-    });
+    tuyenList.forEach(t => { selTuyen.innerHTML += `<option value="${t.id_tuyen_cap || t.id}">${t.ten_tuyen || t.ten_tuyencap}</option>`; });
   }
   updateExcelDoanOptions();
 }
@@ -792,108 +791,85 @@ function updateExcelDoanOptions() {
   var selTuyen = document.getElementById('excelSelectTuyen');
   var selDoan = document.getElementById('excelSelectDoan');
   if (!selTuyen || !selDoan) return;
-  
   var doanList = (typeof getFilteredDoanList === 'function') ? getFilteredDoanList() : (window.rawDoanCapList || []);
-  var tuyenVal = selTuyen.value;
-  
   selDoan.innerHTML = '<option value="">-- Chọn Đoạn Cáp --</option>';
-  if (tuyenVal) {
-    doanList.filter(d => String(d.id_tuyen || d.tuyen_id) === String(tuyenVal)).forEach(d => {
+  if (selTuyen.value) {
+    doanList.filter(d => String(d.id_tuyen || d.tuyen_id) === String(selTuyen.value)).forEach(d => {
       selDoan.innerHTML += `<option value="${d.id_doan_cap || d.id}">${d.ten_doan_cap || d.ma_doancap}</option>`;
     });
   }
 }
 
-// 2. Xuất dữ liệu toàn bản đồ
 function xuatDuLieuExcelAdmin() {
-  if (typeof globalDataPoints === 'undefined' || globalDataPoints.length === 0) {
-    showToast("⚠️ Không có dữ liệu trên bản đồ để xuất!", "error"); return;
-  }
-  showLoading("Đang tạo file báo cáo...");
+  if (typeof globalDataPoints === 'undefined' || globalDataPoints.length === 0) { showToast("⚠️ Bản đồ trống!", "error"); return; }
+  showLoading("Đang xuất báo cáo...");
   try {
-    let excelData = globalDataPoints.map((pt, i) => ({
-      "STT": i + 1,
-      "ID Điểm": pt.id,
-      "Tên Điểm": pt.ten || "",
-      "Loại Điểm": pt.loai || "",
-      "Vĩ độ": pt.lat,
-      "Kinh độ": pt.lng,
-      "Lý Trình": pt.lyTrinh || "",
-      "Dự Trữ": pt.duTru || 0,
-      "Thuộc Tuyến": typeof getTuyenName === 'function' ? getTuyenName(pt.idTuyen) : pt.idTuyen,
-      "Thuộc Đoạn": pt.idDoanCap,
-      "Thuộc Trạm": typeof getTramName === 'function' ? getTramName(pt.idTram) : pt.idTram,
-      "Ghi Chú": pt.ghiChu || "",
-      "Ghi Chú Mật": pt.ghichu_an || ""
+    let data = globalDataPoints.map((pt, i) => ({
+      "STT": i + 1, "ID Điểm": pt.id, "Tên Điểm": pt.ten || "", "Loại Điểm": pt.loai || "",
+      "Vĩ độ": pt.lat, "Kinh độ": pt.lng, "Lý Trình": pt.lyTrinh || "", "Dự Trữ": pt.duTru || 0,
+      "Tuyến": typeof getTuyenName === 'function' ? getTuyenName(pt.idTuyen) : pt.idTuyen,
+      "Ghi Chú": pt.ghiChu || "", "Ghi Chú Mật": pt.ghichu_an || ""
     }));
-
-    let wb = XLSX.utils.book_new();
-    let ws = XLSX.utils.json_to_sheet(excelData);
-    ws['!cols'] = [{ wch: 5 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 8 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 25 }, { wch: 25 }];
+    let wb = XLSX.utils.book_new(), ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{ wch: 5 }, { wch: 10 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(wb, ws, "Diem_Ban_Do");
-    XLSX.writeFile(wb, `Bao_Cao_Diem_Ha_Tang_${new Date().getTime()}.xlsx`);
-    showToast("✅ Xuất báo cáo thành công!", "success");
-  } catch (e) {
-    console.error(e); showToast("❌ Lỗi xuất file!", "error");
-  } finally { hideLoading(); }
+    XLSX.writeFile(wb, `BaoCao_DiemHaTang_${new Date().getTime()}.xlsx`);
+    showToast("✅ Xuất thành công!", "success");
+  } catch (e) { showToast("❌ Lỗi xuất file!", "error"); } finally { hideLoading(); }
 }
 
-// 3. Tải File Mẫu hoặc Dữ Liệu Cũ
 async function taiFileMauHoacDuLieuCu() {
   var idDoan = document.getElementById('excelSelectDoan').value;
-  if (!idDoan) { showToast("⚠️ Vui lòng chọn Đoạn Cáp trước khi tải mẫu!", "error"); return; }
+  if (!idDoan) { showToast("⚠️ Vui lòng chọn Đoạn Cáp!", "error"); return; }
   
-  showLoading("Đang chuẩn bị file Excel...");
+  showLoading("Đang chuẩn bị file Multi-Sheet...");
   try {
-    // Truy vấn xem đoạn này đã có điểm nào chưa
-    let { data: pts } = await supabaseClient.from('doan_cap_diem')
-      .select('thu_tu, diem_ha_tang(*)')
-      .eq('id_doan_cap', Number(idDoan))
-      .order('thu_tu', { ascending: true });
-      
-    let excelData = [];
-    if (pts && pts.length > 0) {
-      // CÓ DỮ LIỆU: Tải dữ liệu cũ về cho Admin sửa
-      excelData = pts.map(p => {
-        let d = p.diem_ha_tang;
-        return {
-          "STT": p.thu_tu, "ID Điểm": d.id_diem, "Tên Điểm": d.ten_diem, "Loại Điểm (1:Cột,2:Bể,3:Mốc,4:MX)": d.id_loaidiem,
-          "Vĩ độ": d.lat, "Kinh độ": d.long, "Lý Trình": d.ly_trinh || "", "Dự Trữ": d.du_tru || 0,
-          "Tuyến Đường": d.duong || "", "Hướng": d.id_huong || "", "Cách Trạm": d.do_cach_tram || "", "Thuộc Trạm": d.id_tram || "",
-          "Ngày PS": d.ngay_ps || "", "Ghi Chú": d.ghi_chu || "", "Ghi Chú Mật": d.ghichu_an || ""
-        };
-      });
-      showToast(`📥 Đã tải ${pts.length} điểm cũ của đoạn cáp.`, "info");
-    } else {
-      // CHƯA CÓ DỮ LIỆU: Tải file mẫu trống
-      excelData = [{
-          "STT": 1, "ID Điểm": "", "Tên Điểm": "Cột 01A", "Loại Điểm (1:Cột,2:Bể,3:Mốc,4:MX)": 1,
-          "Vĩ độ": 21.5942, "Kinh độ": 105.8481, "Lý Trình": "1+200", "Dự Trữ": 15,
-          "Tuyến Đường": "", "Hướng": "", "Cách Trạm": "", "Thuộc Trạm": "",
-          "Ngày PS": "", "Ghi Chú": "Dòng mẫu (Hãy xóa đi)", "Ghi Chú Mật": "Chỉ Admin Sys mới thấy"
-      }];
-      showToast(`📥 Đã tạo file mẫu trống.`, "info");
-    }
+    let { data: pts } = await supabaseClient.from('doan_cap_diem').select('thu_tu, diem_ha_tang(*)').eq('id_doan_cap', Number(idDoan)).order('thu_tu', { ascending: true });
+    
+    let mainData = pts && pts.length > 0 ? pts.map(p => {
+      let d = p.diem_ha_tang;
+      return {
+        "STT": p.thu_tu, "ID Điểm": d.id_diem, "Tên Điểm": d.ten_diem, "ID Loại Điểm": d.id_loaidiem,
+        "Vĩ độ": d.lat, "Kinh độ": d.long, "Lý Trình": d.ly_trinh || "", "Dự Trữ": d.du_tru || 0,
+        "Tuyến Đường": d.duong || "", "ID Hướng": d.id_huong || "", "Cách Trạm": d.do_cach_tram || "", "ID Trạm": d.id_tram || "",
+        "Ngày PS": d.ngay_ps || "", "Ghi Chú": d.ghi_chu || "", "Ghi Chú Mật": d.ghichu_an || ""
+      };
+    }) : [{
+        "STT": 1, "ID Điểm": "", "Tên Điểm": "Cột 01A", "ID Loại Điểm": 1, "Vĩ độ": 21.5942, "Kinh độ": 105.8481,
+        "Lý Trình": "1+200", "Dự Trữ": 15, "Tuyến Đường": "", "ID Hướng": "", "Cách Trạm": "", "ID Trạm": "", "Ngày PS": "", "Ghi Chú": "", "Ghi Chú Mật": ""
+    }];
 
     let wb = XLSX.utils.book_new();
-    let ws = XLSX.utils.json_to_sheet(excelData);
-    XLSX.utils.book_append_sheet(wb, ws, "Data_Import");
-    XLSX.writeFile(wb, `Import_Doan_${idDoan}.xlsx`);
-  } catch (err) {
-    console.error(err); showToast("❌ Lỗi tạo file: " + err.message, "error");
-  } finally { hideLoading(); }
+    
+    // Sheet 1: Data Import
+    let wsMain = XLSX.utils.json_to_sheet(mainData);
+    XLSX.utils.book_append_sheet(wb, wsMain, "Data_Import");
+
+    // Sheet 2: Hướng Dẫn
+    let wsHD = XLSX.utils.json_to_sheet([{ 
+      "Quy Tắc": "1. ID Điểm để trống sẽ tạo điểm mới. 2. Nếu điền ID cũ, hệ thống sẽ dùng chung điểm đó. 3. Các cột ID phải xem bên các Sheet phụ." 
+    }]);
+    XLSX.utils.book_append_sheet(wb, wsHD, "Huong_Dan");
+
+    // Sheets Phụ trợ từ RAM
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((window.rawLoaiDiemList||[]).map(x=>({ "ID Loại": x.id_loaidiem || x.id, "Tên": x.ten_loaidiem || x.ten }))), "Loai_Diem");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((window.rawHuongList||[]).map(x=>({ "ID Hướng": x.id_huong || x.id, "Tên": x.ten_huong || x.ten }))), "Huong");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((window.rawTramList||[]).map(x=>({ "ID Trạm": x.id_tram || x.id, "Tên": x.ten_tram || x.ten }))), "Tram_VT");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((window.rawDoanCapList||[]).map(x=>({ "ID Đoạn": x.id_doan_cap || x.id, "Mã": x.ma_doancap, "Tên": x.ten_doan_cap }))), "Doan_Cap");
+
+    XLSX.writeFile(wb, `DuLieu_Doan_${idDoan}.xlsx`);
+    showToast(pts && pts.length > 0 ? `📥 Tải ${pts.length} điểm thành công!` : `📥 Đã tạo file mẫu.`, "success");
+  } catch (err) { showToast("❌ Lỗi tải file: " + err.message, "error"); } finally { hideLoading(); }
 }
 
-// 4. KIỂM DUYỆT VÀ IMPORT DỮ LIỆU (TUẦN TỰ & AN TOÀN 100%)
 async function kiemDuyetVaImportExcel() {
+  if (!navigator.onLine) { showToast("⚠️ Hệ thống Offline. Vui lòng kết nối mạng để Import!", "error"); return; }
+  
   var idDoan = document.getElementById('excelSelectDoan').value;
   var fileInput = document.getElementById('fileExcelUpload');
-  var statusBox = document.getElementById('excelImportStatus');
-  var statusText = document.getElementById('excelStatusText');
-  var progressBar = document.getElementById('excelProgressBar');
+  var stBox = document.getElementById('excelImportStatus'), stText = document.getElementById('excelStatusText'), pBar = document.getElementById('excelProgressBar');
 
-  if (!idDoan) { showToast("⚠️ Vui lòng chọn Đoạn Cáp đích!", "error"); return; }
-  if (!fileInput.files || fileInput.files.length === 0) { showToast("⚠️ Vui lòng chọn file Excel để tải lên!", "error"); return; }
+  if (!idDoan || !fileInput.files.length) { showToast("⚠️ Chọn Đoạn cáp và File Excel!", "error"); return; }
 
   let file = fileInput.files[0];
   let reader = new FileReader();
@@ -902,90 +878,69 @@ async function kiemDuyetVaImportExcel() {
     try {
       let data = new Uint8Array(e.target.result);
       let workbook = XLSX.read(data, { type: 'array' });
-      let firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      let rows = XLSX.utils.sheet_to_json(firstSheet);
+      // Chỉ đọc sheet đầu tiên (Data_Import)
+      let rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]); 
 
-      if (rows.length === 0) { showToast("⚠️ File Excel không có dữ liệu!", "error"); return; }
+      if (rows.length === 0) { showToast("⚠️ File trống!", "error"); return; }
 
-      // BƯỚC 1: VALIDATE (KIỂM DUYỆT LOCAL)
+      // Validate Local
       for (let i = 0; i < rows.length; i++) {
         let r = rows[i];
-        if (!r["Tên Điểm"]) { showToast(`❌ Lỗi Dòng ${i+2}: Thiếu Tên Điểm!`, "error"); return; }
-        if (isNaN(r["Vĩ độ"]) || isNaN(r["Kinh độ"])) { showToast(`❌ Lỗi Dòng ${i+2}: Tọa độ không hợp lệ!`, "error"); return; }
-        if (!r["Loại Điểm (1:Cột,2:Bể,3:Mốc,4:MX)"]) { showToast(`❌ Lỗi Dòng ${i+2}: Thiếu Loại Điểm!`, "error"); return; }
+        if (!r["Tên Điểm"]) throw new Error(`Dòng ${i+2}: Thiếu Tên Điểm`);
+        if (isNaN(r["Vĩ độ"]) || isNaN(r["Kinh độ"])) throw new Error(`Dòng ${i+2}: Tọa độ sai`);
+        if (!r["ID Loại Điểm"]) throw new Error(`Dòng ${i+2}: Thiếu ID Loại Điểm`);
       }
 
-      let isConfirmed = await showConfirmDialog(`File hợp lệ! Phát hiện <b>${rows.length}</b> bản ghi.<br>Xác nhận đồng bộ vào Đoạn cáp ID: ${idDoan}?`, 'success');
-      if (!isConfirmed) return;
+      if (!await showConfirmDialog(`File hợp lệ! Phát hiện <b>${rows.length}</b> bản ghi.<br>Xác nhận đồng bộ vào Đoạn ID: ${idDoan}?`, 'success')) return;
 
-      // BƯỚC 2: TIẾN HÀNH ĐỒNG BỘ TUẦN TỰ (CHỐNG TIMEOUT SUPABASE)
-      statusBox.style.display = 'block';
-      progressBar.style.width = '0%';
+      stBox.style.display = 'block'; pBar.style.width = '0%';
       let successCount = 0;
 
+      // Xử lý Chunking & Upsert
       for (let i = 0; i < rows.length; i++) {
-        let row = rows[i];
-        statusText.innerText = `Đang xử lý: ${i+1} / ${rows.length} (${row["Tên Điểm"]})...`;
+        let r = rows[i];
+        stText.innerText = `Đang xử lý: ${i+1} / ${rows.length}...`;
         
-        let payloadDiem = {
-          ten_diem: row["Tên Điểm"],
-          lat: parseFloat(row["Vĩ độ"]),
-          long: parseFloat(row["Kinh độ"]),
-          id_loaidiem: parseInt(row["Loại Điểm (1:Cột,2:Bể,3:Mốc,4:MX)"]),
-          ly_trinh: row["Lý Trình"] || null,
-          du_tru: parseFloat(row["Dự Trữ"]) || 0,
-          duong: row["Tuyến Đường"] || null,
-          id_huong: row["Hướng"] || null,
-          do_cach_tram: row["Cách Trạm"] || null,
-          id_tram: row["Thuộc Trạm"] ? parseInt(row["Thuộc Trạm"]) : null,
-          ngay_ps: row["Ngày PS"] || null,
-          ghi_chu: row["Ghi Chú"] || null,
-          ghichu_an: row["Ghi Chú Mật"] || null
+        let payload = {
+          ten_diem: r["Tên Điểm"], lat: parseFloat(r["Vĩ độ"]), long: parseFloat(r["Kinh độ"]),
+          id_loaidiem: parseInt(r["ID Loại Điểm"]), ly_trinh: r["Lý Trình"] || null, du_tru: parseFloat(r["Dự Trữ"]) || 0,
+          duong: r["Tuyến Đường"] || null, id_huong: r["ID Hướng"] ? parseInt(r["ID Hướng"]) : null,
+          do_cach_tram: r["Cách Trạm"] || null, id_tram: r["ID Trạm"] ? parseInt(r["ID Trạm"]) : null,
+          ngay_ps: r["Ngày PS"] || null, ghi_chu: r["Ghi Chú"] || null, ghichu_an: r["Ghi Chú Mật"] || null
         };
 
-        let currentIdDiem = row["ID Điểm"];
+        let currentId = r["ID Điểm"], targetId = null;
 
-        // 2.1: Ghi vào bảng diem_ha_tang (Insert nếu trống ID, Update nếu có ID)
-        let idDiemSauKhiGhi = null;
-        if (currentIdDiem && !isNaN(currentIdDiem)) {
-          // UPDATE
-          payloadDiem.id_diem = Number(currentIdDiem);
-          const { error: errUp } = await supabaseClient.from('diem_ha_tang').update(payloadDiem).eq('id_diem', payloadDiem.id_diem);
-          if (errUp) throw new Error(`Lỗi cập nhật ID ${payloadDiem.id_diem}: ${errUp.message}`);
-          idDiemSauKhiGhi = payloadDiem.id_diem;
+        if (currentId && !isNaN(currentId)) {
+          payload.id_diem = Number(currentId);
+          let { error: errUp } = await supabaseClient.from('diem_ha_tang').update(payload).eq('id_diem', payload.id_diem);
+          if (errUp) throw new Error(`Lỗi cập nhật ID ${payload.id_diem}`);
+          targetId = payload.id_diem;
         } else {
-          // INSERT
-          const { data: newPt, error: errIns } = await supabaseClient.from('diem_ha_tang').insert([payloadDiem]).select();
-          if (errIns) throw new Error(`Lỗi thêm mới: ${errIns.message}`);
-          idDiemSauKhiGhi = newPt[0].id_diem;
+          let { data: newPt, error: errIns } = await supabaseClient.from('diem_ha_tang').insert([payload]).select();
+          if (errIns) throw new Error(`Lỗi thêm mới dòng ${i+2}`);
+          targetId = newPt[0].id_diem;
         }
 
-        // 2.2: Ghi vào bảng doan_cap_diem (Giao điểm dùng chung / chống trùng)
-        let thuTu = row["STT"] ? parseInt(row["STT"]) : (i + 1);
-        const { error: errLink } = await supabaseClient.from('doan_cap_diem').upsert(
-          { id_doan_cap: Number(idDoan), id_diem: idDiemSauKhiGhi, thu_tu: thuTu },
+        let { error: errLink } = await supabaseClient.from('doan_cap_diem').upsert(
+          { id_doan_cap: Number(idDoan), id_diem: targetId, thu_tu: r["STT"] ? parseInt(r["STT"]) : (i+1) },
           { onConflict: 'id_doan_cap, id_diem' }
         );
-        if (errLink) throw new Error(`Lỗi liên kết Đoạn Cáp dòng ${i+2}: ${errLink.message}`);
+        if (errLink) throw new Error(`Lỗi link Đoạn Cáp dòng ${i+2}`);
 
-        // Cập nhật thanh tiến trình
-        successCount++;
-        progressBar.style.width = Math.round((successCount / rows.length) * 100) + '%';
+        successCount++; pBar.style.width = Math.round((successCount / rows.length) * 100) + '%';
       }
 
-      statusText.innerText = `✅ Hoàn tất! Đã đồng bộ ${successCount} điểm hạ tầng.`;
+      stText.innerText = `✅ Hoàn tất! Đã đồng bộ ${successCount} điểm.`;
       showToast(`✅ Import thành công ${successCount} bản ghi!`, "success");
       
-      // Ghi lịch sử & Làm mới bản đồ
       if (typeof ghiNhatKyThaoTac === 'function') ghiNhatKyThaoTac("IMPORT_EXCEL", `Admin Import ${successCount} điểm vào Đoạn ID: ${idDoan}`);
       if (typeof taiDuLieuSupabase === 'function') setTimeout(() => taiDuLieuSupabase(true), 1500);
 
-    } catch (error) {
-      console.error(error);
-      statusText.innerHTML = `<span style="color: red;">❌ Tiến trình dừng do lỗi: ${error.message}</span>`;
-      showToast("❌ Quá trình Import bị gián đoạn!", "error");
+    } catch (err) {
+      stText.innerHTML = `<span style="color: red;">❌ Lỗi: ${err.message}</span>`;
+      showToast(err.message, "error");
     }
   };
-  
   reader.readAsArrayBuffer(file);
 }
