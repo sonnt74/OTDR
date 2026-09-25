@@ -479,9 +479,9 @@ function datLichTuXoaMarkerTimKiem() {
     if (typeof foundMarkerLayer !== 'undefined' && foundMarkerLayer && map) {
       map.removeLayer(foundMarkerLayer);
       foundMarkerLayer = null;
-      showToast("⏱️ Đã tự động xóa mốc tìm kiếm (Sau 30s)", "info");
+      showToast("⏱️ Đã tự động xóa mốc tìm kiếm (Sau 60s)", "info");
     }
-  }, 30000);
+  }, 60000);
 }
 
 function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo, shareType) {
