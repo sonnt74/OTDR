@@ -631,7 +631,7 @@ function timViTriDut() {
 }
 
 function thucHienTinhToanOtdr(kcOtdrKm, kcOtdrMeters, doanVal) {
-  var backbone = getMasterRouteBackbone('ALL', 'ALL', doanVal);
+  var backbone = getFullRouteBackboneForSegment(doanVal);
   precalculateRouteDataForPoints(backbone, backbone);
 
   if (backbone.length < 2) { showToast("Tuyến cáp chưa đủ dữ liệu!", "error"); return; }
@@ -799,7 +799,7 @@ function thucHienTimLyTrinh(txt, targetMeters, doanVal) {
     bestDescription = `Gần điểm mốc: ${closest.ten} (Sai số ~${Math.round(deviationMeters)}m)`;
   }
 
-  var backbone = getMasterRouteBackbone('ALL', 'ALL', doanVal);
+  var backbone = getFullRouteBackboneForSegment(doanVal);
   var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, backbone);
   var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
 
