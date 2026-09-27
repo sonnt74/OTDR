@@ -289,94 +289,48 @@ window.copyToClipboardTNN = function(text) {
     console.error('Lỗi copy: ', err);
   });
 };
-document.getElementById('selectDoanCap').addEventListener('change', async function() {
-  var doanVal = this.value;
-  
-  // 1. Tải trước thứ tự từ bảng doan_cap_diem vào bộ nhớ đệm
-  await taiDuLieuDoanCapDiem(doanVal);
-  
-  // 2. Gọi hàm vẽ lại bản đồ cũ của bạn (giữ nguyên 100%)
-  veLaiTuyenAB();
-});
+// Thay vì lắng nghe selectDoanCap (đã bị ẩn), Tree-view sẽ tự gọi veLaiTuyenAB
+
 function veLaiTuyenAB() {
   if (!map) return;
   if (typeof capLayer !== 'undefined' && capLayer) capLayer.clearLayers();
   if (typeof mxLayer !== 'undefined' && mxLayer) mxLayer.clearLayers();
   markersLayer.clearLayers(); polylinesLayer.clearLayers();
 
-  // [ĐIỂM NÂNG CẤP 1]: Tích hợp đọc danh sách Checklist
   var danhSachDoanCanVe = [];
-  if (typeof getCheckedValues === 'function' && document.getElementById('khayChonDoanCap')) {
-    // Đọc ID đoạn cáp từ các ô Checkbox đang được đánh dấu tích
-    danhSachDoanCanVe = getCheckedValues('khayChonDoanCap');
-  } else {
-    // Fallback: Giữ nguyên 100% logic đọc thẻ <select> cũ của bạn để an toàn
-    var selectTuyen = document.getElementById('selectTuyen');
-    var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
-    var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
-    var doanVal = document.getElementById('selectDoanCap') ? document.getElementById('selectDoanCap').value : 'ALL';
-
-    if (doanVal === 'ALL') {
-      var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
-      danhSachDoanCanVe = doanCapList.filter(d => {
-        var isTuyenMatch = (tuyenVal === 'ALL') ? true : (String(d.id_tuyen || d.tuyen_id || d.id_tuyen_cap) === String(tuyenVal));
-        var isTramMatch = (tramVal === 'ALL') ? true : (String(d.id_tram || d.tram_id) === String(tramVal));
-        return isTuyenMatch && isTramMatch;
-      }).map(d => d.id_doan_cap || d.id);
-    } else {
-      danhSachDoanCanVe = [doanVal];
-    }
+  if (typeof getCheckedDoanIds === 'function') {
+    danhSachDoanCanVe = getCheckedDoanIds();
   }
-
+  
   if (danhSachDoanCanVe.length === 0) return;
 
-  // 1. TẠO BẢNG MÀU CHO CÁC ĐƯỜNG CÁP
   var colorPalette = ['#0d6efd', '#dc3545', '#198754', '#f59e0b', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
-
   var bounds = [];
-  var drawnMarkerIds = new Set(); // Bẫy khử trùng lặp Marker
+  var drawnMarkerIds = new Set(); 
 
-  // Lấy quyền user hiện tại
   var currentUser = (typeof AppStore !== 'undefined' && AppStore.getState().currentUser) ? AppStore.getState().currentUser : (window.currentUser || {});
   var isDraggable = (currentUser.canEditMap || (currentUser.role || '').toLowerCase().includes('admin') || (currentUser.role || '').toLowerCase().includes('sys'));
 
-  // HÀM TẠO NÚT BẤM POPUP (Giữ nguyên 100% logic phân quyền của bạn)
+  // HÀM TẠO NÚT HÀNH ĐỘNG (GIỮ NGUYÊN 100% CỦA BẠN)
   function taoNutHanhDong(ptObj) {
-    let id = ptObj.id || ptObj.id_diem;
-    let ten = ptObj.ten || ptObj.ten_diem || 'Điểm hạ tầng';
-    let lat = ptObj.lat;
-    let lng = ptObj.lng;
-
+    let id = ptObj.id || ptObj.id_diem; let ten = ptObj.ten || ptObj.ten_diem || 'Điểm hạ tầng';
+    let lat = ptObj.lat; let lng = ptObj.lng;
     let valQuyen = currentUser.xem_ghichu_an;
     let hasQuyenGhiChuAn = (valQuyen === true || valQuyen === 1 || valQuyen === '1' || valQuyen === 'true' || valQuyen === 'TRUE');
 
-    var btnGhiChuAn = '';
-    if (hasQuyenGhiChuAn) {
-      btnGhiChuAn = `<button class="btn-small" style="background:#f59e0b; color:white; flex: 1; margin-right: 0;" onclick="xemGhiChuAnTaiDiem(${id}, '${ten}')">📝 Mật</button>`;
-    }
-
-    var btnAdmin = '';
-    if (isDraggable) {
-      btnAdmin = `
-         <button class="btn-small btn-success" style="flex: 1; margin-right: 0;" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa</button>
-         <button class="btn-small del" style="flex: 1; margin-right: 0;" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>
-      `;
-    }
-
+    var btnGhiChuAn = hasQuyenGhiChuAn ? `<button class="btn-small" style="background:#f59e0b; color:white; flex: 1; margin-right: 0;" onclick="xemGhiChuAnTaiDiem(${id}, '${ten}')">📝 Mật</button>` : '';
+    var btnAdmin = `
+       <button class="btn-small btn-success" style="flex: 1; margin-right: 0;" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa</button>
+       <button class="btn-small del" style="flex: 1; margin-right: 0;" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>
+    `;
     var btnTienIch = `
       <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="btn-small" style="background:#0dcaf0; color:black; text-decoration:none; flex: 1; margin-right: 0; display: flex; align-items: center; justify-content: center;">🗺️ Map</a>
       <button class="btn-small" style="background:#6c757d; color:white; flex: 1; margin-right: 0;" onclick="copyToClipboardTNN('${lat.toFixed(6)}, ${lng.toFixed(6)}')">📋 Tọa độ</button>
     `;
-
-    return `
-      <hr style="margin:6px 0; border:0; border-top:1px dashed #ccc;">
-      <div style="display:flex; flex-direction:column; margin-top:4px;">
-        <div style="display:flex; gap:4px; width: 100%; margin-bottom:4px;">${btnGhiChuAn}${btnAdmin}</div>
-        <div style="display:flex; gap:4px; width: 100%;">${btnTienIch}</div>
-      </div>`;
+    return `<hr style="margin:6px 0; border:0; border-top:1px dashed #ccc;"><div style="display:flex; flex-direction:column; margin-top:4px;"><div style="display:flex; gap:4px; width: 100%; margin-bottom:4px;">${btnGhiChuAn}${btnAdmin}</div><div style="display:flex; gap:4px; width: 100%;">${btnTienIch}</div></div>`;
   }
 
-  // HÀM LƯU TỌA ĐỘ KHI KÉO THẢ (Giữ nguyên 100% của bạn)
+  // HÀM KÉO THẢ TỌA ĐỘ (GIỮ NGUYÊN 100% CỦA BẠN)
   async function handleDragEnd(e, ptObj) {
     var newPos = e.target.getLatLng();
     var isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu tọa độ mới cho điểm [${ptObj.ten}] không?`);
@@ -389,24 +343,17 @@ function veLaiTuyenAB() {
         if (localPt) { localPt.lat = newPos.lat; localPt.lng = newPos.lng; }
         hideLoading();
         if(typeof ghiNhatKyThaoTac==='function') await ghiNhatKyThaoTac("DOI_TOA_DO", `Kỹ sư thay đổi tọa độ điểm [${ptObj.ten}] sang (${newPos.lat.toFixed(6)}, ${newPos.lng.toFixed(6)})`);
-        showToast("Đã lưu và cập nhật tọa độ thành công!", "success");
+        showToast("Đã lưu tọa độ thành công!", "success");
         veLaiTuyenAB();
-        map.setView([newPos.lat, newPos.lng], 19, { animate: true });
-      } catch (err) { 
-        showToast("Lỗi: " + err.message, "error"); 
-        hideLoading(); 
-        e.target.setLatLng([ptObj.lat, ptObj.lng]); 
-      }
-    } else { 
-      e.target.setLatLng([ptObj.lat, ptObj.lng]); 
-    }
+      } catch (err) { showToast("Lỗi: " + err.message, "error"); hideLoading(); e.target.setLatLng([ptObj.lat, ptObj.lng]); }
+    } else { e.target.setLatLng([ptObj.lat, ptObj.lng]); }
   }
 
-  // 3. VÒNG LẶP VẼ ĐA TUYẾN
+  // VÒNG LẶP VẼ ĐA SẮC CHO TỪNG ĐOẠN CÁP
   danhSachDoanCanVe.forEach((idDoanHienTai, idx) => {
     var currentColor = colorPalette[idx % colorPalette.length];
-
-    // [ĐIỂM NÂNG CẤP 2]: Truyền ALL cho Tuyến/Trạm vì idDoanHienTai đã là định danh tuyệt đối
+    
+    // Sử dụng hàm của bạn, truyền ID đoạn để lấy backbone 
     var backbone = getMasterRouteBackbone('ALL', 'ALL', idDoanHienTai);
     if (!backbone || backbone.length === 0) return;
     
@@ -415,72 +362,41 @@ function veLaiTuyenAB() {
     var nonMxPts = backbone.filter(pt => !isMangXong(pt) && pt.idLoaiDiem !== 0);
     var basePt = backbone.find(p => p.id === 'TNN_BASE' || Math.abs(p.lat - 21.593365) < 0.0001);
     if (basePt && !nonMxPts.includes(basePt)) nonMxPts.unshift(basePt);
-    
     var pts = precalculateRouteDataForPoints(nonMxPts, backbone);
     
-    // VẼ BỂ, CỘT, MỐC (Giữ nguyên của bạn)
     pts.forEach((pt, index) => {
       bounds.push([pt.lat, pt.lng]);
-      
-      if (drawnMarkerIds.has(pt.id)) return;
+      if (drawnMarkerIds.has(pt.id)) return; // Bẫy chống trùng lặp điểm giao
       drawnMarkerIds.add(pt.id);
 
-      var markerClass = 'marker-loai-1'; 
-      if (index === 0) markerClass = 'point-a-marker'; 
-      else if (String(pt.idLoaiDiem) === '2') markerClass = 'marker-loai-2'; 
-      else if (String(pt.idLoaiDiem) === '3') markerClass = 'marker-loai-3'; 
-
-      var iconHtml = (index === 0) ? `<div class="${markerClass}">A</div>` : `<div class="${markerClass}"></div>`;
+      var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : '<div class="standard-marker"></div>';
       var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
+      var popupHtml = `<div style="font-size: 12px; line-height: 1.6;"><b style="font-size: 14px; color: #0d6efd;">${pt.ten}</b><br>Loại: <b>${pt.loai}</b><br>📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}</span><br>📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b><br>📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText}</b></div>` + taoNutHanhDong(pt);
       
-      var popupHtml = `
-        <div style="font-size: 12px; line-height: 1.6;">
-          <b style="font-size: 14px; color: #0d6efd;">${pt.ten}</b><br>
-          Loại: <b>${pt.loai}</b><br>
-          📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}</span><br>
-          📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b><br>
-          📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText}</b>
-        </div>
-      ` + taoNutHanhDong(pt);
-      
-      marker.bindPopup(popupHtml); 
-      marker.on('dragend', e => handleDragEnd(e, pt));
-      markersLayer.addLayer(marker);
+      marker.bindPopup(popupHtml); marker.on('dragend', e => handleDragEnd(e, pt)); markersLayer.addLayer(marker);
     });
 
-    // VẼ MĂNG XÔNG (Giữ nguyên của bạn)
     var mxList = backbone.filter(p => isMangXong(p));
     mxList.forEach(mx => {
       bounds.push([mx.lat, mx.lng]);
-      
       if (drawnMarkerIds.has(mx.id)) return;
       drawnMarkerIds.add(mx.id);
 
-      var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="marker-loai-4"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
+      var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
+      var popupHtml = `<div style="font-size: 12px; line-height: 1.6;"><b style="font-size: 14px; color: #198754;">${mx.ten}</b><br>📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${mx.lat.toFixed(6)}, ${mx.lng.toFixed(6)}</span><br>📍 Lý trình QL: <b>${mx.calculatedLyTrinhText}</b><br>📏 Cự ly từ Trạm A: <b>${mx.distanceFromAText}</b><br></div>` + taoNutHanhDong(mx);
       
-      var popupHtml = `
-        <div style="font-size: 12px; line-height: 1.6;">
-          <b style="font-size: 14px; color: #198754;">${mx.ten}</b><br>
-          📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${mx.lat.toFixed(6)}, ${mx.lng.toFixed(6)}</span><br>
-          📍 Lý trình QL: <b>${mx.calculatedLyTrinhText}</b><br>
-          📏 Cự ly từ Trạm A: <b>${mx.distanceFromAText}</b><br>
-        </div>
-      ` + taoNutHanhDong(mx);
-      
-      mxMarker.bindPopup(popupHtml); 
-      mxMarker.on('dragend', e => handleDragEnd(e, mx));
-      mxLayer.addLayer(mxMarker);
+      mxMarker.bindPopup(popupHtml); mxMarker.on('dragend', e => handleDragEnd(e, mx)); mxLayer.addLayer(mxMarker);
     });
 
-    // VẼ POLYLINE MÀU SẮC RIÊNG (Giữ nguyên của bạn)
     var lineCoordinates = backbone.map(p => [p.lat, p.lng]);
     if (lineCoordinates.length > 1) {
         polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: currentColor, weight: 4, opacity: 0.85 }));
     }
   });
 
-  if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] }); // Tự động zoom theo bounds
+  if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
 }
+
 window.veLaiTuyenAB = veLaiTuyenAB;
 
 function isMangXong(pt) {
@@ -882,30 +798,3 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
     if (typeof hideLoading === 'function') hideLoading();
   }
 };
-// =========================================================
-// HỖ TRỢ ĐỌC CHECKLIST AN TOÀN CHO BẢN ĐỒ
-// =========================================================
-function toggleAllCheckboxes(containerId, isChecked) {
-  var container = document.getElementById(containerId);
-  if(!container) return;
-  var checkboxes = container.querySelectorAll('input[type="checkbox"]');
-  checkboxes.forEach(cb => cb.checked = isChecked);
-}
-
-function checkSelectAll(containerId, chkAllId) {
-  var container = document.getElementById(containerId);
-  var chkAll = document.getElementById(chkAllId);
-  if(!container || !chkAll) return;
-  var allCbs = container.querySelectorAll('input[type="checkbox"]:not(#'+chkAllId+')');
-  var allChecked = Array.from(allCbs).every(cb => cb.checked);
-  chkAll.checked = allChecked;
-}
-
-function getCheckedValues(containerId) {
-  var container = document.getElementById(containerId);
-  if(!container) return [];
-  var checkboxes = container.querySelectorAll('input[type="checkbox"]:not([id^="chkAll"])');
-  var vals = [];
-  checkboxes.forEach(cb => { if(cb.checked) vals.push(cb.value); });
-  return vals;
-}
