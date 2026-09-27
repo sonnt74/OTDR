@@ -125,11 +125,21 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 /**
  * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH (SỬ DỤNG VIEW)
  */
+function capNhatComboDiemA() {
+  var combo = document.getElementById('comboDiemA');
+  if (!combo) return;
+  combo.innerHTML = '<option value="DEFAULT">📍 Trạm VT A </option>';
+  globalDataPoints.filter(pt => isMangXong(pt)).forEach(mx => {
+    combo.innerHTML += `<option value="${mx.ten}">🔀 ${mx.ten}</option>`;
+  });
+}
+
 async function taiDiemTheoVungXem() {
-  if (isSyncingMaster) return; // CHẶN LẠI: Không nạp vùng xem nếu đang đồng bộ khởi tạo
+  if (isSyncingMaster) return;
   if (typeof map === 'undefined' || !map) return;
-  var selectTuyen = document.getElementById('selectTuyen');
-  if (selectTuyen && selectTuyen.value !== 'ALL') return;
+  
+  var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+  if (checkedDoan.length > 0) return; // Nếu đang tích chọn đoạn cáp trên tree-view thì bỏ qua tải theo vùng xem
 
   var bounds = map.getBounds();
   var minLat = bounds.getSouth(), maxLat = bounds.getNorth();
@@ -166,7 +176,6 @@ async function taiDiemTheoVungXem() {
           idHuong: pt.id_huong !== null && pt.id_huong !== undefined ? Number(pt.id_huong) : '',
           ngayPs: pt.ngay_ps || '',
           ghichu_an: pt.ghichu_an || '',
-          // Lấy đúng STT từ DB, nếu không có mặc định là 1 (Không ép măng xông thành 9999 nữa)
           stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1
         };
       });
@@ -536,12 +545,10 @@ function onDiemAChange() {
 }
 
 function capNhatComboDiemA() {
-  var selectTuyen = document.getElementById('selectTuyen');
-  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
   var combo = document.getElementById('comboDiemA');
   if (!combo) return;
   combo.innerHTML = '<option value="DEFAULT">📍 Trạm VT A </option>';
-  globalDataPoints.filter(pt => isMangXong(pt) && (tuyenVal === 'ALL' || String(pt.idTuyen) === String(tuyenVal))).forEach(mx => {
+  globalDataPoints.filter(pt => isMangXong(pt)).forEach(mx => {
     combo.innerHTML += `<option value="${mx.ten}">🔀 ${mx.ten}</option>`;
   });
 }
@@ -586,15 +593,29 @@ function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo,
 }
 
 function timViTriDut() {
-  
-  var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value), kcOtdrMeters = kcOtdrKm * 1000; 
+  var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value);
+  var kcOtdrMeters = kcOtdrKm * 1000; 
   if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { showToast("Nhập cự ly đo hợp lệ!", "error"); return; }
   
-  var tuyenVal = document.getElementById('selectTuyen').value;
-  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
-  var doanVal = document.getElementById('selectDoanCap').value;
-  
-  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+  if (checkedDoan.length === 0) {
+    showToast("Vui lòng tích chọn ít nhất 1 đoạn cáp trên cây Checklist!", "error");
+    return;
+  }
+
+  // Nếu chọn nhiều đoạn, tự động bật bảng chọn đoạn phân tích
+  if (checkedDoan.length > 1 && typeof chonDoanCapPhanTich === 'function') {
+    chonDoanCapPhanTich(function(selectedDoanId) {
+      thucHienTinhToanOtdr(kcOtdrKm, kcOtdrMeters, selectedDoanId);
+    });
+    return;
+  }
+
+  thucHienTinhToanOtdr(kcOtdrKm, kcOtdrMeters, checkedDoan[0]);
+}
+
+function thucHienTinhToanOtdr(kcOtdrKm, kcOtdrMeters, doanVal) {
+  var backbone = getMasterRouteBackbone('ALL', 'ALL', doanVal);
   precalculateRouteDataForPoints(backbone, backbone);
 
   if (backbone.length < 2) { showToast("Tuyến cáp chưa đủ dữ liệu!", "error"); return; }
@@ -649,7 +670,7 @@ function timViTriDut() {
     }
   }
 
-  if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
+  if (typeof foundMarkerLayer !== 'undefined' && foundMarkerLayer && map) map.removeLayer(foundMarkerLayer);
   map.setView([targetLat, targetLng], 19, { animate: true });
   
   var faultIcon = L.divIcon({ html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>', iconSize: [28, 28] });
@@ -682,7 +703,6 @@ function timViTriDut() {
 }
 
 function timLyTrinhBanDo() {
- 
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var parsedTarget = parseLyTrinhWithSuffix(txt);
   var targetMeters = parsedTarget ? parsedTarget.meters : null;
@@ -692,9 +712,26 @@ function timLyTrinhBanDo() {
     return;
   }
   
-  var pts = getPointsCuaTuyenHienTai();
+  var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+  if (checkedDoan.length === 0) {
+    showToast("Vui lòng tích chọn ít nhất 1 đoạn cáp trên cây Checklist trước khi tìm kiếm!", "error");
+    return;
+  }
+
+  if (checkedDoan.length > 1 && typeof chonDoanCapPhanTich === 'function') {
+    chonDoanCapPhanTich(function(selectedDoanId) {
+      thucHienTimLyTrinh(txt, targetMeters, selectedDoanId);
+    });
+    return;
+  }
+
+  thucHienTimLyTrinh(txt, targetMeters, checkedDoan[0]);
+}
+
+function thucHienTimLyTrinh(txt, targetMeters, doanVal) {
+  var pts = getPointsCuaTuyenHienTaiChoDoan(doanVal);
   if (pts.length < 2) {
-    showToast("Vui lòng chọn tuyến cáp trước khi tìm kiếm!", "error");
+    showToast("Đoạn cáp chưa đủ dữ liệu điểm để tìm lý trình!", "error");
     return;
   }
 
@@ -746,18 +783,11 @@ function timLyTrinhBanDo() {
     bestDescription = `Gần điểm mốc: ${closest.ten} (Sai số ~${Math.round(deviationMeters)}m)`;
   }
 
-  var selectTuyen = document.getElementById('selectTuyen');
-  var selectTram = document.getElementById('selectTram');
-  var selectDoanCap = document.getElementById('selectDoanCap');
-  
-  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
-  var tramVal = selectTram ? selectTram.value : 'ALL';
-  var doanVal = selectDoanCap ? selectDoanCap.value : 'ALL';
-
-  var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, getMasterRouteBackbone(tuyenVal, tramVal, doanVal));
+  var backbone = getMasterRouteBackbone('ALL', 'ALL', doanVal);
+  var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, backbone);
   var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
 
-  if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
+  if (typeof foundMarkerLayer !== 'undefined' && foundMarkerLayer && map) map.removeLayer(foundMarkerLayer);
   map.setView([foundLat, foundLng], 19, { animate: true });
   
   var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
@@ -765,7 +795,7 @@ function timLyTrinhBanDo() {
   
   var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
                      `- Vị trí: <b>${bestDescription}</b><br>` +
-                     `- Cự ly cáp tới Trạm VT A: <b>${distStr}</b><br>` ;
+                     `- Cự ly cáp tới Trạm VT A: <b>${distStr}</b><br>`;
                      
   foundMarkerLayer.bindPopup(popupContent).openPopup();
   datLichTuXoaMarkerTimKiem();
