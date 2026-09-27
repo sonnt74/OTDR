@@ -410,50 +410,59 @@ function onTramChange() {
   if (tramVal === 'ALL') {
     filteredTuyen = tuyenList;
   } else {
+    // 1. Chỉ lấy danh sách ID tuyến có chứa ít nhất một đoạn cáp thuộc trạm đang chọn
     var matchedTuyenIds = doanCapList
       .filter(d => getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']) === tramVal)
       .map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']));
     
     filteredTuyen = tuyenList.filter(t => {
       var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
-      return matchedTuyenIds.includes(tId) || getSafeStrId(t, ['id_tram', 'tram_id']) === tramVal;
+      return matchedTuyenIds.includes(tId);
     });
   }
 
   var khayTree = document.getElementById('khayTreeChecklist');
   if (khayTree) {
     if (filteredTuyen.length === 0) {
-      khayTree.innerHTML = '<div style="color: #94a3b8; font-style: italic; font-size: 11px;">Không có tuyến cáp nào</div>';
+      khayTree.innerHTML = '<div style="color: #94a3b8; font-style: italic; font-size: 11px;">Không có tuyến cáp nào thuộc trạm này</div>';
     } else {
       let html = '';
       filteredTuyen.forEach(t => {
         var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
         var tName = t.ten_tuyen || t.ten_tuyencap || t.ten || ("Tuyến " + tId);
         
-        var doanCon = doanCapList.filter(d => getSafeStrId(d, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']) === String(tId));
+        // 2. Chỉ lọc các Đoạn cáp con THUỘC ĐÚNG TUYẾN VÀ ĐÚNG TRẠM QUẢN LÝ
+        var doanCon = doanCapList.filter(d => {
+          var dTuyenId = getSafeStrId(d, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']);
+          var dTramId = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']);
+          var isMatchTuyen = (dTuyenId === String(tId));
+          var isMatchTram = (tramVal === 'ALL' || dTramId === tramVal);
+          return isMatchTuyen && isMatchTram;
+        });
         
+        // Chỉ render tuyến nếu tuyến đó thực sự chứa đoạn cáp của trạm
         if(doanCon.length > 0) {
           html += `
-          <div style="margin-bottom: 8px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background: #f8fafc;">
-            <label style="font-weight:bold; color:#0d6efd; display: flex; align-items: center; cursor: pointer; font-size: 12px;">
-              <input type="checkbox" id="chkTuyen_${tId}" style="margin-right: 8px; width:14px; height:14px;" onchange="toggleTuyenGroup('${tId}', this.checked)"> 
+          <div style="margin-bottom: 5px; border: 1px solid #e2e8f0; border-radius: 5px; padding: 4px 6px; background: #f8fafc;">
+            <label style="font-weight:bold; color:#0d6efd; display: flex; align-items: center; cursor: pointer; font-size: 11px;">
+              <input type="checkbox" id="chkTuyen_${tId}" style="margin-right: 6px; width:13px; height:13px;" onchange="toggleTuyenGroup('${tId}', this.checked)"> 
               [-] ${tName}
             </label>
-            <div style="margin-left: 22px; margin-top: 6px; display: flex; flex-direction: column; gap: 4px;">`;
+            <div style="margin-left: 18px; margin-top: 4px; display: flex; flex-direction: column; gap: 3px;">`;
           
           doanCon.forEach(d => {
             var dId = d.id_doan_cap || d.id;
             var dName = d.ten_doan_cap || d.ma_doancap || ("Đoạn " + dId);
             html += `
               <label style="display: flex; align-items: center; cursor: pointer; color: #334155; font-size: 11px;">
-                <input type="checkbox" value="${dId}" class="chk-doan chk-doan-${tId}" style="margin-right: 6px;" onchange="checkDoanChild('${tId}')"> 
+                <input type="checkbox" value="${dId}" class="chk-doan chk-doan-${tId}" style="margin-right: 5px;" onchange="checkDoanChild('${tId}')"> 
                 ${dName}
               </label>`;
           });
           html += `</div></div>`;
         }
       });
-      khayTree.innerHTML = html || '<div style="color: #94a3b8; font-style: italic; font-size: 11px;">Không có tuyến/đoạn cáp nào</div>';
+      khayTree.innerHTML = html || '<div style="color: #94a3b8; font-style: italic; font-size: 11px;">Không có tuyến/đoạn cáp nào thuộc trạm này</div>';
     }
   }
   
