@@ -889,3 +889,106 @@ function chonDoanCapPhanTich(callback) {
     callback(document.getElementById('modalSelectDoan').value); 
   };
 }
+// ==========================================================================
+// HÀM TỰ ĐỘNG CHUẨN HÓA THỨ TỰ VÀ BỔ SUNG MĂNG XÔNG THIẾU CHO ĐOẠN CÁP
+// ==========================================================================
+async function chuanHoaThuTuDoanCap() {
+  var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+  if (checkedDoan.length === 0) {
+    showToast("Vui lòng tích chọn 1 đoạn cáp trên cây Checklist để chuẩn hóa!", "warning");
+    return;
+  }
+  if (checkedDoan.length > 1) {
+    showToast("Vui lòng chỉ tích chọn MỘT đoạn cáp để chuẩn hóa chính xác!", "warning");
+    return;
+  }
+
+  let doanVal = checkedDoan[0];
+  let isConfirmed = await showConfirmDialog("Bạn có muốn hệ thống tự động tìm các măng xông lân cận, sắp xếp lại toàn bộ thứ tự liên thông từ gốc và cập nhật vào CSDL không?");
+  if (!isConfirmed) return;
+
+  showLoading("Đang phân tích không gian và chuẩn hóa thứ tự...");
+  try {
+    // 1. Lấy thông tin đoạn cáp để xác định Tuyến chứa nó
+    var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
+    var curDoan = doanCapList.find(d => String(d.id_doan_cap || d.id) === String(doanVal));
+    if (!curDoan) throw new Error("Không tìm thấy thông tin đoạn cáp!");
+
+    let tuyenId = getSafeStrId(curDoan, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']);
+    if (!tuyenId) throw new Error("Đoạn cáp này không thuộc tuyến nào!");
+
+    // 2. Tải toàn bộ điểm hạ tầng thuộc tuyến từ View (bao gồm cả điểm chưa được gán vào đoạn)
+    const { data: allPtsView, error: errView } = await supabaseClient
+      .from('v_diem_ha_tang_full')
+      .select('*')
+      .eq('id_tuyen', tuyenId);
+
+    if (errView) throw errView;
+    if (!allPtsView || allPtsView.length === 0) throw new Error("Không tìm thấy điểm hạ tầng nào thuộc tuyến này!");
+
+    // 3. Chuẩn hóa danh sách tọa độ
+    let pointsWithCoords = allPtsView.map(p => ({
+      id_diem: Number(p.id),
+      ten: p.ten,
+      lat: parseFloat(p.lat),
+      lng: parseFloat(p.lng),
+      stt: p.stt !== null && p.stt !== undefined ? Number(p.stt) : 999
+    }));
+
+    if (pointsWithCoords.length === 0) throw new Error("Không có điểm nào để sắp xếp!");
+
+    // Sắp xếp điểm bắt đầu (ưu tiên điểm có stt nhỏ nhất hoặc điểm đầu tuyến)
+    pointsWithCoords.sort((a, b) => a.stt - b.stt);
+
+    // 4. Thuật toán xâu chuỗi không gian (Nearest Neighbor): Nối đuôi điểm gần nhất liên tục
+    let sortedChain = [pointsWithCoords[0]];
+    let remaining = pointsWithCoords.slice(1);
+
+    while (remaining.length > 0) {
+      let lastPt = sortedChain[sortedChain.length - 1];
+      let nearestIdx = 0;
+      let minNutDist = Infinity;
+      
+      for (let i = 0; i < remaining.length; i++) {
+        let dist = calculateHaversine(lastPt.lat, lastPt.lng, remaining[i].lat, remaining[i].lng);
+        if (dist < minNutDist) {
+          minNutDist = dist;
+          nearestIdx = i;
+        }
+      }
+      sortedChain.push(remaining[nearestIdx]);
+      remaining.splice(nearestIdx, 1);
+    }
+
+    // 5. Xóa liên kết cũ của đoạn này trong bảng doan_cap_diem và ghi đè danh sách mới đã được sắp xếp đầy đủ
+    const { error: errDel } = await supabaseClient
+      .from('doan_cap_diem')
+      .delete()
+      .eq('id_doan_cap', Number(doanVal));
+
+    if (errDel) throw errDel;
+
+    let upsertData = sortedChain.map((pt, idx) => ({
+      id_doan_cap: Number(doanVal),
+      id_diem: pt.id_diem,
+      thu_tu: idx + 1
+    }));
+
+    const { error: errUpsert } = await supabaseClient
+      .from('doan_cap_diem')
+      .upsert(upsertData, { onConflict: 'id_doan_cap,id_diem' });
+      
+    if (errUpsert) throw errUpsert;
+
+    hideLoading();
+    showToast("✅ Đã chuẩn hóa thứ tự và bổ sung măng xông thành công!", "success");
+    
+    // Tải lại dữ liệu bản đồ để hiển thị ngay lập tức
+    await taiDiemDaTuyen();
+
+  } catch (err) {
+    hideLoading();
+    showToast("❌ Lỗi chuẩn hóa: " + err.message, "error");
+    console.error(err);
+  }
+}
