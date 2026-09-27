@@ -483,71 +483,73 @@ function onTramChange() {
 // ==========================================================================
 // TẢI ĐIỂM ĐA TUYẾN (ĐẢM BẢO ĐẦY ĐỦ TRỤC TỪ TRẠM A ĐẾN CUỐI TUYẾN)
 // ==========================================================================
+// Khởi tạo kho lưu trữ điểm độc lập cho từng đoạn cáp
+window.segmentPointsCache = {};
+
 async function taiDiemDaTuyen() {
   var selectedDoanIds = getCheckedDoanIds();
   
   if (selectedDoanIds.length === 0) {
     globalDataPoints = [];
+    window.segmentPointsCache = {};
     AppStore.setState({ dataPoints: [] });
     if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
     return;
   }
 
-  showLoading("Đang nạp dữ liệu toàn tuyến...");
+  showLoading("Đang nạp dữ liệu các đoạn cáp...");
   try {
-    // 1. Từ danh sách đoạn cáp đang tích, suy ngược ra các ID Tuyến chứa chúng
-    var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
-    var matchedTuyenIds = [];
-    
-    selectedDoanIds.forEach(doanId => {
-      var foundDoan = doanCapList.find(d => String(d.id_doan_cap || d.id) === String(doanId));
-      if (foundDoan) {
-        var tuyenId = getSafeStrId(foundDoan, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']);
-        if (tuyenId && !matchedTuyenIds.includes(tuyenId)) {
-          matchedTuyenIds.push(tuyenId);
-        }
-      }
-    });
-
-    if (matchedTuyenIds.length === 0) {
-      hideLoading();
-      return;
-    }
+    window.segmentPointsCache = {}; // Reset kho cache
 
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      // 2. Tải toàn bộ điểm của các tuyến này về RAM để đảm bảo thông suốt từ Trạm A
-      const { data: pts, error: errPts } = await supabaseClient
-        .from('v_diem_ha_tang_full')
-        .select('*')
-        .in('id_tuyen', matchedTuyenIds.map(id => Number(id)));
+      // Tải điểm cho từng đoạn cáp một cách độc lập
+      for (let i = 0; i < selectedDoanIds.length; i++) {
+        let dId = selectedDoanIds[i];
+        
+        const { data: pts, error: errPts } = await supabaseClient
+          .from('v_diem_ha_tang_full')
+          .select('*')
+          .eq('id_doan_cap', Number(dId));
 
-      if (errPts) throw errPts;
-      
-      globalDataPoints = (pts || []).map(pt => {
-        return {
-          id: String(pt.id),
-          ten: pt.ten || '',
-          lat: parseFloat(pt.lat),
-          lng: parseFloat(pt.lng),
-          ghiChu: pt.ghi_chu || '',
-          idTuyen: String(pt.id_tuyen),
-          idDoanCap: String(pt.id_doan_cap),
-          idTram: String(pt.id_tram),
-          idLoaiDiem: pt.id_loaidiem || 1,
-          loai: pt.loai || 'Điểm',
-          lyTrinh: pt.ly_trinh || '',
-          idHuong: pt.id_huong || null,
-          ngayPs: pt.ngay_ps || '',
-          duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-          stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1, 
-          ghichu_an: pt.ghichu_an || ''
-        };
+        if (!errPts && pts) {
+          let formattedPts = pts.map(pt => ({
+            id: String(pt.id),
+            ten: pt.ten || '',
+            lat: parseFloat(pt.lat),
+            lng: parseFloat(pt.lng),
+            ghiChu: pt.ghi_chu || '',
+            idTuyen: String(pt.id_tuyen),
+            idDoanCap: String(pt.id_doan_cap),
+            idTram: String(pt.id_tram),
+            idLoaiDiem: pt.id_loaidiem || 1,
+            loai: pt.loai || 'Điểm',
+            lyTrinh: pt.ly_trinh || '',
+            idHuong: pt.id_huong || null,
+            ngayPs: pt.ngay_ps || '',
+            duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
+            stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1, 
+            ghichu_an: pt.ghichu_an || ''
+          }));
+
+          // Sắp xếp độc lập theo thứ tự stt của đoạn đó
+          formattedPts.sort((a, b) => a.stt - b.stt);
+          
+          // Lưu vào kho độc lập riêng cho đoạn này
+          window.segmentPointsCache[String(dId)] = formattedPts;
+        }
+      }
+
+      // Tổng hợp vào globalDataPoints để vẽ bản đồ đa sắc
+      let allCombinedPts = [];
+      Object.keys(window.segmentPointsCache).forEach(dId => {
+        allCombinedPts = allCombinedPts.concat(window.segmentPointsCache[dId]);
       });
-      
+      globalDataPoints = allCombinedPts;
+
       if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
     }
   } catch (err) {
-    console.warn("Lỗi tải điểm toàn tuyến:", err.message);
+    console.warn("Lỗi tải điểm đoạn cáp:", err.message);
   } finally {
     AppStore.setState({ dataPoints: globalDataPoints });
     capNhatComboDiemA();
