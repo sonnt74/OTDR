@@ -396,7 +396,7 @@ function veLaiTuyenAB() {
 
   if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
 }
-window.veLaiTuyenAB = veLaiTuyenAB;
+
 window.veLaiTuyenAB = veLaiTuyenAB;
 
 function isMangXong(pt) {
