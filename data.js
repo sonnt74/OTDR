@@ -320,8 +320,18 @@ function xuLyPhanQuyenDoanTuyenUser() {
   }
 
   // Cập nhật State và chuyển tiếp logic xuống hàm xử lý Tuyến
+  // Cập nhật State ban đầu
   AppStore.setState({ selectedDai: selectedDaiVal, selectedTram: selectedTramVal });
-  updateTuyenOptions();
+
+  // TỰ ĐỘNG CHỌN TRẠM ĐẦU TIÊN NẾU ĐANG LÀ 'ALL' ĐỂ HIỂN THỊ LUÔN CÂY CHECKLIST
+  if (selectedTramVal === 'ALL' && selectTram && selectTram.options.length > 1) {
+    selectTram.selectedIndex = 1; // Tự động chọn trạm đầu tiên trong danh sách
+    selectedTramVal = selectTram.value;
+    AppStore.setState({ selectedTram: selectedTramVal });
+  }
+
+  // Kích hoạt dựng cây Checklist và nạp dữ liệu ngay lập tức
+  onTramChange();
 }
 
 function onDaiChange() {
