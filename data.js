@@ -347,17 +347,168 @@ function onDaiChange() {
   onTramChange();
 }
 
-function updateTuyenOptions() {
-  onTramChange();
+// ==========================================================================
+// BỘ HÀM XỬ LÝ TREE-VIEW CHECKLIST (TUYẾN + ĐOẠN LỒNG NHAU)
+// ==========================================================================
+
+function toggleTuyenGroup(tuyenId, isChecked) {
+  var container = document.getElementById('khayTreeChecklist');
+  if(!container) return;
+  var childCbs = container.querySelectorAll('.chk-doan-' + tuyenId);
+  childCbs.forEach(cb => cb.checked = isChecked);
+  taiDiemDaTuyen(); 
 }
 
-function onDoanCapChange() { 
-  var selectDoanCap = document.getElementById('selectDoanCap');
-  var doanVal = selectDoanCap ? String(selectDoanCap.value).trim() : 'ALL';
-  AppStore.setState({ selectedDoanCap: doanVal });
+function checkDoanChild(tuyenId) {
+  var container = document.getElementById('khayTreeChecklist');
+  if(!container) return;
+  var childCbs = container.querySelectorAll('.chk-doan-' + tuyenId);
+  var parentCb = container.querySelector('#chkTuyen_' + tuyenId);
+  if(!parentCb) return;
+
+  var allChecked = Array.from(childCbs).every(cb => cb.checked);
+  var someChecked = Array.from(childCbs).some(cb => cb.checked);
   
-  if (typeof veLaiTuyenAB === 'function') {
-    veLaiTuyenAB(); 
+  parentCb.checked = allChecked;
+  parentCb.indeterminate = !allChecked && someChecked; 
+  
+  taiDiemDaTuyen(); 
+}
+
+function getCheckedDoanIds() {
+  var container = document.getElementById('khayTreeChecklist');
+  if(!container) return [];
+  var checkboxes = container.querySelectorAll('input.chk-doan:checked');
+  return Array.from(checkboxes).map(cb => cb.value);
+}
+
+// Các hàm chim mồi giữ cho các module khác gọi không bị lỗi
+function updateTuyenOptions() { onTramChange(); }
+function onTuyenChange() { } 
+function onDoanCapChange() { }
+
+function onTramChange() {
+  var selectTram = document.getElementById('selectTram');
+  var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
+  
+  AppStore.setState({ selectedTram: tramVal, selectedDai: document.getElementById('selectDai') ? document.getElementById('selectDai').value : 'ALL' });
+
+  var tuyenList = AppStore.getState().tuyenList || rawTuyenList || [];
+  var doanCapList = AppStore.getState().doanCapList || rawDoanCapList || [];
+
+  var filteredTuyen = [];
+  if (tramVal === 'ALL') {
+    filteredTuyen = tuyenList;
+  } else {
+    var matchedTuyenIds = doanCapList
+      .filter(d => getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']) === tramVal)
+      .map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']));
+    
+    filteredTuyen = tuyenList.filter(t => {
+      var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
+      return matchedTuyenIds.includes(tId) || getSafeStrId(t, ['id_tram', 'tram_id']) === tramVal;
+    });
+  }
+
+  var khayTree = document.getElementById('khayTreeChecklist');
+  if (khayTree) {
+    if (filteredTuyen.length === 0) {
+      khayTree.innerHTML = '<div style="color: #94a3b8; font-style: italic; font-size: 11px;">Không có tuyến cáp nào</div>';
+    } else {
+      let html = '';
+      filteredTuyen.forEach(t => {
+        var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
+        var tName = t.ten_tuyen || t.ten_tuyencap || t.ten || ("Tuyến " + tId);
+        
+        var doanCon = doanCapList.filter(d => getSafeStrId(d, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']) === String(tId));
+        
+        if(doanCon.length > 0) {
+          html += `
+          <div style="margin-bottom: 8px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background: #f8fafc;">
+            <label style="font-weight:bold; color:#0d6efd; display: flex; align-items: center; cursor: pointer; font-size: 12px;">
+              <input type="checkbox" id="chkTuyen_${tId}" style="margin-right: 8px; width:14px; height:14px;" onchange="toggleTuyenGroup('${tId}', this.checked)"> 
+              [-] ${tName}
+            </label>
+            <div style="margin-left: 22px; margin-top: 6px; display: flex; flex-direction: column; gap: 4px;">`;
+          
+          doanCon.forEach(d => {
+            var dId = d.id_doan_cap || d.id;
+            var dName = d.ten_doan_cap || d.ma_doancap || ("Đoạn " + dId);
+            html += `
+              <label style="display: flex; align-items: center; cursor: pointer; color: #334155; font-size: 11px;">
+                <input type="checkbox" value="${dId}" class="chk-doan chk-doan-${tId}" style="margin-right: 6px;" onchange="checkDoanChild('${tId}')"> 
+                ${dName}
+              </label>`;
+          });
+          html += `</div></div>`;
+        }
+      });
+      khayTree.innerHTML = html || '<div style="color: #94a3b8; font-style: italic; font-size: 11px;">Không có tuyến/đoạn cáp nào</div>';
+    }
+  }
+  
+  if (!isSyncingMaster) {
+    taiDiemDaTuyen();
+  }
+}
+
+async function taiDiemDaTuyen() {
+  var selectedDoanIds = getCheckedDoanIds();
+  
+  if (selectedDoanIds.length === 0) {
+    globalDataPoints = [];
+    AppStore.setState({ dataPoints: [] });
+    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+    return;
+  }
+
+  showLoading("Đang nạp dữ liệu đa tuyến...");
+  try {
+    // Gọi hàm taiDuLieuDoanCapDiem bên map.js để nạp cache thứ tự cho các đoạn cáp
+    if (typeof taiDuLieuDoanCapDiem === 'function') {
+      for (let i = 0; i < selectedDoanIds.length; i++) {
+        await taiDuLieuDoanCapDiem(selectedDoanIds[i]);
+      }
+    }
+
+    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
+      const { data: pts, error: errPts } = await supabaseClient
+        .from('v_diem_ha_tang_full')
+        .select('*')
+        .in('id_doan_cap', selectedDoanIds.map(id => Number(id)));
+
+      if (errPts) throw errPts;
+      
+      globalDataPoints = (pts || []).map(pt => {
+        return {
+          id: String(pt.id),
+          ten: pt.ten || '',
+          lat: parseFloat(pt.lat),
+          lng: parseFloat(pt.lng),
+          ghiChu: pt.ghi_chu || '',
+          idTuyen: String(pt.id_tuyen),
+          idDoanCap: String(pt.id_doan_cap),
+          idTram: String(pt.id_tram),
+          idLoaiDiem: pt.id_loaidiem || 1,
+          loai: pt.loai || 'Điểm',
+          lyTrinh: pt.ly_trinh || '',
+          idHuong: pt.id_huong || null,
+          ngayPs: pt.ngay_ps || '',
+          duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
+          stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1, 
+          ghichu_an: pt.ghichu_an || ''
+        };
+      });
+      
+      if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
+    }
+  } catch (err) {
+    console.warn("Lỗi tải điểm đa tuyến:", err.message);
+  } finally {
+    AppStore.setState({ dataPoints: globalDataPoints });
+    capNhatComboDiemA();
+    hideLoading();
+    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
   }
 }
 
@@ -388,9 +539,9 @@ function datLichTuXoaMarkerTimKiem() {
     if (typeof foundMarkerLayer !== 'undefined' && foundMarkerLayer && map) {
       map.removeLayer(foundMarkerLayer);
       foundMarkerLayer = null;
-      showToast("⏱️ Đã tự động xóa mốc tìm kiếm (Sau 60s)", "info");
+      showToast("⏱️ Đã tự động xóa mốc tìm kiếm (Sau 30s)", "info");
     }
-  }, 60000);
+  }, 30000);
 }
 
 function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo, shareType) {
@@ -415,337 +566,192 @@ function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo,
   }
 }
 
-// =========================================================
-// CHÈN VÀO DATA.JS (PHẦN 6: OTDR VÀ TÌM LÝ TRÌNH)
-// =========================================================
-
-// HÀM TIỆN ÍCH: Nhận diện bối cảnh thông minh (Context-Aware)
-function chonDoanCapPhanTich(callback) {
-  var doanVal = document.getElementById('selectDoanCap').value;
-  // Trạng thái 1: Kỹ sư đang chọn 1 đoạn cụ thể -> Tính toán ngay
-  if (doanVal !== 'ALL') { 
-    callback(doanVal); 
-    return; 
-  }
-
-  // Trạng thái 2: Bản đồ đang vẽ Toàn cảnh -> Bật Form hỏi
-  var tuyenVal = document.getElementById('selectTuyen').value;
-  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
-  var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
-  
-  var matchedDoan = doanCapList.filter(d => {
-    var isTuyenMatch = (tuyenVal === 'ALL') ? true : (String(d.id_tuyen || d.tuyen_id || d.id_tuyen_cap) === String(tuyenVal));
-    var isTramMatch = (tramVal === 'ALL') ? true : (String(d.id_tram || d.tram_id) === String(tramVal));
-    return isTuyenMatch && isTramMatch;
-  });
-
-  if (matchedDoan.length === 0) { showToast("Không có đoạn cáp nào!", "error"); return; }
-  if (matchedDoan.length === 1) { callback(matchedDoan[0].id_doan_cap || matchedDoan[0].id); return; }
-
-  let overlay = document.getElementById('custom-segment-overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'custom-segment-overlay';
-    overlay.style.cssText = "display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.7); z-index: 9999999; justify-content: center; align-items: center; backdrop-filter: blur(3px);";
-    document.body.appendChild(overlay);
-  }
-
-  let optsHtml = matchedDoan.map(d => `<option value="${d.id_doan_cap || d.id}">${d.ten_doan_cap || d.ma_doancap}</option>`).join('');
-  overlay.innerHTML = `
-    <div class="confirm-box" style="width: 90%; max-width: 380px; text-align: left; background: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
-      <div style="margin-bottom: 12px; font-size: 14px; font-weight: bold; color: #0d6efd;">🔀 Chọn Đoạn Cáp Phân Tích</div>
-      <div style="font-size: 13px; color: #64748b; margin-bottom: 12px;">Bản đồ đang hiển thị toàn cảnh. Vui lòng chọn nhánh cáp muốn phân tích:</div>
-      <select id="modalSelectDoan" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; margin-bottom: 16px;">${optsHtml}</select>
-      <div style="display: flex; gap: 8px;">
-        <button id="btnCancelSeg" style="flex: 1; padding: 8px; border-radius: 6px; background: #64748b; color: white; border: none; font-weight: bold; cursor: pointer;">Hủy bỏ</button>
-        <button id="btnConfirmSeg" style="flex: 1; padding: 8px; border-radius: 6px; background: #198754; color: white; border: none; font-weight: bold; cursor: pointer;">Phân tích</button>
-      </div>
-    </div>`;
-  overlay.style.display = 'flex';
-  document.getElementById('btnCancelSeg').onclick = () => overlay.style.display = 'none';
-  document.getElementById('btnConfirmSeg').onclick = () => { overlay.style.display = 'none'; callback(document.getElementById('modalSelectDoan').value); };
-}
-
-// =========================================================
-// 1. CÁC HÀM HỖ TRỢ CHECKLIST (ĐA TUYẾN/ĐOẠN)
-// =========================================================
-function toggleAllCheckboxes(containerId, isChecked) {
-  var container = document.getElementById(containerId);
-  if(!container) return;
-  var checkboxes = container.querySelectorAll('input[type="checkbox"]');
-  checkboxes.forEach(cb => cb.checked = isChecked);
-}
-
-function checkSelectAll(containerId, chkAllId) {
-  var container = document.getElementById(containerId);
-  var chkAll = document.getElementById(chkAllId);
-  if(!container || !chkAll) return;
-  var allCbs = container.querySelectorAll('input[type="checkbox"]:not(#'+chkAllId+')');
-  var allChecked = Array.from(allCbs).every(cb => cb.checked);
-  chkAll.checked = allChecked;
-}
-
-function getCheckedValues(containerId) {
-  var container = document.getElementById(containerId);
-  if(!container) return [];
-  var checkboxes = container.querySelectorAll('input[type="checkbox"]:not([id^="chkAll"])');
-  var vals = [];
-  checkboxes.forEach(cb => { if(cb.checked) vals.push(cb.value); });
-  return vals;
-}
-
-// =========================================================
-// 2. NẠP DỮ LIỆU CASCADING VÀO CHECKLIST
-// =========================================================
-function onTramChange() {
-  var selectTram = document.getElementById('selectTram');
-  var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
-  
-  AppStore.setState({ selectedTram: tramVal, selectedDai: document.getElementById('selectDai') ? document.getElementById('selectDai').value : 'ALL' });
-
-  var tuyenList = (typeof AppStore !== 'undefined' && AppStore.getState().tuyenList) ? AppStore.getState().tuyenList : (window.rawTuyenList || []);
-  var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
-
-  // Lọc tuyến theo Trạm thông qua các đoạn cáp thuộc trạm đó hoặc thuộc tính trạm của tuyến
-  var filteredTuyen = [];
-  if (tramVal === 'ALL') {
-    filteredTuyen = tuyenList;
-  } else {
-    var matchedTuyenIds = doanCapList
-      .filter(d => getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']) === tramVal)
-      .map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']));
-    
-    filteredTuyen = tuyenList.filter(t => {
-      var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
-      return matchedTuyenIds.includes(tId) || getSafeStrId(t, ['id_tram', 'tram_id']) === tramVal;
-    });
-  }
-
-  var khayTuyen = document.getElementById('khayChonTuyen');
-  if (khayTuyen) {
-    if (filteredTuyen.length === 0) {
-      khayTuyen.innerHTML = '<div style="color: #94a3b8; font-style: italic;">Không có tuyến cáp nào</div>';
-    } else {
-      let html = `<label class="checklist-item" style="font-weight:bold; color:#0d6efd;"><input type="checkbox" id="chkAllTuyen" onchange="toggleAllCheckboxes('khayChonTuyen', this.checked); onTuyenChange();"> ☑️ Chọn tất cả Tuyến</label>`;
-      filteredTuyen.forEach(t => {
-         var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
-         var tName = t.ten_tuyen || t.ten_tuyencap || t.ten || ("Tuyến " + tId);
-         html += `<label class="checklist-item"><input type="checkbox" value="${tId}" onchange="checkSelectAll('khayChonTuyen', 'chkAllTuyen'); onTuyenChange();"> ${tName}</label>`;
-      });
-      khayTuyen.innerHTML = html;
-    }
-  }
-  onTuyenChange(); 
-}
-
-function onTuyenChange() {
-  var checkedTuyen = getCheckedValues('khayChonTuyen');
-  var doanList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
-  
-  var filteredDoan = [];
-  if (checkedTuyen.length > 0) {
-    filteredDoan = doanList.filter(d => checkedTuyen.includes(String(d.id_tuyen || d.tuyen_id || d.id_tuyen_cap)));
-  }
-
-  var khayDoan = document.getElementById('khayChonDoanCap');
-  if (khayDoan) {
-    if (filteredDoan.length === 0) {
-      khayDoan.innerHTML = '<div style="color: #94a3b8;">Vui lòng chọn Tuyến cáp...</div>';
-    } else {
-      let html = `<label class="checklist-item" style="font-weight:bold; color:#198754;"><input type="checkbox" id="chkAllDoan" onchange="toggleAllCheckboxes('khayChonDoanCap', this.checked); veLaiTuyenAB();"> ☑️ Chọn tất cả Đoạn cáp</label>`;
-      filteredDoan.forEach(d => {
-         html += `<label class="checklist-item"><input type="checkbox" value="${d.id_doan_cap || d.id}" onchange="checkSelectAll('khayChonDoanCap', 'chkAllDoan'); veLaiTuyenAB();"> ${d.ten_doan_cap || d.ma_doancap}</label>`;
-      });
-      khayDoan.innerHTML = html;
-    }
-  }
-  veLaiTuyenAB();
-}
-
-// =========================================================
-// 3. XỬ LÝ OTDR & LÝ TRÌNH THÔNG MINH (CONTEXT-AWARE)
-// =========================================================
-function chonDoanCapPhanTich(callback) {
-  var checkedDoan = getCheckedValues('khayChonDoanCap');
-  if (checkedDoan.length === 0) { showToast("Vui lòng tích chọn ít nhất 1 đoạn cáp!", "error"); return; }
-  
-  // Trạng thái 1: Kỹ sư chỉ tích chọn 1 đoạn cụ thể -> Tính toán ngay
-  if (checkedDoan.length === 1) { callback(checkedDoan[0]); return; }
-
-  // Trạng thái 2: Đang tích chọn >= 2 đoạn -> Bật Modal Form hỏi
-  var doanList = window.rawDoanCapList || [];
-  var matchedDoan = doanList.filter(d => checkedDoan.includes(String(d.id_doan_cap || d.id)));
-
-  let overlay = document.getElementById('custom-segment-overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'custom-segment-overlay';
-    overlay.style.cssText = "display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.7); z-index: 9999999; justify-content: center; align-items: center; backdrop-filter: blur(3px);";
-    document.body.appendChild(overlay);
-  }
-
-  let optsHtml = matchedDoan.map(d => `<option value="${d.id_doan_cap || d.id}">${d.ten_doan_cap || d.ma_doancap}</option>`).join('');
-  overlay.innerHTML = `
-    <div class="confirm-box" style="width: 90%; max-width: 380px; text-align: left; background: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
-      <div style="margin-bottom: 12px; font-size: 14px; font-weight: bold; color: #0d6efd;">🔀 Chọn Đoạn Cáp Phân Tích</div>
-      <div style="font-size: 13px; color: #64748b; margin-bottom: 12px;">Bản đồ đang hiển thị nhiều đoạn cáp. Vui lòng chọn nhánh cáp làm trục chính:</div>
-      <select id="modalSelectDoan" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; margin-bottom: 16px;">${optsHtml}</select>
-      <div style="display: flex; gap: 8px;">
-        <button id="btnCancelSeg" style="flex: 1; padding: 8px; border-radius: 6px; background: #64748b; color: white; border: none; font-weight: bold; cursor: pointer;">Hủy bỏ</button>
-        <button id="btnConfirmSeg" style="flex: 1; padding: 8px; border-radius: 6px; background: #198754; color: white; border: none; font-weight: bold; cursor: pointer;">Phân tích OTDR</button>
-      </div>
-    </div>`;
-  overlay.style.display = 'flex';
-  document.getElementById('btnCancelSeg').onclick = () => overlay.style.display = 'none';
-  document.getElementById('btnConfirmSeg').onclick = () => { overlay.style.display = 'none'; callback(document.getElementById('modalSelectDoan').value); };
-}
-
-// Bọc hàm timViTriDut cũ bằng logic chọn đoạn thông minh
 function timViTriDut() {
+  
   var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value), kcOtdrMeters = kcOtdrKm * 1000; 
   if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { showToast("Nhập cự ly đo hợp lệ!", "error"); return; }
   
-  chonDoanCapPhanTich(function(targetDoanVal) {
-    // Gọi hàm getMasterRouteBackbone với targetDoanVal đã chốt. (Truyền ALL cho Trạm/Tuyến vì Đoạn đã là ID duy nhất)
-    var backbone = getMasterRouteBackbone('ALL', 'ALL', targetDoanVal);
-    precalculateRouteDataForPoints(backbone, backbone);
-    if (backbone.length < 2) { showToast("Tuyến cáp chưa đủ dữ liệu!", "error"); return; }
+  var tuyenVal = document.getElementById('selectTuyen').value;
+  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
+  var doanVal = document.getElementById('selectDoanCap').value;
+  
+  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  precalculateRouteDataForPoints(backbone, backbone);
 
-    var routeStops = backbone.map(p => ({ pt: p, dist: p.distanceFromAMeters, duTru: p.duTru || 0, isMX: isMangXong(p) })).sort((a, b) => a.dist - b.dist);
-    var targetLat = backbone[backbone.length - 1].lat, targetLng = backbone[backbone.length - 1].lng;
-    var prevMXName = "Chưa xác định", nextMXName = "Chưa xác định", prevMXDistText = "", nextMXDistText = "", interpolatedLyTrinhText = "Đang xác định...";
+  if (backbone.length < 2) { showToast("Tuyến cáp chưa đủ dữ liệu!", "error"); return; }
 
-    for (var i = 0; i < routeStops.length - 1; i++) {
-      var segStartDist = routeStops[i].dist, segEndDist = routeStops[i+1].dist;
-      if (kcOtdrMeters <= segEndDist) {
-        var ratio = (segEndDist - segStartDist > 0) ? ((kcOtdrMeters - segStartDist) / (segEndDist - segStartDist)) : 0;
-        targetLat = routeStops[i].pt.lat + ratio * (routeStops[i+1].pt.lat - routeStops[i].pt.lat);
-        targetLng = routeStops[i].pt.lng + ratio * (routeStops[i+1].pt.lng - routeStops[i].pt.lng);
-        
-        var lt1 = routeStops[i].pt.calculatedLyTrinhMeters, lt2 = routeStops[i+1].pt.calculatedLyTrinhMeters;
-        if (lt1 !== undefined && lt2 !== undefined) {
-          var interMeters = Math.round(lt1 + ratio * (lt2 - lt1));
-          interpolatedLyTrinhText = `${Math.floor(interMeters / 1000)}+${(interMeters % 1000) < 10 ? '0' + (interMeters % 1000) : (interMeters % 1000)}`;
-        }
-        for (var j = i; j >= 0; j--) { if (routeStops[j].isMX) { prevMXName = routeStops[j].pt.ten; var dp = Math.round(kcOtdrMeters - routeStops[j].dist); prevMXDistText = (dp >= 1000) ? (dp/1000).toFixed(2)+" km" : dp+" m"; break; } }
-        for (var k = i + 1; k < routeStops.length; k++) { if (routeStops[k].isMX) { nextMXName = routeStops[k].pt.ten; var dn = Math.round(routeStops[k].dist - kcOtdrMeters); nextMXDistText = (dn >= 1000) ? (dn/1000).toFixed(2)+" km" : dn+" m"; break; } }
-        break;
+  var routeStops = [];
+  backbone.forEach(p => routeStops.push({ pt: p, dist: p.distanceFromAMeters, duTru: p.duTru || 0, isMX: isMangXong(p) }));
+  routeStops.sort((a, b) => a.dist - b.dist);
+
+  var targetLat = backbone[backbone.length - 1].lat, targetLng = backbone[backbone.length - 1].lng;
+  var prevMXName = "Chưa xác định", nextMXName = "Chưa xác định";
+  var prevMXDistText = "", nextMXDistText = "";
+  var interpolatedLyTrinhText = "Đang xác định...";
+
+  for (var i = 0; i < routeStops.length - 1; i++) {
+    var segStartDist = routeStops[i].dist;
+    var segEndDist = routeStops[i+1].dist;
+    
+    if (kcOtdrMeters <= segEndDist) {
+      var segOptDist = segEndDist - segStartDist;
+      var ratio = (segOptDist > 0) ? ((kcOtdrMeters - segStartDist) / segOptDist) : 0;
+      
+      targetLat = routeStops[i].pt.lat + ratio * (routeStops[i+1].pt.lat - routeStops[i].pt.lat);
+      targetLng = routeStops[i].pt.lng + ratio * (routeStops[i+1].pt.lng - routeStops[i].pt.lng);
+      
+      var lt1 = routeStops[i].pt.calculatedLyTrinhMeters;
+      var lt2 = routeStops[i+1].pt.calculatedLyTrinhMeters;
+      if (lt1 !== undefined && lt2 !== undefined) {
+        var interMeters = Math.round(lt1 + ratio * (lt2 - lt1));
+        var km = Math.floor(interMeters / 1000);
+        var m = interMeters % 1000;
+        interpolatedLyTrinhText = `${km}+${m < 10 ? '0' + m : m}`;
       }
+
+      for (var j = i; j >= 0; j--) {
+        if (routeStops[j].isMX) {
+          prevMXName = routeStops[j].pt.ten;
+          var distPrev = Math.round(kcOtdrMeters - routeStops[j].dist);
+          prevMXDistText = (distPrev >= 1000) ? (distPrev / 1000).toFixed(2) + " km" : distPrev + " m";
+          break;
+        }
+      }
+
+      for (var k = i + 1; k < routeStops.length; k++) { 
+        if (routeStops[k].isMX) { 
+          nextMXName = routeStops[k].pt.ten;
+          var distNext = Math.round(routeStops[k].dist - kcOtdrMeters);
+          nextMXDistText = (distNext >= 1000) ? (distNext / 1000).toFixed(2) + " km" : distNext + " m";
+          break; 
+        } 
+      }
+      break;
     }
+  }
 
-    if (typeof foundMarkerLayer !== 'undefined' && foundMarkerLayer) map.removeLayer(foundMarkerLayer);
-    map.setView([targetLat, targetLng], 19, { animate: true });
-    
-    var faultIcon = L.divIcon({ html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>', iconSize: [28, 28] });
-    foundMarkerLayer = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
+  if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
+  map.setView([targetLat, targetLng], 19, { animate: true });
+  
+  var faultIcon = L.divIcon({ html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>', iconSize: [28, 28] });
+  var faultMarker = L.marker([targetLat, targetLng], { icon: faultIcon }).addTo(map);
+  foundMarkerLayer = faultMarker;
 
-    var prevMXFullInfo = prevMXName + (prevMXDistText ? ` (cách ${prevMXDistText})` : '');
-    var nextMXFullInfo = nextMXName + (nextMXDistText ? ` (cách ${nextMXDistText})` : '');
-    var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>Cự đoạn đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>📍 Lý trình QL: <b>${interpolatedLyTrinhText}</b><br>🔀 MX trước: <b>${prevMXFullInfo}</b><br>🔀 MX sau: <b>${nextMXFullInfo}</b><br><a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='btn-info' style='background:#0d6efd; color:white;'>🗺️ Dẫn đường GMaps</a>`;
-    foundMarkerLayer.bindPopup(popupHtml).openPopup();
-    
-    var panel = document.getElementById('control-panel'); if (panel) panel.style.display = 'none';
-    if (typeof datLichTuXoaMarkerTimKiem === 'function') datLichTuXoaMarkerTimKiem();
-  });
+  var prevMXFullInfo = prevMXName + (prevMXDistText ? ` (cách ${prevMXDistText})` : '');
+  var nextMXFullInfo = nextMXName + (nextMXDistText ? ` (cách ${nextMXDistText})` : '');
+
+  var shareButtonsHtml = `
+    <div style="margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 6px;">
+      <b>Chia sẻ sự cố nhanh:</b><br>
+      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'copy')">📋 Copy</button>
+      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'zalo')" style="background:#0068ff; color:white;">💬 Zalo App</button>
+      <button class="btn-info" onclick="chiaSeSuCo(${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}, ${kcOtdrKm.toFixed(2)}, '${interpolatedLyTrinhText}', '${prevMXFullInfo}', '${nextMXFullInfo}', 'viber')" style="background:#6f42c1; color:white;">📱 Viber</button>
+    </div>`;
+  
+  var popupHtml = `<b>⚡ VỊ TRÍ SỰ CỐ OTDR</b><br>` +
+                  `Cự đoạn đo: <b>${kcOtdrKm.toFixed(2)} km</b><br>` +
+                  `📍 Lý trình QL: <b>${interpolatedLyTrinhText}</b><br>` +
+                  `🔀 MX trước: <b>${prevMXFullInfo}</b><br>` +
+                  `🔀 MX sau: <b>${nextMXFullInfo}</b><br>` +
+                  `<a href='https://maps.google.com/?q=${targetLat},${targetLng}' target='_blank' class='btn-info' style='background:#0d6efd; color:white;'>🗺️ Dẫn đường GMaps</a>` +
+                  shareButtonsHtml;
+  
+  faultMarker.bindPopup(popupHtml).openPopup();
+  var panel = document.getElementById('control-panel');
+  if (panel) panel.style.display = 'none';
+  datLichTuXoaMarkerTimKiem();
 }
 
-// HÀM TÌM LÝ TRÌNH TRÊN BẢN ĐỒ HOÀN CHỈNH (Đã tích hợp Context-Aware)
 function timLyTrinhBanDo() {
+ 
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var parsedTarget = parseLyTrinhWithSuffix(txt);
   var targetMeters = parsedTarget ? parsedTarget.meters : null;
   
   if (targetMeters === null || isNaN(targetMeters)) {
-    showToast("Sai định dạng lý trình! Vui lòng nhập theo mẫu: 54+100", "error");
+    showToast("Sai định dạng lý trình! Vui lòng nhập theo mẫu: 54+100 hoặc km 54+100", "error");
     return;
   }
   
-  // BỌC TRONG HÀM NHẬN DIỆN BỐI CẢNH (ĐA TUYẾN/ĐƠN TUYẾN)
-  chonDoanCapPhanTich(function(targetDoanVal) {
+  var pts = getPointsCuaTuyenHienTai();
+  if (pts.length < 2) {
+    showToast("Vui lòng chọn tuyến cáp trước khi tìm kiếm!", "error");
+    return;
+  }
+
+  var isNghichHuong = (pts.length >= 2 && pts[1].calculatedLyTrinhMeters < pts[0].calculatedLyTrinhMeters);
+  var sortedPts = [...pts].sort((a, b) => isNghichHuong ? b.calculatedLyTrinhMeters - a.calculatedLyTrinhMeters : a.calculatedLyTrinhMeters - b.calculatedLyTrinhMeters);
+
+  var targetSeg = null;
+  var foundLat = null, foundLng = null, bestDescription = "";
+
+  for (var i = 0; i < sortedPts.length - 1; i++) {
+    var p1 = sortedPts[i];
+    var p2 = sortedPts[i+1];
+    var startLt = p1.calculatedLyTrinhMeters;
+    var endLt = p2.calculatedLyTrinhMeters;
     
-    // Đã xác định được Đoạn cáp ID duy nhất, truyền ALL cho Tuyến/Trạm
-    var backbone = getMasterRouteBackbone('ALL', 'ALL', targetDoanVal);
-    var nonMxPts = backbone.filter(pt => !isMangXong(pt) && pt.idLoaiDiem !== 0);
-    var basePt = backbone.find(p => p.id === 'TNN_BASE' || Math.abs(p.lat - 21.593365) < 0.0001);
-    if (basePt && !nonMxPts.includes(basePt)) nonMxPts.unshift(basePt);
-    var pts = precalculateRouteDataForPoints(nonMxPts, backbone);
+    var minLt = Math.min(startLt, endLt);
+    var maxLt = Math.max(startLt, endLt);
     
-    if (pts.length < 2) {
-      showToast("Đoạn cáp này chưa đủ điểm để tìm lý trình!", "error");
+    if (targetMeters >= minLt && targetMeters <= maxLt) {
+      var span = endLt - startLt;
+      var ratio = (span !== 0) ? (targetMeters - startLt) / span : 0;
+      
+      var testLat = p1.lat + ratio * (p2.lat - p1.lat);
+      var testLng = p1.lng + ratio * (p2.lng - p1.lng);
+      
+      var distToP1 = calculateHaversine(testLat, testLng, p1.lat, p1.lng);
+      var distToP2 = calculateHaversine(testLat, testLng, p2.lat, p2.lng);
+      var segmentRealLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
+
+      if (distToP1 <= segmentRealLen + 100 && distToP2 <= segmentRealLen + 100) {
+        targetSeg = { p1: p1, p2: p2 };
+        foundLat = testLat;
+        foundLng = testLng;
+        bestDescription = `Nằm giữa [${p1.ten}] và [${p2.ten}]`;
+        break;
+      }
+    }
+  }
+
+  if (!targetSeg) {
+    var closest = sortedPts.reduce((prev, curr) => Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev);
+    var deviationMeters = Math.abs(closest.calculatedLyTrinhMeters - targetMeters);
+    if (deviationMeters > 100) {
+      showToast(`Không tìm thấy vị trí lý trình ${txt} chính xác (Sai số quá ${Math.round(deviationMeters)}m).`, "error");
       return;
     }
+    foundLat = closest.lat;
+    foundLng = closest.lng;
+    bestDescription = `Gần điểm mốc: ${closest.ten} (Sai số ~${Math.round(deviationMeters)}m)`;
+  }
 
-    // XỬ LÝ LÝ TRÌNH NGHỊCH HƯỚNG (Logic gốc của bạn - Giữ nguyên 100%)
-    var isNghichHuong = (pts.length >= 2 && pts[1].calculatedLyTrinhMeters < pts[0].calculatedLyTrinhMeters);
-    var sortedPts = [...pts].sort((a, b) => isNghichHuong ? b.calculatedLyTrinhMeters - a.calculatedLyTrinhMeters : a.calculatedLyTrinhMeters - b.calculatedLyTrinhMeters);
+  var selectTuyen = document.getElementById('selectTuyen');
+  var selectTram = document.getElementById('selectTram');
+  var selectDoanCap = document.getElementById('selectDoanCap');
+  
+  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
+  var tramVal = selectTram ? selectTram.value : 'ALL';
+  var doanVal = selectDoanCap ? selectDoanCap.value : 'ALL';
 
-    var targetSeg = null;
-    var foundLat = null, foundLng = null, bestDescription = "";
+  var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, getMasterRouteBackbone(tuyenVal, tramVal, doanVal));
+  var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
 
-    // NỘI SUY TỌA ĐỘ VÀ KIỂM TRA HAVERSINE (Logic gốc của bạn)
-    for (var i = 0; i < sortedPts.length - 1; i++) {
-      var p1 = sortedPts[i];
-      var p2 = sortedPts[i+1];
-      var startLt = p1.calculatedLyTrinhMeters;
-      var endLt = p2.calculatedLyTrinhMeters;
-      
-      var minLt = Math.min(startLt, endLt);
-      var maxLt = Math.max(startLt, endLt);
-      
-      if (targetMeters >= minLt && targetMeters <= maxLt) {
-        var span = endLt - startLt;
-        var ratio = (span !== 0) ? (targetMeters - startLt) / span : 0;
-        
-        var testLat = p1.lat + ratio * (p2.lat - p1.lat);
-        var testLng = p1.lng + ratio * (p2.lng - p1.lng);
-        
-        var distToP1 = calculateHaversine(testLat, testLng, p1.lat, p1.lng);
-        var distToP2 = calculateHaversine(testLat, testLng, p2.lat, p2.lng);
-        var segmentRealLen = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
-
-        if (distToP1 <= segmentRealLen + 100 && distToP2 <= segmentRealLen + 100) {
-          targetSeg = { p1: p1, p2: p2 };
-          foundLat = testLat;
-          foundLng = testLng;
-          bestDescription = `Nằm giữa [${p1.ten}] và [${p2.ten}]`;
-          break;
-        }
-      }
-    }
-
-    // XỬ LÝ TÌM ĐIỂM GẦN NHẤT NẾU KHÔNG CÓ TRONG ĐOẠN NỘI SUY (Logic gốc)
-    if (!targetSeg) {
-      var closest = sortedPts.reduce((prev, curr) => Math.abs(curr.calculatedLyTrinhMeters - targetMeters) < Math.abs(prev.calculatedLyTrinhMeters - targetMeters) ? curr : prev);
-      var deviationMeters = Math.abs(closest.calculatedLyTrinhMeters - targetMeters);
-      if (deviationMeters > 100) {
-        showToast(`Không tìm thấy lý trình (Sai số quá ${Math.round(deviationMeters)}m).`, "error");
-        return;
-      }
-      foundLat = closest.lat;
-      foundLng = closest.lng;
-      bestDescription = `Gần điểm mốc: ${closest.ten}`;
-    }
-
-    var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, backbone);
-    var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
-
-    // VẼ MARKER VÀ GIAO DIỆN (Giữ nguyên)
-    if (typeof foundMarkerLayer !== 'undefined' && foundMarkerLayer) map.removeLayer(foundMarkerLayer);
-    map.setView([foundLat, foundLng], 19, { animate: true });
-    
-    var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
-    foundMarkerLayer = L.marker([foundLat, foundLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
-    
-    var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
-                       `- Vị trí: <b>${bestDescription}</b><br>` +
-                       `- Cự ly cáp tới Trạm VT A: <b>${distStr}</b><br>` ;
-                       
-    foundMarkerLayer.bindPopup(popupContent).openPopup();
-    
-    if (typeof datLichTuXoaMarkerTimKiem === 'function') datLichTuXoaMarkerTimKiem();
-    var panel = document.getElementById('control-panel');
-    if (panel) panel.style.display = 'none';
-  });
+  if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
+  map.setView([foundLat, foundLng], 19, { animate: true });
+  
+  var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
+  foundMarkerLayer = L.marker([foundLat, foundLng], { icon: L.divIcon({ html: markerHtml, className: '', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(map);
+  
+  var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
+                     `- Vị trí: <b>${bestDescription}</b><br>` +
+                     `- Cự ly cáp tới Trạm VT A: <b>${distStr}</b><br>` ;
+                     
+  foundMarkerLayer.bindPopup(popupContent).openPopup();
+  datLichTuXoaMarkerTimKiem();
+  var panel = document.getElementById('control-panel');
+  if (panel) panel.style.display = 'none';
 }
 
 function xoaTatCaDoiTuongMap() {
