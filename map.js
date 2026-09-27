@@ -263,12 +263,13 @@ function precalculateRouteDataForPoints(pts, backbonePts) {
 }
 
 function getPointsCuaTuyenHienTai() {
-  var selectTuyen = document.getElementById('selectTuyen');
-  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
-  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
-  var doanVal = document.getElementById('selectDoanCap') ? document.getElementById('selectDoanCap').value : 'ALL';
-  
-  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+  if (checkedDoan.length === 0) return [];
+  var doanVal = checkedDoan[0]; // Mặc định lấy đoạn đầu tiên đang tích để tính lý trình
+  return getPointsCuaTuyenHienTaiChoDoan(doanVal);
+}
+function getPointsCuaTuyenHienTaiChoDoan(doanVal) {
+  var backbone = getMasterRouteBackbone('ALL', 'ALL', doanVal);
   if (backbone.length === 0) return [];
 
   var nonMxPts = backbone.filter(pt => !isMangXong(pt) && pt.idLoaiDiem !== 0);
@@ -277,7 +278,6 @@ function getPointsCuaTuyenHienTai() {
 
   return precalculateRouteDataForPoints(nonMxPts, backbone);
 }
-
 /**
  * 4. VẼ TUYẾN CÁP VÀ ĐIỂM HẠ TẦNG LÊN BẢN ĐỒ
  */
