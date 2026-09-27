@@ -194,17 +194,16 @@ function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
     return [];
   }
 
-  // 1. Lọc các điểm thuộc đúng đoạn cáp hiện tại từ bộ nhớ globalDataPoints
-  let segmentPts = globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
-
-  if (segmentPts.length === 0) {
-    return [];
+  // Ưu tiên lấy từ kho độc lập của đoạn cáp để đảm bảo tính chính xác tuyệt đối, không bị ghi đè
+  if (window.segmentPointsCache && window.segmentPointsCache[String(doanVal)]) {
+    return window.segmentPointsCache[String(doanVal)];
   }
 
-  // 2. Sắp xếp tuyệt đối theo cột stt (hoặc thu_tu) đã được đồng bộ sẵn từ cơ sở dữ liệu
+  // Dự phòng fallback an toàn nếu gọi trực tiếp
+  let segmentPts = globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
   segmentPts.sort((a, b) => {
-    let orderA = a.stt !== undefined && a.stt !== null ? Number(a.stt) : (a.thu_tu !== undefined ? Number(a.thu_tu) : 9999);
-    let orderB = b.stt !== undefined && b.stt !== null ? Number(b.stt) : (b.thu_tu !== undefined ? Number(b.thu_tu) : 9999);
+    let orderA = a.stt !== undefined && a.stt !== null ? Number(a.stt) : 9999;
+    let orderB = b.stt !== undefined && b.stt !== null ? Number(b.stt) : 9999;
     return orderA - orderB;
   });
 
