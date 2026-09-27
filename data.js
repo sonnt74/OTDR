@@ -480,6 +480,9 @@ function onTramChange() {
   }
 }
 
+// ==========================================================================
+// TẢI ĐIỂM ĐA TUYẾN (ĐẢM BẢO ĐẦY ĐỦ TRỤC TỪ TRẠM A ĐẾN CUỐI TUYẾN)
+// ==========================================================================
 async function taiDiemDaTuyen() {
   var selectedDoanIds = getCheckedDoanIds();
   
@@ -490,20 +493,33 @@ async function taiDiemDaTuyen() {
     return;
   }
 
-  showLoading("Đang nạp dữ liệu đa tuyến...");
+  showLoading("Đang nạp dữ liệu toàn tuyến...");
   try {
-    // Gọi hàm taiDuLieuDoanCapDiem bên map.js để nạp cache thứ tự cho các đoạn cáp
-    if (typeof taiDuLieuDoanCapDiem === 'function') {
-      for (let i = 0; i < selectedDoanIds.length; i++) {
-        await taiDuLieuDoanCapDiem(selectedDoanIds[i]);
+    // 1. Từ danh sách đoạn cáp đang tích, suy ngược ra các ID Tuyến chứa chúng
+    var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
+    var matchedTuyenIds = [];
+    
+    selectedDoanIds.forEach(doanId => {
+      var foundDoan = doanCapList.find(d => String(d.id_doan_cap || d.id) === String(doanId));
+      if (foundDoan) {
+        var tuyenId = getSafeStrId(foundDoan, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']);
+        if (tuyenId && !matchedTuyenIds.includes(tuyenId)) {
+          matchedTuyenIds.push(tuyenId);
+        }
       }
+    });
+
+    if (matchedTuyenIds.length === 0) {
+      hideLoading();
+      return;
     }
 
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
+      // 2. Tải toàn bộ điểm của các tuyến này về RAM để đảm bảo thông suốt từ Trạm A
       const { data: pts, error: errPts } = await supabaseClient
         .from('v_diem_ha_tang_full')
         .select('*')
-        .in('id_doan_cap', selectedDoanIds.map(id => Number(id)));
+        .in('id_tuyen', matchedTuyenIds.map(id => Number(id)));
 
       if (errPts) throw errPts;
       
@@ -531,7 +547,7 @@ async function taiDiemDaTuyen() {
       if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
     }
   } catch (err) {
-    console.warn("Lỗi tải điểm đa tuyến:", err.message);
+    console.warn("Lỗi tải điểm toàn tuyến:", err.message);
   } finally {
     AppStore.setState({ dataPoints: globalDataPoints });
     capNhatComboDiemA();
