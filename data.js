@@ -603,8 +603,8 @@ function timViTriDut() {
     return;
   }
 
-  // Nếu chọn nhiều đoạn, tự động bật bảng chọn đoạn phân tích
-  if (checkedDoan.length > 1 && typeof chonDoanCapPhanTich === 'function') {
+  // Nếu chọn nhiều đoạn, tự động bật bảng hỏi chọn đoạn phân tích
+  if (checkedDoan.length > 1) {
     chonDoanCapPhanTich(function(selectedDoanId) {
       thucHienTinhToanOtdr(kcOtdrKm, kcOtdrMeters, selectedDoanId);
     });
@@ -718,7 +718,7 @@ function timLyTrinhBanDo() {
     return;
   }
 
-  if (checkedDoan.length > 1 && typeof chonDoanCapPhanTich === 'function') {
+  if (checkedDoan.length > 1) {
     chonDoanCapPhanTich(function(selectedDoanId) {
       thucHienTimLyTrinh(txt, targetMeters, selectedDoanId);
     });
@@ -826,4 +826,48 @@ function toggleGISPanel() {
   if (panel) {
     panel.classList.toggle('collapsed');
   }
+}
+
+// ==========================================================================
+// HÀM BỔ SUNG: HỘP THOẠI CHỌN ĐOẠN CÁP KHI TÍCH CHỌN NHIỀU ĐOẠN
+// ==========================================================================
+function chonDoanCapPhanTich(callback) {
+  var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+  if (checkedDoan.length === 0) { 
+    showToast("Vui lòng tích chọn ít nhất 1 đoạn cáp!", "error"); 
+    return; 
+  }
+  if (checkedDoan.length === 1) { 
+    callback(checkedDoan[0]); 
+    return; 
+  }
+
+  var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
+  var matchedDoan = doanCapList.filter(d => checkedDoan.includes(String(d.id_doan_cap || d.id)));
+
+  let overlay = document.getElementById('custom-segment-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'custom-segment-overlay';
+    overlay.style.cssText = "display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.7); z-index: 9999999; justify-content: center; align-items: center; backdrop-filter: blur(3px);";
+    document.body.appendChild(overlay);
+  }
+
+  let optsHtml = matchedDoan.map(d => `<option value="${d.id_doan_cap || d.id}">${d.ten_doan_cap || d.ma_doancap || ('Đoạn ' + (d.id_doan_cap || d.id))}</option>`).join('');
+  overlay.innerHTML = `
+    <div class="confirm-box" style="width: 90%; max-width: 380px; text-align: left; background: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+      <div style="margin-bottom: 12px; font-size: 14px; font-weight: bold; color: #0d6efd;">🔀 Chọn Đoạn Cáp Phân Tích</div>
+      <div style="font-size: 13px; color: #64748b; margin-bottom: 12px;">Bạn đang chọn nhiều đoạn cáp. Vui lòng chọn đoạn trục chính để tính toán:</div>
+      <select id="modalSelectDoan" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; margin-bottom: 16px;">${optsHtml}</select>
+      <div style="display: flex; gap: 8px;">
+        <button id="btnCancelSeg" style="flex: 1; padding: 8px; border-radius: 6px; background: #64748b; color: white; border: none; font-weight: bold; cursor: pointer;">Hủy bỏ</button>
+        <button id="btnConfirmSeg" style="flex: 1; padding: 8px; border-radius: 6px; background: #198754; color: white; border: none; font-weight: bold; cursor: pointer;">Xác nhận</button>
+      </div>
+    </div>`;
+  overlay.style.display = 'flex';
+  document.getElementById('btnCancelSeg').onclick = () => overlay.style.display = 'none';
+  document.getElementById('btnConfirmSeg').onclick = () => { 
+    overlay.style.display = 'none'; 
+    callback(document.getElementById('modalSelectDoan').value); 
+  };
 }
