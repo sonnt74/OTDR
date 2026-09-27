@@ -798,3 +798,27 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
     if (typeof hideLoading === 'function') hideLoading();
   }
 };
+// ==========================================================================
+// HÀM HỖ TRỢ: LẤY TRỤC XƯƠNG SỐNG LIÊN THÔNG TỪ TRẠM A ĐẾN HẾT TUYẾN
+// ==========================================================================
+function getFullRouteBackboneForSegment(doanVal) {
+  var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
+  var foundDoan = doanCapList.find(d => String(d.id_doan_cap || d.id) === String(doanVal));
+  if (!foundDoan) return getMasterRouteBackbone('ALL', 'ALL', doanVal);
+  
+  var tuyenId = getSafeStrId(foundDoan, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']);
+  if (!tuyenId) return getMasterRouteBackbone('ALL', 'ALL', doanVal);
+
+  // Lọc toàn bộ điểm thuộc tuyến từ bộ nhớ globalDataPoints
+  let tuyenPts = globalDataPoints.filter(pt => String(pt.idTuyen) === String(tuyenId));
+  if (tuyenPts.length === 0) return getMasterRouteBackbone('ALL', 'ALL', doanVal);
+
+  // Sắp xếp tuần tự từ Trạm A đi ra theo thứ tự stt chuẩn từ CSDL
+  tuyenPts.sort((a, b) => {
+    let orderA = a.stt !== undefined && a.stt !== null ? Number(a.stt) : 9999;
+    let orderB = b.stt !== undefined && b.stt !== null ? Number(b.stt) : 9999;
+    return orderA - orderB;
+  });
+
+  return tuyenPts;
+}
