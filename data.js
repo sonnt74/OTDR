@@ -347,168 +347,108 @@ function onDaiChange() {
   onTramChange();
 }
 
-// ==========================================================================
-// BỘ HÀM XỬ LÝ TREE-VIEW CHECKLIST (TUYẾN + ĐOẠN LỒNG NHAU)
-// ==========================================================================
-
-function toggleTuyenGroup(tuyenId, isChecked) {
-  var container = document.getElementById('khayTreeChecklist');
-  if(!container) return;
-  var childCbs = container.querySelectorAll('.chk-doan-' + tuyenId);
-  childCbs.forEach(cb => cb.checked = isChecked);
-  taiDiemDaTuyen(); 
-}
-
-function checkDoanChild(tuyenId) {
-  var container = document.getElementById('khayTreeChecklist');
-  if(!container) return;
-  var childCbs = container.querySelectorAll('.chk-doan-' + tuyenId);
-  var parentCb = container.querySelector('#chkTuyen_' + tuyenId);
-  if(!parentCb) return;
-
-  var allChecked = Array.from(childCbs).every(cb => cb.checked);
-  var someChecked = Array.from(childCbs).some(cb => cb.checked);
-  
-  parentCb.checked = allChecked;
-  parentCb.indeterminate = !allChecked && someChecked; 
-  
-  taiDiemDaTuyen(); 
-}
-
-function getCheckedDoanIds() {
-  var container = document.getElementById('khayTreeChecklist');
-  if(!container) return [];
-  var checkboxes = container.querySelectorAll('input.chk-doan:checked');
-  return Array.from(checkboxes).map(cb => cb.value);
-}
-
-// Các hàm chim mồi giữ cho các module khác gọi không bị lỗi
-function updateTuyenOptions() { onTramChange(); }
-function onTuyenChange() { } 
-function onDoanCapChange() { }
-
 function onTramChange() {
   var selectTram = document.getElementById('selectTram');
   var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
+
+  AppStore.setState({ selectedTram: tramVal });
+  updateTuyenOptions();
+}
+
+function updateTuyenOptions() {
+  var selectTuyen = document.getElementById('selectTuyen');
+  var selectTram = document.getElementById('selectTram');
+  if (!selectTuyen) return;
+
+  var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
+  var state = AppStore.getState();
   
-  AppStore.setState({ selectedTram: tramVal, selectedDai: document.getElementById('selectDai') ? document.getElementById('selectDai').value : 'ALL' });
+  var doanCapList = state.doanCapList || rawDoanCapList || [];
+  var tuyenList = state.tuyenList || rawTuyenList || [];
 
-  var tuyenList = AppStore.getState().tuyenList || rawTuyenList || [];
-  var doanCapList = AppStore.getState().doanCapList || rawDoanCapList || [];
+  var filteredTuyenList = [];
 
-  var filteredTuyen = [];
   if (tramVal === 'ALL') {
-    filteredTuyen = tuyenList;
+    filteredTuyenList = tuyenList;
   } else {
     var matchedTuyenIds = doanCapList
-      .filter(d => getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']) === tramVal)
+      .filter(d => {
+        var dTramId = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']);
+        return dTramId === tramVal;
+      })
       .map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']));
     
-    filteredTuyen = tuyenList.filter(t => {
+    filteredTuyenList = tuyenList.filter(t => {
       var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
-      return matchedTuyenIds.includes(tId) || getSafeStrId(t, ['id_tram', 'tram_id']) === tramVal;
+      return matchedTuyenIds.includes(tId);
     });
   }
 
-  var khayTree = document.getElementById('khayTreeChecklist');
-  if (khayTree) {
-    if (filteredTuyen.length === 0) {
-      khayTree.innerHTML = '<div style="color: #94a3b8; font-style: italic; font-size: 11px;">Không có tuyến cáp nào</div>';
-    } else {
-      let html = '';
-      filteredTuyen.forEach(t => {
-        var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
-        var tName = t.ten_tuyen || t.ten_tuyencap || t.ten || ("Tuyến " + tId);
-        
-        var doanCon = doanCapList.filter(d => getSafeStrId(d, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']) === String(tId));
-        
-        if(doanCon.length > 0) {
-          html += `
-          <div style="margin-bottom: 8px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background: #f8fafc;">
-            <label style="font-weight:bold; color:#0d6efd; display: flex; align-items: center; cursor: pointer; font-size: 12px;">
-              <input type="checkbox" id="chkTuyen_${tId}" style="margin-right: 8px; width:14px; height:14px;" onchange="toggleTuyenGroup('${tId}', this.checked)"> 
-              [-] ${tName}
-            </label>
-            <div style="margin-left: 22px; margin-top: 6px; display: flex; flex-direction: column; gap: 4px;">`;
-          
-          doanCon.forEach(d => {
-            var dId = d.id_doan_cap || d.id;
-            var dName = d.ten_doan_cap || d.ma_doancap || ("Đoạn " + dId);
-            html += `
-              <label style="display: flex; align-items: center; cursor: pointer; color: #334155; font-size: 11px;">
-                <input type="checkbox" value="${dId}" class="chk-doan chk-doan-${tId}" style="margin-right: 6px;" onchange="checkDoanChild('${tId}')"> 
-                ${dName}
-              </label>`;
-          });
-          html += `</div></div>`;
-        }
+  selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
+  filteredTuyenList.forEach(t => {
+    var tuyenId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
+    var tuyenMa = t.ma_tuyencap || t.ten_tuyen || t.ten || ("Tuyến " + tuyenId);
+    selectTuyen.innerHTML += `<option value="${tuyenId}">${tuyenMa}</option>`;
+  });
+
+  if (selectTuyen.options.length > 1) {
+    selectTuyen.selectedIndex = 1;
+  }
+
+  onTuyenChange();
+}
+
+async function onTuyenChange() {
+  var selectTuyen = document.getElementById('selectTuyen');
+  var selectTram = document.getElementById('selectTram'); 
+  
+  var tuyenVal = selectTuyen ? String(selectTuyen.value).trim() : 'ALL';
+  var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
+  
+  var selectDoanCap = document.getElementById('selectDoanCap');
+  AppStore.setState({ selectedTuyen: tuyenVal });
+
+  var state = AppStore.getState();
+  var doanCapList = state.doanCapList || rawDoanCapList;
+
+  if (selectDoanCap) {
+    selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
+    if (tuyenVal !== 'ALL') {
+      var matchedDoan = doanCapList.filter(d => {
+        var isTuyenMatch = getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']) === tuyenVal;
+        var isTramMatch = (tramVal === 'ALL') ? true : (getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']) === tramVal);
+        return isTuyenMatch && isTramMatch;
       });
-      khayTree.innerHTML = html || '<div style="color: #94a3b8; font-style: italic; font-size: 11px;">Không có tuyến/đoạn cáp nào</div>';
+
+      matchedDoan.forEach(d => {
+        var dId = getSafeStrId(d, ['id_doan_cap', 'id']);
+        var dName = d.ma_doancap || d.ten_doancap;
+        selectDoanCap.innerHTML += `<option value="${dId}">${dName}</option>`;
+      });
+
+      if (selectDoanCap.options.length > 1) {
+        selectDoanCap.selectedIndex = 1;
+      }
     }
   }
-  
+
+  var selectDoanCapEl = document.getElementById('selectDoanCap');
+  var doanVal = selectDoanCapEl ? String(selectDoanCapEl.value).trim() : 'ALL';
+  AppStore.setState({ selectedDoanCap: doanVal });
+
+  // CHẶN LẠI: Nếu hệ thống đang khởi tạo (Syncing), không tải điểm bản đồ ở bước này
   if (!isSyncingMaster) {
-    taiDiemDaTuyen();
+    await taiDiemTheoTuyen(tuyenVal);
   }
 }
 
-async function taiDiemDaTuyen() {
-  var selectedDoanIds = getCheckedDoanIds();
+function onDoanCapChange() { 
+  var selectDoanCap = document.getElementById('selectDoanCap');
+  var doanVal = selectDoanCap ? String(selectDoanCap.value).trim() : 'ALL';
+  AppStore.setState({ selectedDoanCap: doanVal });
   
-  if (selectedDoanIds.length === 0) {
-    globalDataPoints = [];
-    AppStore.setState({ dataPoints: [] });
-    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
-    return;
-  }
-
-  showLoading("Đang nạp dữ liệu đa tuyến...");
-  try {
-    // Gọi hàm taiDuLieuDoanCapDiem bên map.js để nạp cache thứ tự cho các đoạn cáp
-    if (typeof taiDuLieuDoanCapDiem === 'function') {
-      for (let i = 0; i < selectedDoanIds.length; i++) {
-        await taiDuLieuDoanCapDiem(selectedDoanIds[i]);
-      }
-    }
-
-    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      const { data: pts, error: errPts } = await supabaseClient
-        .from('v_diem_ha_tang_full')
-        .select('*')
-        .in('id_doan_cap', selectedDoanIds.map(id => Number(id)));
-
-      if (errPts) throw errPts;
-      
-      globalDataPoints = (pts || []).map(pt => {
-        return {
-          id: String(pt.id),
-          ten: pt.ten || '',
-          lat: parseFloat(pt.lat),
-          lng: parseFloat(pt.lng),
-          ghiChu: pt.ghi_chu || '',
-          idTuyen: String(pt.id_tuyen),
-          idDoanCap: String(pt.id_doan_cap),
-          idTram: String(pt.id_tram),
-          idLoaiDiem: pt.id_loaidiem || 1,
-          loai: pt.loai || 'Điểm',
-          lyTrinh: pt.ly_trinh || '',
-          idHuong: pt.id_huong || null,
-          ngayPs: pt.ngay_ps || '',
-          duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-          stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1, 
-          ghichu_an: pt.ghichu_an || ''
-        };
-      });
-      
-      if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
-    }
-  } catch (err) {
-    console.warn("Lỗi tải điểm đa tuyến:", err.message);
-  } finally {
-    AppStore.setState({ dataPoints: globalDataPoints });
-    capNhatComboDiemA();
-    hideLoading();
-    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+  if (typeof veLaiTuyenAB === 'function') {
+    veLaiTuyenAB(); 
   }
 }
 
