@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (VÉT DỮ LIỆU VƯỢT 1000 BẢN GHI & SẮP XẾP GẦN NHẤT)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (VÉT DỮ LIỆU VƯỢT 1000 DÒNG & SẮP XẾP TỪ GỐC A)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -1023,12 +1023,13 @@ async function xuLyChuanHoaThuTuDoanCap() {
       throw new Error("Không tìm thấy thông tin tọa độ các điểm thuộc đoạn cáp này!");
     }
 
-    // 6. Thuật toán sắp xếp không gian Nearest Neighbor bắt đầu từ điểm gốc A (stt nhỏ nhất)
-    segmentPointObjects.sort((a, b) => (a.stt || 0) - (b.stt || 0));
+    // 6. Xác định Điểm gốc A: Điểm có số thứ tự (stt) nhỏ nhất làm mốc xuất phát
+    segmentPointObjects.sort((a, b) => (Number(a.stt) || 0) - (Number(b.stt) || 0));
 
     let sortedChain = [segmentPointObjects[0]]; // Điểm gốc A
     let remaining = segmentPointObjects.slice(1);
 
+    // Thuật toán Nearest Neighbor dựa trên tọa độ lat, lng bắt đầu từ điểm gốc A
     while (remaining.length > 0) {
       let lastPt = sortedChain[sortedChain.length - 1];
       let nearestIdx = 0;
