@@ -189,25 +189,44 @@ async function taiDuLieuDoanCapDiem(doanVal) {
 /**
  * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ CỦA BẢNG DOAN_CAP_DIEM
  */
+/**
+ * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ CỦA BẢNG DOAN_CAP_DIEM (Đã Fix dứt điểm lỗi lặp code)
+ */
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   if (!doanVal || doanVal === 'ALL') {
     return [];
   }
 
-  // Ưu tiên lấy từ kho độc lập của đoạn cáp để đảm bảo tính chính xác tuyệt đối, không bị ghi đè
-  if (window.segmentPointsCache && window.segmentPointsCache[String(doanVal)]) {
-    return window.segmentPointsCache[String(doanVal)];
-  }
-
-  // Dự phòng fallback an toàn nếu gọi trực tiếp
-  let segmentPts = globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
-  segmentPts.sort((a, b) => {
-    let orderA = a.stt !== undefined && a.stt !== null ? Number(a.stt) : 9999;
-    let orderB = b.stt !== undefined && b.stt !== null ? Number(b.stt) : 9999;
-    return orderA - orderB;
+  // 1. Lọc các điểm thuộc đoạn cáp OR các điểm mới vét có ID nằm trong sổ tay cacheThuTuDoanCap
+  let segmentPts = globalDataPoints.filter(pt => {
+    return String(pt.idDoanCap) === String(doanVal) || window.cacheThuTuDoanCap[Number(pt.id)] !== undefined;
   });
 
-  return segmentPts;
+  if (segmentPts.length === 0) return [];
+
+  // 2. Chống trùng lặp điểm bằng Map ID (Đảm bảo bản đồ không vẽ đè 2 điểm giống nhau)
+  let uniqueMap = new Map();
+  segmentPts.forEach(p => {
+    if (p.id && !uniqueMap.has(String(p.id))) {
+      uniqueMap.set(String(p.id), p);
+    }
+  });
+  let cleanPts = Array.from(uniqueMap.values());
+
+  // 3. Gán số thứ tự chuẩn từ bộ nhớ đệm (doan_cap_diem) vào đối tượng điểm
+  cleanPts.forEach(pt => {
+    let thuTuCSDL = window.cacheThuTuDoanCap[Number(pt.id)];
+    // Nếu điểm có thứ tự chuẩn, dùng nó. Nếu điểm bị rác/chưa có, đẩy về 9999 ở cuối
+    pt.thu_tu = (thuTuCSDL !== undefined && thuTuCSDL !== null) ? Number(thuTuCSDL) : 9999;
+  });
+
+  // 4. Sắp xếp tuyệt đối theo đúng cột thu_tu từ nhỏ đến lớn (1 đến n)
+  // Loại bỏ hoàn toàn khối lệnh sort bằng stt gây lỗi lặp vòng cũ
+  let sortedByThuTu = cleanPts.sort((a, b) => {
+    return a.thu_tu - b.thu_tu;
+  });
+
+  return sortedByThuTu;
 }
 
 function precalculateRouteDataForPoints(pts, backbonePts) {
