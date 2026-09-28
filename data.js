@@ -403,8 +403,6 @@ function getCheckedDoanIds() {
 
 // Các hàm chim mồi giữ cho các module khác gọi không bị lỗi
 function updateTuyenOptions() { onTramChange(); }
-function onTuyenChange() { } 
-function onDoanCapChange() { }
 
 function onTramChange() {
   var selectTram = document.getElementById('selectTram');
