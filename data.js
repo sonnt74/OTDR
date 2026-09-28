@@ -944,7 +944,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (ĐÃ FIX LỖI 42703 CỘT ten_diem)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (XÁC ĐỊNH ĐIỂM GỐC A DỰA TRÊN THỨ TỰ THỰC TẾ)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -975,7 +975,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
       let fetchMore = true;
       
       while (fetchMore) {
-        // ĐÃ SỬA LỖI 42703: Chỉ truy vấn đúng cột ten_diem có thực trong cơ sở dữ liệu
         const { data: chunk, error } = await supabaseClient
           .from('diem_ha_tang')
           .select('*')
@@ -994,7 +993,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
       }
 
       if (matchedPtsRaw.length > 0) {
-        // Lấy danh sách toàn bộ id_diem đã được gán trên hệ thống
         let assignedIds = [];
         let aOffset = 0;
         let aFetchMore = true;
@@ -1014,7 +1012,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
           }
         }
 
-        // Lọc điểm chưa gán và tiến hành chèn
         let matchedPts = matchedPtsRaw.filter(p => !assignedIds.includes(Number(p.id_diem || p.id)));
 
         if (matchedPts.length > 0) {
@@ -1032,7 +1029,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
       }
     }
 
-    // 4. Lấy toàn bộ id_diem thuộc đoạn cáp này từ doan_cap_diem
+    // 4. Lấy toàn bộ id_diem và thu_tu cũ thuộc đoạn cáp này từ doan_cap_diem
     let segmentLinks = [];
     let segOffset = 0;
     let segFetchMore = true;
@@ -1040,7 +1037,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
     while (segFetchMore) {
       const { data: chunk, error: errSegLink } = await supabaseClient
         .from('doan_cap_diem')
-        .select('id_diem')
+        .select('id_diem, thu_tu')
         .eq('id_doan_cap', Number(doanVal))
         .range(segOffset, segOffset + 999);
 
@@ -1058,6 +1055,12 @@ async function xuLyChuanHoaThuTuDoanCap() {
     if (!segmentLinks || segmentLinks.length === 0) {
       throw new Error("Đoạn cáp này chưa có điểm nào được gán! Hãy nhập từ khóa để gán điểm.");
     }
+
+    // Tạo bản đồ ánh xạ thứ tự cũ để ưu tiên nhận diện điểm đầu
+    let existingThuTuMap = {};
+    segmentLinks.forEach(l => {
+      existingThuTuMap[Number(l.id_diem)] = Number(l.thu_tu);
+    });
 
     let segmentPointIds = segmentLinks.map(l => Number(l.id_diem));
 
@@ -1084,7 +1087,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
       throw new Error("Không tìm thấy thông tin tọa độ các điểm thuộc đoạn cáp này!");
     }
 
-    // 6. LÀM SẠCH VÀ ÉP KIỂU TỌA ĐỘ (Giữ nguyên phần xử lý NaN rất tốt trước đó)
+    // 6. LÀM SẠCH VÀ ÉP KIỂU TỌA ĐỘ
     let validPoints = [];
     segmentPointObjects.forEach(pt => {
       let parsedLat = parseFloat(pt.lat || pt.latitude);
@@ -1103,24 +1106,27 @@ async function xuLyChuanHoaThuTuDoanCap() {
        throw new Error("Tất cả các điểm trong đoạn cáp đều bị lỗi hoặc không có tọa độ hợp lệ!");
     }
 
-    // 7. XÁC ĐỊNH ĐIỂM GỐC A TỪ TỌA ĐỘ CỐ ĐỊNH 
-    const REF_LAT = 21.593808;
-    const REF_LNG = 105.840167;
-
+    // 7. XÁC ĐỊNH ĐIỂM GỐC A (Ưu tiên điểm có thu_tu nhỏ nhất từ trước, hoặc điểm đầu tiên)
     let startIdx = 0;
-    let minRefDist = Infinity;
+    let minThuTu = Infinity;
 
     for (let i = 0; i < validPoints.length; i++) {
-      let distToRef = calculateHaversine(REF_LAT, REF_LNG, validPoints[i]._lat, validPoints[i]._lng);
-      if (distToRef < minRefDist) {
-        minRefDist = distToRef;
+      let pId = Number(validPoints[i].id_diem || validPoints[i].id);
+      let tVal = existingThuTuMap[pId] !== undefined ? existingThuTuMap[pId] : 9999;
+      if (tVal < minThuTu) {
+        minThuTu = tVal;
         startIdx = i;
       }
     }
 
-    console.log("📍 Điểm gốc A gần mốc nhất:", validPoints[startIdx]);
+    // Nếu tất cả đều chưa có thu_tu, mặc định lấy điểm đầu tiên trong danh sách
+    if (minThuTu === 9999 || minThuTu === Infinity) {
+      startIdx = 0;
+    }
 
-    // 8. THUẬT TOÁN NEAREST NEIGHBOR (KHÔNG GIAN LIỀN MẠCH)
+    console.log("📍 Điểm gốc A được xác định chuẩn xác:", validPoints[startIdx]);
+
+    // 8. THUẬT TOÁN NEAREST NEIGHBOR (LAN TRUYỀN LIỀN MẠCH TỪ ĐIỂM GỐC)
     let sortedChain = [validPoints[startIdx]];
     let remaining = validPoints.filter((_, idx) => idx !== startIdx);
 
@@ -1141,7 +1147,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
       remaining.splice(nearestIdx, 1);
     }
 
-    console.log("⛓️ Chuỗi điểm sau khi tính toán Haversine chuẩn:", sortedChain.map(p => ({ 
+    console.log("⛓️ Chuỗi điểm sau khi tính toán chuẩn:", sortedChain.map(p => ({ 
       id: p.id_diem || p.id, 
       ten: p.ten_diem || p.ten 
     })));
@@ -1164,7 +1170,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
     }
 
     hideLoading();
-    showToast(`✅ Chuẩn hóa thành công ${sortedChain.length} điểm theo khoảng cách không gian!`, "success");
+    showToast(`✅ Chuẩn hóa thành công ${sortedChain.length} điểm liên tục từ điểm gốc!`, "success");
 
     // Tải lại dữ liệu bản đồ
     if (typeof taiDiemDaTuyen === 'function') {
