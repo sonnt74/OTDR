@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (TÌM KIẾM TRỰC TIẾP TRÊN CSDL VỚI CỘT ten_diem)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (KHẮC PHỤC CHUẨN CỘT id_diem TRONG BẢNG GỐC)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -918,7 +918,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
   showLoading("Đang quét tìm, gán và sắp xếp thứ tự măng xông...");
   try {
-    // 3. TÌM KIẾM TRỰC TIẾP TRÊN CSDL BẰNG CỘT CHUẨN TEN_DIEM (Bỏ qua cột ten không tồn tại)
+    // 3. Tìm kiếm trực tiếp trên bảng gốc diem_ha_tang với cột ten_diem
     const { data: matchedPtsRaw, error: errPts } = await supabaseClient
       .from('diem_ha_tang')
       .select('*')
@@ -937,8 +937,11 @@ async function xuLyChuanHoaThuTuDoanCap() {
     if (errLink) throw errLink;
     let assignedIds = (assignedLinks || []).map(l => Number(l.id_diem));
 
-    // 5. Lọc bỏ những điểm đã được gán trước đó để lấy các điểm mồ côi thực sự
-    let matchedPts = matchedPtsRaw.filter(p => !assignedIds.includes(Number(p.id)));
+    // 5. Lọc bỏ những điểm đã được gán trước đó (dùng id_diem chuẩn xác của bảng gốc)
+    let matchedPts = matchedPtsRaw.filter(p => {
+      let pId = Number(p.id_diem || p.id);
+      return !assignedIds.includes(pId);
+    });
 
     console.log("🔍 Từ khóa tìm kiếm:", keyword);
     console.log("🔍 Các điểm khớp và chưa gán:", matchedPts);
@@ -947,10 +950,10 @@ async function xuLyChuanHoaThuTuDoanCap() {
       throw new Error(`Các điểm chứa từ khóa "${keyword}" đều đã được gán vào đoạn cáp khác rồi!`);
     }
 
-    // 6. Gán các điểm tìm được vào bảng doan_cap_diem (với id_doan_cap đã chọn)
+    // 6. Gán các điểm tìm được vào bảng doan_cap_diem (với id_doan_cap đã chọn và id_diem chuẩn)
     let newInserts = matchedPts.map(pt => ({
       id_doan_cap: Number(doanVal),
-      id_diem: Number(pt.id),
+      id_diem: Number(pt.id_diem || pt.id),
       thu_tu: 999 // Tạm thời để số lớn, thuật toán gần nhất sẽ sắp xếp lại ngay sau đây
     }));
 
@@ -960,7 +963,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
     if (errIns) throw errIns;
 
-    // 7. Lấy toàn bộ danh sách các điểm thuộc đoạn cáp này để chạy thuật toán khoảng cách gần nhất (Nearest Neighbor)
+    // 7. Lấy toàn bộ danh sách các điểm thuộc đoạn cáp này từ bảng doan_cap_diem
     const { data: segmentLinks, error: errSegLink } = await supabaseClient
       .from('doan_cap_diem')
       .select('id_diem')
@@ -969,11 +972,11 @@ async function xuLyChuanHoaThuTuDoanCap() {
     if (errSegLink) throw errSegLink;
     let segmentPointIds = (segmentLinks || []).map(l => Number(l.id_diem));
     
-    // Lấy thông tin tọa độ của tất cả các điểm trong đoạn cáp này từ bảng diem_ha_tang
+    // Lấy thông tin tọa độ của tất cả các điểm trong đoạn cáp này từ bảng diem_ha_tang (dùng .in với id_diem)
     const { data: segmentPointObjects, error: errPtObjs } = await supabaseClient
       .from('diem_ha_tang')
       .select('*')
-      .in('id', segmentPointIds);
+      .in('id_diem', segmentPointIds);
 
     if (errPtObjs) throw errPtObjs;
 
@@ -1003,7 +1006,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
       // 8. Cập nhật lại số thứ tự (thu_tu) chuẩn xác vào CSDL
       let updateBatch = sortedChain.map((pt, idx) => ({
         id_doan_cap: Number(doanVal),
-        id_diem: Number(pt.id),
+        id_diem: Number(pt.id_diem || pt.id),
         thu_tu: idx + 1
       }));
 
