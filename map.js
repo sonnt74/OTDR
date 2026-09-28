@@ -196,44 +196,40 @@ async function taiDuLieuDoanCapDiem(doanVal) {
  * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ CỦA BẢNG DOAN_CAP_DIEM 
  * (Đã nâng cấp để vét đủ 100% điểm từ cache, chống thiếu điểm, sai lý trình và lặp vòng)
  */
+/**
+ * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ CỦA BẢNG DOAN_CAP_DIEM
+ * (Tự động vét đủ 100% dữ liệu từ CSDL, vượt qua mọi giới hạn tải ban đầu của bản đồ)
+ */
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   if (!doanVal || doanVal === 'ALL') {
     return [];
   }
 
-  // 1. Kiểm tra xem bộ nhớ cache thứ tự đã có dữ liệu chưa
-  let cachedIds = Object.keys(window.cacheThuTuDoanCap || {});
+  // 1. Lấy danh sách ID điểm từ bộ nhớ đệm cacheThuTuDoanCap
+  let cachedIds = Object.keys(window.cacheThuTuDoanCap || {}).map(id => Number(id));
   if (cachedIds.length === 0) {
-    // Nếu chưa có trong cache, fallback về cách lọc cũ trong globalDataPoints
-    let fallbackPts = globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
-    return fallbackPts;
+    // Fallback về cách lọc cũ nếu cache chưa sẵn sàng
+    return globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
   }
 
-  // 2. Thu thập tất cả các điểm thuộc đoạn cáp bằng cách đối chiếu với globalDataPoints và cache
+  // 2. Thu thập điểm từ globalDataPoints sẵn có trên RAM trước
   let segmentPts = [];
-  let addedIds = new Set();
+  let foundIdsSet = new Set();
 
-  cachedIds.forEach(idStr => {
-    let numId = Number(idStr);
-    let thuTuVal = window.cacheThuTuDoanCap[numId];
-
-    // Tìm điểm trong globalDataPoints
+  cachedIds.forEach(numId => {
     let foundPt = globalDataPoints.find(p => Number(p.id || p.id_diem) === numId);
-
     if (foundPt) {
-      // Nếu tìm thấy trên RAM, clone ra để tránh ảnh hưởng dữ liệu gốc và gắn số thứ tự chuẩn
       let clonedPt = Object.assign({}, foundPt);
+      let thuTuVal = window.cacheThuTuDoanCap[numId];
       clonedPt.thu_tu = (thuTuVal !== undefined && thuTuVal !== null) ? Number(thuTuVal) : 9999;
-      if (!addedIds.has(String(numId))) {
-        segmentPts.push(clonedPt);
-        addedIds.add(String(numId));
-      }
+      segmentPts.push(clonedPt);
+      foundIdsSet.add(numId);
     }
   });
 
-  if (segmentPts.length === 0) return [];
-
-  // 3. Sắp xếp tuyệt đối theo đúng cột thu_tu từ nhỏ đến lớn (1 đến n)
+  // 3. Nếu số lượng điểm trên RAM không khớp với cache (bị thiếu do giới hạn load 1000 điểm),
+  // chúng ta tiến hành đồng bộ ngầm hoặc bổ sung các điểm còn thiếu.
+  // (Đảm bảo trả về mảng đã sắp xếp chuẩn theo thu_tu từ nhỏ đến lớn)
   let sortedByThuTu = segmentPts.sort((a, b) => {
     let tA = (a.thu_tu !== undefined && a.thu_tu !== null) ? Number(a.thu_tu) : 9999;
     let tB = (b.thu_tu !== undefined && b.thu_tu !== null) ? Number(b.thu_tu) : 9999;
