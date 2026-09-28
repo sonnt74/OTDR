@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (TÌM DIÊM TỪ BẢNG GỐC, GÁN VÀ SẮP XẾP GẦN NHẤT)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (TÌM KIẾM TRỰC TIẾP TRÊN CSDL - TRÁNH LỖI PHÂN TRANG)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -910,7 +910,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
   let keywordInput = prompt("Nhập từ khóa tìm kiếm Măng Xông cần gán (VD: 96TQG, MX...):", "");
   if (keywordInput === null) return; // Người dùng bấm Hủy
   
-  let keyword = keywordInput.trim().toLowerCase();
+  let keyword = keywordInput.trim();
   if (!keyword) {
     showToast("Bạn chưa nhập từ khóa tìm kiếm!", "warning");
     return;
@@ -918,15 +918,18 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
   showLoading("Đang quét tìm, gán và sắp xếp thứ tự măng xông...");
   try {
-    // 3. Lấy toàn bộ dữ liệu điểm từ bảng gốc diem_ha_tang
-    const { data: allPts, error: errPts } = await supabaseClient
+    // 3. TÌM KIẾM TRỰC TIẾP TRÊN CSDL DÙNG .ilike (Bỏ qua giới hạn phân trang 1000 dòng)
+    const { data: matchedPtsRaw, error: errPts } = await supabaseClient
       .from('diem_ha_tang')
-      .select('*');
+      .select('*')
+      .or(`ten_diem.ilike.%${keyword}%,ten.ilike.%${keyword}%`);
 
     if (errPts) throw errPts;
-    if (!allPts || allPts.length === 0) throw new Error("Không có dữ liệu trong bảng diem_ha_tang!");
+    if (!matchedPtsRaw || matchedPtsRaw.length === 0) {
+      throw new Error(`Không tìm thấy điểm nào trong CSDL chứa từ khóa "${keyword}"!`);
+    }
 
-    // 4. Lấy danh sách tất cả id_diem đã được gán vào bảng doan_cap_diem trước đó
+    // 4. Lấy danh sách tất cả id_diem đã được gán vào bảng doan_cap_diem
     const { data: assignedLinks, error: errLink } = await supabaseClient
       .from('doan_cap_diem')
       .select('id_diem');
@@ -934,31 +937,21 @@ async function xuLyChuanHoaThuTuDoanCap() {
     if (errLink) throw errLink;
     let assignedIds = (assignedLinks || []).map(l => Number(l.id_diem));
 
-    // 5. Lọc thông minh: Khớp từ khóa (bỏ qua khoảng trắng, dấu _, -) và chưa được gán
-    let cleanKeyword = keyword.replace(/[\s_\-]/g, '');
+    // 5. Lọc bỏ những điểm đã được gán trước đó để lấy các điểm mồ côi thực sự
+    let matchedPts = matchedPtsRaw.filter(p => !assignedIds.includes(Number(p.id)));
 
-    let matchedPts = allPts.filter(p => {
-      let pName = (p.ten_diem || p.ten || p.name || "").toLowerCase();
-      let cleanPName = pName.replace(/[\s_\-]/g, '');
-      let pId = Number(p.id);
-
-      let matchKeyword = cleanPName.includes(cleanKeyword);
-      let notAssigned = !assignedIds.includes(pId);
-      return matchKeyword && notAssigned;
-    });
-
-    console.log("🔍 Từ khóa tìm kiếm:", keyword, "| Làm sạch:", cleanKeyword);
-    console.log("🔍 Các điểm mồ côi khớp:", matchedPts);
+    console.log("🔍 Từ khóa tìm kiếm:", keyword);
+    console.log("🔍 Các điểm khớp và chưa gán:", matchedPts);
 
     if (matchedPts.length === 0) {
-      throw new Error(`Không tìm thấy điểm chưa gán nào chứa từ khóa "${keyword}"!`);
+      throw new Error(`Các điểm chứa từ khóa "${keyword}" đều đã được gán vào đoạn cáp khác rồi!`);
     }
 
     // 6. Gán các điểm tìm được vào bảng doan_cap_diem (với id_doan_cap đã chọn)
     let newInserts = matchedPts.map(pt => ({
       id_doan_cap: Number(doanVal),
       id_diem: Number(pt.id),
-      thu_tu: 999 // Tạm thời để số lớn, bước sau thuật toán gần nhất sẽ sắp xếp lại
+      thu_tu: 999 // Tạm thời để số lớn, thuật toán gần nhất sẽ sắp xếp lại ngay sau đây
     }));
 
     const { error: errIns } = await supabaseClient
@@ -975,9 +968,16 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
     if (errSegLink) throw errSegLink;
     let segmentPointIds = (segmentLinks || []).map(l => Number(l.id_diem));
-    let segmentPointObjects = allPts.filter(p => segmentPointIds.includes(Number(p.id)));
+    
+    // Lấy thông tin tọa độ của tất cả các điểm trong đoạn cáp này từ bảng diem_ha_tang
+    const { data: segmentPointObjects, error: errPtObjs } = await supabaseClient
+      .from('diem_ha_tang')
+      .select('*')
+      .in('id', segmentPointIds);
 
-    if (segmentPointObjects.length > 0) {
+    if (errPtObjs) throw errPtObjs;
+
+    if (segmentPointObjects && segmentPointObjects.length > 0) {
       // Sắp xếp điểm xuất phát (ưu tiên điểm có stt nhỏ nhất làm mốc gốc)
       segmentPointObjects.sort((a, b) => (a.stt || 0) - (b.stt || 0));
 
