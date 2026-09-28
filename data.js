@@ -125,11 +125,21 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 /**
  * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH (SỬ DỤNG VIEW)
  */
+function capNhatComboDiemA() {
+  var combo = document.getElementById('comboDiemA');
+  if (!combo) return;
+  combo.innerHTML = '<option value="DEFAULT">📍 Trạm VT A </option>';
+  globalDataPoints.filter(pt => isMangXong(pt)).forEach(mx => {
+    combo.innerHTML += `<option value="${mx.ten}">🔀 ${mx.ten}</option>`;
+  });
+}
+
 async function taiDiemTheoVungXem() {
-  if (isSyncingMaster) return; // CHẶN LẠI: Không nạp vùng xem nếu đang đồng bộ khởi tạo
+  if (isSyncingMaster) return;
   if (typeof map === 'undefined' || !map) return;
-  var selectTuyen = document.getElementById('selectTuyen');
-  if (selectTuyen && selectTuyen.value !== 'ALL') return;
+  
+  var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+  if (checkedDoan.length > 0) return; // Nếu đang tích chọn đoạn cáp trên tree-view thì bỏ qua tải theo vùng xem
 
   var bounds = map.getBounds();
   var minLat = bounds.getSouth(), maxLat = bounds.getNorth();
@@ -166,7 +176,6 @@ async function taiDiemTheoVungXem() {
           idHuong: pt.id_huong !== null && pt.id_huong !== undefined ? Number(pt.id_huong) : '',
           ngayPs: pt.ngay_ps || '',
           ghichu_an: pt.ghichu_an || '',
-          // Lấy đúng STT từ DB, nếu không có mặc định là 1 (Không ép măng xông thành 9999 nữa)
           stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1
         };
       });
@@ -320,8 +329,18 @@ function xuLyPhanQuyenDoanTuyenUser() {
   }
 
   // Cập nhật State và chuyển tiếp logic xuống hàm xử lý Tuyến
+  // Cập nhật State ban đầu
   AppStore.setState({ selectedDai: selectedDaiVal, selectedTram: selectedTramVal });
-  updateTuyenOptions();
+
+  // TỰ ĐỘNG CHỌN TRẠM ĐẦU TIÊN NẾU ĐANG LÀ 'ALL' ĐỂ HIỂN THỊ LUÔN CÂY CHECKLIST
+  if (selectedTramVal === 'ALL' && selectTram && selectTram.options.length > 1) {
+    selectTram.selectedIndex = 1; // Tự động chọn trạm đầu tiên trong danh sách
+    selectedTramVal = selectTram.value;
+    AppStore.setState({ selectedTram: selectedTramVal });
+  }
+
+  // Kích hoạt dựng cây Checklist và nạp dữ liệu ngay lập tức
+  onTramChange();
 }
 
 function onDaiChange() {
@@ -347,108 +366,249 @@ function onDaiChange() {
   onTramChange();
 }
 
+// ==========================================================================
+// BỘ HÀM XỬ LÝ TREE-VIEW CHECKLIST (TUYẾN + ĐOẠN LỒNG NHAU)
+// ==========================================================================
+
+function toggleTuyenGroup(tuyenId, isChecked) {
+  var container = document.getElementById('khayTreeChecklist');
+  if(!container) return;
+  var childCbs = container.querySelectorAll('.chk-doan-' + tuyenId);
+  childCbs.forEach(cb => cb.checked = isChecked);
+  taiDiemDaTuyen(); 
+}
+
+function checkDoanChild(tuyenId) {
+  var container = document.getElementById('khayTreeChecklist');
+  if(!container) return;
+  var childCbs = container.querySelectorAll('.chk-doan-' + tuyenId);
+  var parentCb = container.querySelector('#chkTuyen_' + tuyenId);
+  if(!parentCb) return;
+
+  var allChecked = Array.from(childCbs).every(cb => cb.checked);
+  var someChecked = Array.from(childCbs).some(cb => cb.checked);
+  
+  parentCb.checked = allChecked;
+  parentCb.indeterminate = !allChecked && someChecked; 
+  
+  taiDiemDaTuyen(); 
+}
+
+function getCheckedDoanIds() {
+  var container = document.getElementById('khayTreeChecklist');
+  if(!container) return [];
+  var checkboxes = container.querySelectorAll('input.chk-doan:checked');
+  return Array.from(checkboxes).map(cb => cb.value);
+}
+
+// Các hàm chim mồi giữ cho các module khác gọi không bị lỗi
+function updateTuyenOptions() { onTramChange(); }
+
 function onTramChange() {
   var selectTram = document.getElementById('selectTram');
   var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
-
-  AppStore.setState({ selectedTram: tramVal });
-  updateTuyenOptions();
-}
-
-function updateTuyenOptions() {
-  var selectTuyen = document.getElementById('selectTuyen');
-  var selectTram = document.getElementById('selectTram');
-  if (!selectTuyen) return;
-
-  var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
-  var state = AppStore.getState();
   
-  var doanCapList = state.doanCapList || rawDoanCapList || [];
-  var tuyenList = state.tuyenList || rawTuyenList || [];
+  AppStore.setState({ selectedTram: tramVal, selectedDai: document.getElementById('selectDai') ? document.getElementById('selectDai').value : 'ALL' });
 
-  var filteredTuyenList = [];
+  var tuyenList = AppStore.getState().tuyenList || rawTuyenList || [];
+  var doanCapList = AppStore.getState().doanCapList || rawDoanCapList || [];
 
+  var filteredTuyen = [];
   if (tramVal === 'ALL') {
-    filteredTuyenList = tuyenList;
+    filteredTuyen = tuyenList;
   } else {
+    // 1. Chỉ lấy danh sách ID tuyến có chứa ít nhất một đoạn cáp thuộc trạm đang chọn
     var matchedTuyenIds = doanCapList
-      .filter(d => {
-        var dTramId = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']);
-        return dTramId === tramVal;
-      })
+      .filter(d => getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']) === tramVal)
       .map(d => getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']));
     
-    filteredTuyenList = tuyenList.filter(t => {
+    filteredTuyen = tuyenList.filter(t => {
       var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
       return matchedTuyenIds.includes(tId);
     });
   }
 
-  selectTuyen.innerHTML = '<option value="ALL">-- Chọn tuyến cáp --</option>';
-  filteredTuyenList.forEach(t => {
-    var tuyenId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
-    var tuyenMa = t.ma_tuyencap || t.ten_tuyen || t.ten || ("Tuyến " + tuyenId);
-    selectTuyen.innerHTML += `<option value="${tuyenId}">${tuyenMa}</option>`;
-  });
-
-  if (selectTuyen.options.length > 1) {
-    selectTuyen.selectedIndex = 1;
-  }
-
-  onTuyenChange();
-}
-
-async function onTuyenChange() {
-  var selectTuyen = document.getElementById('selectTuyen');
-  var selectTram = document.getElementById('selectTram'); 
-  
-  var tuyenVal = selectTuyen ? String(selectTuyen.value).trim() : 'ALL';
-  var tramVal = selectTram ? String(selectTram.value).trim() : 'ALL';
-  
-  var selectDoanCap = document.getElementById('selectDoanCap');
-  AppStore.setState({ selectedTuyen: tuyenVal });
-
-  var state = AppStore.getState();
-  var doanCapList = state.doanCapList || rawDoanCapList;
-
-  if (selectDoanCap) {
-    selectDoanCap.innerHTML = '<option value="ALL">-- Tất cả đoạn cáp --</option>';
-    if (tuyenVal !== 'ALL') {
-      var matchedDoan = doanCapList.filter(d => {
-        var isTuyenMatch = getSafeStrId(d, ['id_tuyen', 'tuyen_cap_id', 'id_tuyen_cap']) === tuyenVal;
-        var isTramMatch = (tramVal === 'ALL') ? true : (getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']) === tramVal);
-        return isTuyenMatch && isTramMatch;
+  var khayTree = document.getElementById('khayTreeChecklist');
+  if (khayTree) {
+    if (filteredTuyen.length === 0) {
+      khayTree.innerHTML = '<div style="color: #94a3b8; font-style: italic; font-size: 11px;">Không có tuyến cáp nào thuộc trạm này</div>';
+    } else {
+      let html = '';
+      filteredTuyen.forEach(t => {
+        var tId = getSafeStrId(t, ['id_tuyen_cap', 'id_tuyen', 'id']);
+        var tName = t.ten_tuyen || t.ten_tuyencap || t.ten || ("Tuyến " + tId);
+        
+        // 2. Chỉ lọc các Đoạn cáp con THUỘC ĐÚNG TUYẾN VÀ ĐÚNG TRẠM QUẢN LÝ
+        var doanCon = doanCapList.filter(d => {
+          var dTuyenId = getSafeStrId(d, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']);
+          var dTramId = getSafeStrId(d, ['id_tram', 'tram_id', 'id_tram_vt', 'tram_ql']);
+          var isMatchTuyen = (dTuyenId === String(tId));
+          var isMatchTram = (tramVal === 'ALL' || dTramId === tramVal);
+          return isMatchTuyen && isMatchTram;
+        });
+        
+        // Chỉ render tuyến nếu tuyến đó thực sự chứa đoạn cáp của trạm
+        if(doanCon.length > 0) {
+          html += `
+          <div style="margin-bottom: 5px; border: 1px solid #e2e8f0; border-radius: 5px; padding: 4px 6px; background: #f8fafc;">
+            <label style="font-weight:bold; color:#0d6efd; display: flex; align-items: center; cursor: pointer; font-size: 11px;">
+              <input type="checkbox" id="chkTuyen_${tId}" style="margin-right: 6px; width:13px; height:13px;" onchange="toggleTuyenGroup('${tId}', this.checked)"> 
+              [-] ${tName}
+            </label>
+            <div style="margin-left: 18px; margin-top: 4px; display: flex; flex-direction: column; gap: 3px;">`;
+          
+          doanCon.forEach(d => {
+            var dId = d.id_doan_cap || d.id;
+            var dName = d.ten_doan_cap || d.ma_doancap || ("Đoạn " + dId);
+            html += `
+              <label style="display: flex; align-items: center; cursor: pointer; color: #334155; font-size: 11px;">
+                <input type="checkbox" value="${dId}" class="chk-doan chk-doan-${tId}" style="margin-right: 5px;" onchange="checkDoanChild('${tId}')"> 
+                ${dName}
+              </label>`;
+          });
+          html += `</div></div>`;
+        }
       });
-
-      matchedDoan.forEach(d => {
-        var dId = getSafeStrId(d, ['id_doan_cap', 'id']);
-        var dName = d.ma_doancap || d.ten_doancap;
-        selectDoanCap.innerHTML += `<option value="${dId}">${dName}</option>`;
-      });
-
-      if (selectDoanCap.options.length > 1) {
-        selectDoanCap.selectedIndex = 1;
-      }
+      khayTree.innerHTML = html || '<div style="color: #94a3b8; font-style: italic; font-size: 11px;">Không có tuyến/đoạn cáp nào thuộc trạm này</div>';
     }
   }
-
-  var selectDoanCapEl = document.getElementById('selectDoanCap');
-  var doanVal = selectDoanCapEl ? String(selectDoanCapEl.value).trim() : 'ALL';
-  AppStore.setState({ selectedDoanCap: doanVal });
-
-  // CHẶN LẠI: Nếu hệ thống đang khởi tạo (Syncing), không tải điểm bản đồ ở bước này
+  
   if (!isSyncingMaster) {
-    await taiDiemTheoTuyen(tuyenVal);
+    taiDiemDaTuyen();
   }
 }
 
-function onDoanCapChange() { 
-  var selectDoanCap = document.getElementById('selectDoanCap');
-  var doanVal = selectDoanCap ? String(selectDoanCap.value).trim() : 'ALL';
-  AppStore.setState({ selectedDoanCap: doanVal });
+// ==========================================================================
+// TẢI ĐIỂM ĐA TUYẾN (ĐẢM BẢO ĐẦY ĐỦ TRỤC TỪ TRẠM A ĐẾN CUỐI TUYẾN)
+// ==========================================================================
+// Khởi tạo kho lưu trữ điểm độc lập cho từng đoạn cáp
+window.segmentPointsCache = {};
+
+// ==========================================================================
+// TẢI ĐIỂM ĐA TUYẾN THEO TREE-VIEW (VƯỢT MỐC 1000 ĐIỂM AN TOÀN TUYỆT ĐỐI)
+// ==========================================================================
+window.segmentPointsCache = {};
+
+async function taiDiemDaTuyen() {
+  var selectedDoanIds = getCheckedDoanIds();
   
-  if (typeof veLaiTuyenAB === 'function') {
-    veLaiTuyenAB(); 
+  if (selectedDoanIds.length === 0) {
+    globalDataPoints = [];
+    window.segmentPointsCache = {};
+    window.cacheThuTuDoanCap = {};
+    window.cacheChiTietDiemDoanCap = {};
+    AppStore.setState({ dataPoints: [] });
+    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+    return;
+  }
+
+  showLoading("Đang nạp dữ liệu các đoạn cáp lớn...");
+  try {
+    window.segmentPointsCache = {}; 
+    window.cacheThuTuDoanCap = {};
+    window.cacheChiTietDiemDoanCap = {};
+
+    if (navigator.onLine && typeof supabaseClient !== 'undefined') {
+      let allCombinedPts = [];
+
+      for (let i = 0; i < selectedDoanIds.length; i++) {
+        let dId = selectedDoanIds[i];
+
+        // 1. VÉT TOÀN BỘ LIÊN KẾT ID VÀ THỨ TỰ (Dùng phân trang vượt mốc 1000 điểm)
+        let segmentLinks = [];
+        let offset = 0;
+        let fetchMore = true;
+        while (fetchMore) {
+          let { data: chunk, error } = await supabaseClient
+            .from('doan_cap_diem')
+            .select('id_diem, thu_tu')
+            .eq('id_doan_cap', Number(dId))
+            .range(offset, offset + 999);
+
+          if (error) throw error;
+          if (chunk && chunk.length > 0) {
+            segmentLinks = segmentLinks.concat(chunk);
+            offset += 1000;
+            if (chunk.length < 1000) fetchMore = false;
+          } else {
+            fetchMore = false;
+          }
+        }
+
+        if (segmentLinks.length === 0) continue;
+
+        // Lưu vào bộ nhớ đệm cache thứ tự
+        segmentLinks.forEach(row => {
+          window.cacheThuTuDoanCap[Number(row.id_diem)] = row.thu_tu;
+        });
+
+        let allIds = segmentLinks.map(l => Number(l.id_diem));
+        let segmentPointObjects = [];
+        const batchSize = 500;
+
+        // 2. CHIA LÔ 500 ID ĐỂ TẢI CHI TIẾT TỌA ĐỘ TỪ BẢNG (Chống tràn giới hạn truy vấn)
+        for (let b = 0; b < allIds.length; b += batchSize) {
+          let batchIds = allIds.slice(b, b + batchSize);
+          if (batchIds.length === 0) continue;
+
+          const { data: batchData, error: errBatch } = await supabaseClient
+            .from('v_diem_ha_tang_full')
+            .select('*')
+            .in('id', batchIds);
+
+          if (errBatch) throw errBatch;
+          if (batchData) {
+            segmentPointObjects = segmentPointObjects.concat(batchData);
+          }
+        }
+
+        // 3. CHUẨN HÓA VÀ GẮN SỐ THỨ TỰ CHUẨN
+        let formattedPts = segmentPointObjects.map(pt => {
+          let pId = Number(pt.id);
+          let tVal = window.cacheThuTuDoanCap[pId];
+          
+          let formattedPt = {
+            id: String(pt.id),
+            ten: pt.ten || '',
+            lat: parseFloat(pt.lat),
+            lng: parseFloat(pt.lng),
+            ghiChu: pt.ghi_chu || '',
+            idTuyen: String(pt.id_tuyen),
+            idDoanCap: String(pt.id_doan_cap || dId),
+            idTram: String(pt.id_tram),
+            idLoaiDiem: pt.id_loaidiem || 1,
+            loai: pt.loai || 'Điểm',
+            lyTrinh: pt.ly_trinh || '',
+            idHuong: pt.id_huong || null,
+            ngayPs: pt.ngay_ps || '',
+            duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
+            stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1,
+            ghichu_an: pt.ghichu_an || '',
+            thu_tu: (tVal !== undefined && tVal !== null) ? Number(tVal) : 9999
+          };
+
+          window.cacheChiTietDiemDoanCap[pId] = formattedPt;
+          return formattedPt;
+        });
+
+        // Sắp xếp tuyệt đối theo đúng thứ tự (thu_tu) từ CSDL
+        formattedPts.sort((a, b) => a.thu_tu - b.thu_tu);
+
+        window.segmentPointsCache[String(dId)] = formattedPts;
+        allCombinedPts = allCombinedPts.concat(formattedPts);
+      }
+
+      globalDataPoints = allCombinedPts;
+      if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
+    }
+  } catch (err) {
+    console.warn("Lỗi tải điểm đoạn cáp:", err.message);
+    showToast("❌ Lỗi tải điểm: " + err.message, "error");
+  } finally {
+    AppStore.setState({ dataPoints: globalDataPoints });
+    capNhatComboDiemA();
+    hideLoading();
+    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
   }
 }
 
@@ -457,12 +617,10 @@ function onDiemAChange() {
 }
 
 function capNhatComboDiemA() {
-  var selectTuyen = document.getElementById('selectTuyen');
-  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
   var combo = document.getElementById('comboDiemA');
   if (!combo) return;
   combo.innerHTML = '<option value="DEFAULT">📍 Trạm VT A </option>';
-  globalDataPoints.filter(pt => isMangXong(pt) && (tuyenVal === 'ALL' || String(pt.idTuyen) === String(tuyenVal))).forEach(mx => {
+  globalDataPoints.filter(pt => isMangXong(pt)).forEach(mx => {
     combo.innerHTML += `<option value="${mx.ten}">🔀 ${mx.ten}</option>`;
   });
 }
@@ -507,15 +665,29 @@ function chiaSeSuCo(lat, lng, khoangCachKm, lyTrinhText, prevMXInfo, nextMXInfo,
 }
 
 function timViTriDut() {
-  
-  var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value), kcOtdrMeters = kcOtdrKm * 1000; 
+  var kcOtdrKm = parseFloat(document.getElementById('txtKcOtdr').value);
+  var kcOtdrMeters = kcOtdrKm * 1000; 
   if (isNaN(kcOtdrMeters) || kcOtdrMeters <= 0) { showToast("Nhập cự ly đo hợp lệ!", "error"); return; }
   
-  var tuyenVal = document.getElementById('selectTuyen').value;
-  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
-  var doanVal = document.getElementById('selectDoanCap').value;
-  
-  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+  if (checkedDoan.length === 0) {
+    showToast("Vui lòng tích chọn ít nhất 1 đoạn cáp trên cây Checklist!", "error");
+    return;
+  }
+
+  // Nếu chọn nhiều đoạn, tự động bật bảng hỏi chọn đoạn phân tích
+  if (checkedDoan.length > 1) {
+    chonDoanCapPhanTich(function(selectedDoanId) {
+      thucHienTinhToanOtdr(kcOtdrKm, kcOtdrMeters, selectedDoanId);
+    });
+    return;
+  }
+
+  thucHienTinhToanOtdr(kcOtdrKm, kcOtdrMeters, checkedDoan[0]);
+}
+
+function thucHienTinhToanOtdr(kcOtdrKm, kcOtdrMeters, doanVal) {
+  var backbone = getFullRouteBackboneForSegment(doanVal);
   precalculateRouteDataForPoints(backbone, backbone);
 
   if (backbone.length < 2) { showToast("Tuyến cáp chưa đủ dữ liệu!", "error"); return; }
@@ -570,7 +742,7 @@ function timViTriDut() {
     }
   }
 
-  if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
+  if (typeof foundMarkerLayer !== 'undefined' && foundMarkerLayer && map) map.removeLayer(foundMarkerLayer);
   map.setView([targetLat, targetLng], 19, { animate: true });
   
   var faultIcon = L.divIcon({ html: '<div style="background:red; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px red;">⚡</div>', iconSize: [28, 28] });
@@ -603,7 +775,6 @@ function timViTriDut() {
 }
 
 function timLyTrinhBanDo() {
- 
   var txt = document.getElementById('txtTimLyTrinh').value.trim();
   var parsedTarget = parseLyTrinhWithSuffix(txt);
   var targetMeters = parsedTarget ? parsedTarget.meters : null;
@@ -613,9 +784,26 @@ function timLyTrinhBanDo() {
     return;
   }
   
-  var pts = getPointsCuaTuyenHienTai();
+  var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+  if (checkedDoan.length === 0) {
+    showToast("Vui lòng tích chọn ít nhất 1 đoạn cáp trên cây Checklist trước khi tìm kiếm!", "error");
+    return;
+  }
+
+  if (checkedDoan.length > 1) {
+    chonDoanCapPhanTich(function(selectedDoanId) {
+      thucHienTimLyTrinh(txt, targetMeters, selectedDoanId);
+    });
+    return;
+  }
+
+  thucHienTimLyTrinh(txt, targetMeters, checkedDoan[0]);
+}
+
+function thucHienTimLyTrinh(txt, targetMeters, doanVal) {
+  var pts = getPointsCuaTuyenHienTaiChoDoan(doanVal);
   if (pts.length < 2) {
-    showToast("Vui lòng chọn tuyến cáp trước khi tìm kiếm!", "error");
+    showToast("Đoạn cáp chưa đủ dữ liệu điểm để tìm lý trình!", "error");
     return;
   }
 
@@ -667,18 +855,11 @@ function timLyTrinhBanDo() {
     bestDescription = `Gần điểm mốc: ${closest.ten} (Sai số ~${Math.round(deviationMeters)}m)`;
   }
 
-  var selectTuyen = document.getElementById('selectTuyen');
-  var selectTram = document.getElementById('selectTram');
-  var selectDoanCap = document.getElementById('selectDoanCap');
-  
-  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
-  var tramVal = selectTram ? selectTram.value : 'ALL';
-  var doanVal = selectDoanCap ? selectDoanCap.value : 'ALL';
-
-  var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, getMasterRouteBackbone(tuyenVal, tramVal, doanVal));
+  var backbone = getFullRouteBackboneForSegment(doanVal);
+  var distToA = getDistanceAlongRoute({lat: foundLat, lng: foundLng}, backbone);
   var distStr = (distToA >= 1000) ? (distToA / 1000).toFixed(2) + " km" : Math.round(distToA) + " m";
 
-  if (foundMarkerLayer) map.removeLayer(foundMarkerLayer);
+  if (typeof foundMarkerLayer !== 'undefined' && foundMarkerLayer && map) map.removeLayer(foundMarkerLayer);
   map.setView([foundLat, foundLng], 19, { animate: true });
   
   var markerHtml = '<div style="background:#fd7e14; color:white; width:28px; height:28px; border-radius:50%; text-align:center; line-height:28px; border:2px solid #fff; box-shadow:0 0 10px #fd7e14; font-size:14px;">📍</div>';
@@ -686,7 +867,7 @@ function timLyTrinhBanDo() {
   
   var popupContent = `<b>🔍 KẾT QUẢ TÌM LÝ TRÌNH: ${txt}</b><br>` +
                      `- Vị trí: <b>${bestDescription}</b><br>` +
-                     `- Cự ly cáp tới Trạm VT A: <b>${distStr}</b><br>` ;
+                     `- Cự ly cáp tới Trạm VT A: <b>${distStr}</b><br>`;
                      
   foundMarkerLayer.bindPopup(popupContent).openPopup();
   datLichTuXoaMarkerTimKiem();
@@ -716,5 +897,271 @@ function toggleGISPanel() {
   var panel = document.getElementById('control-panel');
   if (panel) {
     panel.classList.toggle('collapsed');
+  }
+}
+
+// ==========================================================================
+// HÀM BỔ SUNG: HỘP THOẠI CHỌN ĐOẠN CÁP KHI TÍCH CHỌN NHIỀU ĐOẠN
+// ==========================================================================
+function chonDoanCapPhanTich(callback) {
+  var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+  if (checkedDoan.length === 0) { 
+    showToast("Vui lòng tích chọn ít nhất 1 đoạn cáp!", "error"); 
+    return; 
+  }
+  if (checkedDoan.length === 1) { 
+    callback(checkedDoan[0]); 
+    return; 
+  }
+
+  var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
+  var matchedDoan = doanCapList.filter(d => checkedDoan.includes(String(d.id_doan_cap || d.id)));
+
+  let overlay = document.getElementById('custom-segment-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'custom-segment-overlay';
+    overlay.style.cssText = "display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.7); z-index: 9999999; justify-content: center; align-items: center; backdrop-filter: blur(3px);";
+    document.body.appendChild(overlay);
+  }
+
+  let optsHtml = matchedDoan.map(d => `<option value="${d.id_doan_cap || d.id}">${d.ten_doan_cap || d.ma_doancap || ('Đoạn ' + (d.id_doan_cap || d.id))}</option>`).join('');
+  overlay.innerHTML = `
+    <div class="confirm-box" style="width: 90%; max-width: 380px; text-align: left; background: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+      <div style="margin-bottom: 12px; font-size: 14px; font-weight: bold; color: #0d6efd;">🔀 Chọn Đoạn Cáp Phân Tích</div>
+      <div style="font-size: 13px; color: #64748b; margin-bottom: 12px;">Bạn đang chọn nhiều đoạn cáp. Vui lòng chọn đoạn trục chính để tính toán:</div>
+      <select id="modalSelectDoan" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; margin-bottom: 16px;">${optsHtml}</select>
+      <div style="display: flex; gap: 8px;">
+        <button id="btnCancelSeg" style="flex: 1; padding: 8px; border-radius: 6px; background: #64748b; color: white; border: none; font-weight: bold; cursor: pointer;">Hủy bỏ</button>
+        <button id="btnConfirmSeg" style="flex: 1; padding: 8px; border-radius: 6px; background: #198754; color: white; border: none; font-weight: bold; cursor: pointer;">Xác nhận</button>
+      </div>
+    </div>`;
+  overlay.style.display = 'flex';
+  document.getElementById('btnCancelSeg').onclick = () => overlay.style.display = 'none';
+  document.getElementById('btnConfirmSeg').onclick = () => { 
+    overlay.style.display = 'none'; 
+    callback(document.getElementById('modalSelectDoan').value); 
+  };
+}
+// ==========================================================================
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (XÁC ĐỊNH ĐIỂM GỐC A DỰA TRÊN THỨ TỰ THỰC TẾ)
+// ==========================================================================
+// ==========================================================================
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (ĐÃ GỌN GÀNG, KHÔNG CONSOLE & DÙNG PROMPT CHUYÊN NGHIỆP)
+// ==========================================================================
+async function xuLyChuanHoaThuTuDoanCap() {
+  var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+  if (checkedDoan.length === 0) {
+    showToast("Vui lòng tích chọn 1 đoạn cáp trên cây Checklist!", "warning");
+    return;
+  }
+  if (checkedDoan.length > 1) {
+    showToast("Vui lòng chỉ tích chọn MỘT đoạn cáp để thực hiện!", "warning");
+    return;
+  }
+
+  let doanVal = checkedDoan[0];
+
+  // Sử dụng hộp thoại tùy chỉnh chuyên nghiệp thay vì lệnh prompt() mặc định của trình duyệt
+  let keywordInput = await showPromptDialog("Nhập từ khóa tìm kiếm Măng Xông cần gán thêm (Bỏ trống nếu chỉ sắp xếp lại các điểm hiện có):", "");
+  if (keywordInput === null) return; // Người dùng bấm Hủy
+  
+  let keyword = keywordInput.trim();
+
+  showLoading("Đang xử lý chuẩn hóa thứ tự đoạn cáp...");
+  try {
+    if (keyword) {
+      let matchedPtsRaw = [];
+      let offset = 0;
+      let fetchMore = true;
+      
+      while (fetchMore) {
+        const { data: chunk, error } = await supabaseClient
+          .from('diem_ha_tang')
+          .select('*')
+          .ilike('ten_diem', `%${keyword}%`)
+          .range(offset, offset + 999);
+
+        if (error) throw error;
+        
+        if (chunk && chunk.length > 0) {
+          matchedPtsRaw = matchedPtsRaw.concat(chunk);
+          offset += 1000;
+          if (chunk.length < 1000) fetchMore = false;
+        } else {
+          fetchMore = false;
+        }
+      }
+
+      if (matchedPtsRaw.length > 0) {
+        let assignedIds = [];
+        let aOffset = 0;
+        let aFetchMore = true;
+        
+        while (aFetchMore) {
+          const { data: aChunk } = await supabaseClient
+            .from('doan_cap_diem')
+            .select('id_diem')
+            .range(aOffset, aOffset + 999);
+
+          if (aChunk && aChunk.length > 0) {
+            assignedIds = assignedIds.concat(aChunk.map(l => Number(l.id_diem)));
+            aOffset += 1000;
+            if (aChunk.length < 1000) aFetchMore = false;
+          } else {
+            aFetchMore = false;
+          }
+        }
+
+        let matchedPts = matchedPtsRaw.filter(p => !assignedIds.includes(Number(p.id_diem || p.id)));
+
+        if (matchedPts.length > 0) {
+          let newInserts = matchedPts.map(pt => ({
+            id_doan_cap: Number(doanVal),
+            id_diem: Number(pt.id_diem || pt.id),
+            thu_tu: 999
+          }));
+          
+          const { error: insErr } = await supabaseClient
+            .from('doan_cap_diem')
+            .insert(newInserts);
+          if (insErr) throw insErr;
+        }
+      }
+    }
+
+    let segmentLinks = [];
+    let segOffset = 0;
+    let segFetchMore = true;
+    
+    while (segFetchMore) {
+      const { data: chunk, error: errSegLink } = await supabaseClient
+        .from('doan_cap_diem')
+        .select('id_diem, thu_tu')
+        .eq('id_doan_cap', Number(doanVal))
+        .range(segOffset, segOffset + 999);
+
+      if (errSegLink) throw errSegLink;
+      
+      if (chunk && chunk.length > 0) {
+        segmentLinks = segmentLinks.concat(chunk);
+        segOffset += 1000;
+        if (chunk.length < 1000) segFetchMore = false;
+      } else {
+        segFetchMore = false;
+      }
+    }
+
+    if (!segmentLinks || segmentLinks.length === 0) {
+      throw new Error("Đoạn cáp này chưa có điểm nào được gán! Hãy nhập từ khóa để gán điểm.");
+    }
+
+    let existingThuTuMap = {};
+    segmentLinks.forEach(l => {
+      existingThuTuMap[Number(l.id_diem)] = Number(l.thu_tu);
+    });
+
+    let segmentPointIds = segmentLinks.map(l => Number(l.id_diem));
+
+    let segmentPointObjects = [];
+    const batchSize = 500;
+    
+    for (let i = 0; i < segmentPointIds.length; i += batchSize) {
+      let batchIds = segmentPointIds.slice(i, i + batchSize);
+      if (batchIds.length === 0) continue;
+
+      const { data: batchData, error: errBatch } = await supabaseClient
+        .from('diem_ha_tang')
+        .select('*')
+        .in('id_diem', batchIds);
+
+      if (errBatch) throw errBatch;
+      if (batchData) {
+        segmentPointObjects = segmentPointObjects.concat(batchData);
+      }
+    }
+
+    if (!segmentPointObjects || segmentPointObjects.length === 0) {
+      throw new Error("Không tìm thấy thông tin tọa độ các điểm thuộc đoạn cáp này!");
+    }
+
+    let validPoints = [];
+    segmentPointObjects.forEach(pt => {
+      let parsedLat = parseFloat(pt.lat || pt.latitude);
+      let parsedLng = parseFloat(pt.lng || pt.longitude || pt.long);
+      
+      if (!isNaN(parsedLat) && !isNaN(parsedLng) && parsedLat !== 0 && parsedLng !== 0) {
+        pt._lat = parsedLat;
+        pt._lng = parsedLng;
+        validPoints.push(pt);
+      }
+    });
+
+    if (validPoints.length === 0) {
+       throw new Error("Tất cả các điểm trong đoạn cáp đều bị lỗi hoặc không có tọa độ hợp lệ!");
+    }
+
+    let startIdx = 0;
+    let minThuTu = Infinity;
+
+    for (let i = 0; i < validPoints.length; i++) {
+      let pId = Number(validPoints[i].id_diem || validPoints[i].id);
+      let tVal = existingThuTuMap[pId] !== undefined ? existingThuTuMap[pId] : 9999;
+      if (tVal < minThuTu) {
+        minThuTu = tVal;
+        startIdx = i;
+      }
+    }
+
+    if (minThuTu === 9999 || minThuTu === Infinity) {
+      startIdx = 0;
+    }
+
+    let sortedChain = [validPoints[startIdx]];
+    let remaining = validPoints.filter((_, idx) => idx !== startIdx);
+
+    while (remaining.length > 0) {
+      let lastPt = sortedChain[sortedChain.length - 1];
+      let nearestIdx = 0;
+      let minNutDist = Infinity;
+
+      for (let i = 0; i < remaining.length; i++) {
+        let dist = calculateHaversine(lastPt._lat, lastPt._lng, remaining[i]._lat, remaining[i]._lng);
+        
+        if (dist < minNutDist) {
+          minNutDist = dist;
+          nearestIdx = i;
+        }
+      }
+      sortedChain.push(remaining[nearestIdx]);
+      remaining.splice(nearestIdx, 1);
+    }
+
+    const updateBatchSize = 500;
+    for (let i = 0; i < sortedChain.length; i += updateBatchSize) {
+      let chunkChain = sortedChain.slice(i, i + updateBatchSize);
+      let updateBatch = chunkChain.map((pt, idx) => ({
+        id_doan_cap: Number(doanVal),
+        id_diem: Number(pt.id_diem || pt.id),
+        thu_tu: i + idx + 1
+      }));
+
+      const { error: errUpdateOrder } = await supabaseClient
+        .from('doan_cap_diem')
+        .upsert(updateBatch, { onConflict: 'id_doan_cap,id_diem' });
+
+      if (errUpdateOrder) throw errUpdateOrder;
+    }
+
+    hideLoading();
+    showToast(`✅ Chuẩn hóa thành công ${sortedChain.length} điểm liên tục từ điểm gốc!`, "success");
+
+    if (typeof taiDiemDaTuyen === 'function') {
+      await taiDiemDaTuyen();
+    }
+
+  } catch (err) {
+    hideLoading();
+    showToast("❌ Lỗi: " + err.message, "error");
   }
 }

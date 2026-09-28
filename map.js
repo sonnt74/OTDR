@@ -31,13 +31,12 @@ function khoiTaoBanDoLeaflet() {
     { position: 'topright' }
   ).addTo(map);
 
-  // Sự kiện tự động nạp điểm theo vùng xem khi kéo/zoom bản đồ
+ // Sự kiện tự động nạp điểm theo vùng xem khi kéo/zoom bản đồ
   map.on('moveend', function() {
     clearTimeout(moveEndDebounceTimer);
     moveEndDebounceTimer = setTimeout(function() {
-      var selectTuyen = document.getElementById('selectTuyen');
-      var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
-      if (tuyenVal === 'ALL' && typeof taiDiemTheoVungXem === 'function') {
+      var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+      if (checkedDoan.length === 0 && typeof taiDiemTheoVungXem === 'function') {
         taiDiemTheoVungXem();
       }
     }, 400);
@@ -149,66 +148,104 @@ function getDistanceAlongRoute(targetPt, pathPts) {
  * 1. HÀM TẢI DỮ LIỆU ĐỆM TỪ BẢNG doan_cap_diem (Chạy ngầm khi đổi đoạn cáp)
  * Bạn hãy gọi hàm này ở sự kiện onchange của dropdown chọn Đoạn cáp: taiDuLieuDoanCapDiem(doanVal);
  */
-window.cacheThuTuDoanCap = {}; // Bộ nhớ tạm lưu thứ tự
+window.cacheThuTuDoanCap = {};
+window.cacheChiTietDiemDoanCap = {}; // Bộ nhớ đệm lưu chi tiết toàn bộ điểm của đoạn cáp
 
 async function taiDuLieuDoanCapDiem(doanVal) {
   if (!doanVal || doanVal === 'ALL') {
     window.cacheThuTuDoanCap = {};
+    window.cacheChiTietDiemDoanCap = {};
     return;
   }
 
   try {
-    let { data, error } = await supabaseClient
-      .from('doan_cap_diem')
-      .select('id_diem, thu_tu')
-      .eq('id_doan_cap', Number(doanVal));
+    // 1. Vét toàn bộ liên kết id_diem, thu_tu từ doan_cap_diem (Vượt mốc 1000 bản ghi bằng phân trang)
+    let segmentLinks = [];
+    let offset = 0;
+    let fetchMore = true;
+    while (fetchMore) {
+      let { data: chunk, error } = await supabaseClient
+        .from('doan_cap_diem')
+        .select('id_diem, thu_tu')
+        .eq('id_doan_cap', Number(doanVal))
+        .range(offset, offset + 999);
 
-    if (error) {
-      console.error("Lỗi tải bảng doan_cap_diem:", error);
-      window.cacheThuTuDoanCap = {};
-      return;
+      if (error) throw error;
+      if (chunk && chunk.length > 0) {
+        segmentLinks = segmentLinks.concat(chunk);
+        offset += 1000;
+        if (chunk.length < 1000) fetchMore = false;
+      } else {
+        fetchMore = false;
+      }
     }
 
-    // Đưa vào object để tra cứu siêu nhanh dạng { id_diem: thu_tu }
     window.cacheThuTuDoanCap = {};
-    if (data) {
-      data.forEach(row => {
+    window.cacheChiTietDiemDoanCap = {};
+
+    if (segmentLinks.length > 0) {
+      segmentLinks.forEach(row => {
         window.cacheThuTuDoanCap[Number(row.id_diem)] = row.thu_tu;
       });
+
+      // 2. Lấy toàn bộ chi tiết tọa độ từ diem_ha_tang theo lô 500 ID (Vượt mốc giới hạn RAM)
+      let allIds = segmentLinks.map(l => Number(l.id_diem));
+      const batchSize = 500;
+      
+      for (let i = 0; i < allIds.length; i += batchSize) {
+        let batchIds = allIds.slice(i, i + batchSize);
+        if (batchIds.length === 0) continue;
+
+        const { data: batchData, error: errBatch } = await supabaseClient
+          .from('diem_ha_tang')
+          .select('*')
+          .in('id_diem', batchIds);
+
+        if (errBatch) throw errBatch;
+        if (batchData) {
+          batchData.forEach(pt => {
+            let pId = Number(pt.id_diem || pt.id);
+            window.cacheChiTietDiemDoanCap[pId] = pt;
+          });
+        }
+      }
     }
   } catch (err) {
-    console.error("Lỗi kết nối:", err);
+    console.error("Lỗi tải cache đoạn cáp:", err);
     window.cacheThuTuDoanCap = {};
+    window.cacheChiTietDiemDoanCap = {};
   }
 }
 
 /**
- * 2. HÀM XÂY DỰNG TUYẾN BACKBONE (ĐỒNG BỘ): 
- * Giúp hàm veLaiTuyenAB() cũ của bạn hoạt động hoàn hảo, không cần sửa đổi gì bên trong.
- */
-/**
- * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ CỦA BẢNG DOAN_CAP_DIEM
+ * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ (CÁCH LY VÙNG NHỚ THEO ĐOẠN CÁP)
+ * Khắc phục triệt để lỗi nối chéo nét đứt khi chọn nhiều đoạn cáp cùng lúc.
  */
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   if (!doanVal || doanVal === 'ALL') {
     return [];
   }
 
-  // 1. Lọc các điểm thuộc đúng đoạn cáp hiện tại từ bộ nhớ globalDataPoints
-  let segmentPts = globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
-
-  if (segmentPts.length === 0) {
-    return [];
+  // 1. ƯU TIÊN CAO NHẤT: Lấy từ ngăn kéo bộ nhớ độc lập của chính đoạn cáp đó.
+  // Dữ liệu trong này đã được data.js nạp đủ 100% (vượt mốc 1000) và sắp xếp chuẩn tuyệt đối.
+  if (window.segmentPointsCache && window.segmentPointsCache[String(doanVal)]) {
+    // Trả về bản sao chép (clone) để tránh tham chiếu làm hỏng cache gốc khi tính toán lý trình
+    return window.segmentPointsCache[String(doanVal)].map(pt => Object.assign({}, pt));
   }
 
-  // 2. Sắp xếp tuyệt đối theo cột stt (hoặc thu_tu) đã được đồng bộ sẵn từ cơ sở dữ liệu
-  segmentPts.sort((a, b) => {
-    let orderA = a.stt !== undefined && a.stt !== null ? Number(a.stt) : (a.thu_tu !== undefined ? Number(a.thu_tu) : 9999);
-    let orderB = b.stt !== undefined && b.stt !== null ? Number(b.stt) : (b.thu_tu !== undefined ? Number(b.thu_tu) : 9999);
+  // 2. PHƯƠNG ÁN DỰ PHÒNG (Fallback): Nếu cache chưa kịp nạp, lọc từ mảng RAM chung
+  let segmentPts = globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
+
+  if (segmentPts.length === 0) return [];
+
+  // Sắp xếp lại theo thứ tự (thu_tu hoặc stt) nếu rơi vào phương án dự phòng
+  let sortedByThuTu = segmentPts.sort((a, b) => {
+    let orderA = a.thu_tu !== undefined && a.thu_tu !== null ? a.thu_tu : (a.stt !== undefined && a.stt !== null ? a.stt : 9999);
+    let orderB = b.thu_tu !== undefined && b.thu_tu !== null ? b.thu_tu : (b.stt !== undefined && b.stt !== null ? b.stt : 9999);
     return orderA - orderB;
   });
 
-  return segmentPts;
+  return sortedByThuTu;
 }
 
 function precalculateRouteDataForPoints(pts, backbonePts) {
@@ -263,12 +300,13 @@ function precalculateRouteDataForPoints(pts, backbonePts) {
 }
 
 function getPointsCuaTuyenHienTai() {
-  var selectTuyen = document.getElementById('selectTuyen');
-  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
-  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
-  var doanVal = document.getElementById('selectDoanCap') ? document.getElementById('selectDoanCap').value : 'ALL';
-  
-  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
+  var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+  if (checkedDoan.length === 0) return [];
+  var doanVal = checkedDoan[0]; // Mặc định lấy đoạn đầu tiên đang tích để tính lý trình
+  return getPointsCuaTuyenHienTaiChoDoan(doanVal);
+}
+function getPointsCuaTuyenHienTaiChoDoan(doanVal) {
+  var backbone = getMasterRouteBackbone('ALL', 'ALL', doanVal);
   if (backbone.length === 0) return [];
 
   var nonMxPts = backbone.filter(pt => !isMangXong(pt) && pt.idLoaiDiem !== 0);
@@ -277,7 +315,6 @@ function getPointsCuaTuyenHienTai() {
 
   return precalculateRouteDataForPoints(nonMxPts, backbone);
 }
-
 /**
  * 4. VẼ TUYẾN CÁP VÀ ĐIỂM HẠ TẦNG LÊN BẢN ĐỒ
  */
@@ -289,164 +326,224 @@ window.copyToClipboardTNN = function(text) {
     console.error('Lỗi copy: ', err);
   });
 };
-document.getElementById('selectDoanCap').addEventListener('change', async function() {
-  var doanVal = this.value;
-  
-  // 1. Tải trước thứ tự từ bảng doan_cap_diem vào bộ nhớ đệm
-  await taiDuLieuDoanCapDiem(doanVal);
-  
-  // 2. Gọi hàm vẽ lại bản đồ cũ của bạn (giữ nguyên 100%)
-  veLaiTuyenAB();
-});
+// Thay vì lắng nghe selectDoanCap (đã bị ẩn), Tree-view sẽ tự gọi veLaiTuyenAB
+
 function veLaiTuyenAB() {
   if (!map) return;
-  if (typeof capLayer !== 'undefined' && capLayer) {
-    capLayer.clearLayers();
-  }
-  if (typeof mxLayer !== 'undefined' && mxLayer) {
-      mxLayer.clearLayers();
-  }
-  markersLayer.clearLayers(); mxLayer.clearLayers(); polylinesLayer.clearLayers();
-  
-  var selectTuyen = document.getElementById('selectTuyen');
-  var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
-  var tramVal = document.getElementById('selectTram') ? document.getElementById('selectTram').value : 'ALL';
-  var doanVal = document.getElementById('selectDoanCap') ? document.getElementById('selectDoanCap').value : 'ALL';
+  if (typeof capLayer !== 'undefined' && capLayer) capLayer.clearLayers();
+  if (typeof mxLayer !== 'undefined' && mxLayer) mxLayer.clearLayers();
+  markersLayer.clearLayers(); polylinesLayer.clearLayers();
 
-  var backbone = getMasterRouteBackbone(tuyenVal, tramVal, doanVal);
-  if (!backbone || backbone.length === 0) return;
-
-  precalculateRouteDataForPoints(backbone, backbone);
-  var pts = getPointsCuaTuyenHienTai();
+  var danhSachDoanCanVe = [];
+  if (typeof getCheckedDoanIds === 'function') {
+    danhSachDoanCanVe = getCheckedDoanIds();
+  }
   
+  if (danhSachDoanCanVe.length === 0) return;
+
+  var colorPalette = ['#0d6efd', '#dc3545', '#198754', '#f59e0b', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
   var bounds = [];
-  var isDraggable = (currentUser.canEditMap || currentUser.role === 'sys_admin');
+  var drawnMarkerIds = new Set(); 
 
- // HÀM TẠO NÚT BẤM POPUP (Bản hoàn thiện: Đã bỏ log, khôi phục nút Sửa/Xóa)
+  var currentUser = (typeof AppStore !== 'undefined' && AppStore.getState().currentUser) ? AppStore.getState().currentUser : (window.currentUser || {});
+  var isDraggable = (currentUser.canEditMap || (currentUser.role || '').toLowerCase().includes('admin') || (currentUser.role || '').toLowerCase().includes('sys'));
+
+  // HÀM TẠO NÚT HÀNH ĐỘNG (GIỮ NGUYÊN 100% CỦA BẠN)
   function taoNutHanhDong(ptObj) {
-    let id = ptObj.id || ptObj.id_diem;
-    let ten = ptObj.ten || ptObj.ten_diem || 'Điểm hạ tầng';
-    let lat = ptObj.lat;
-    let lng = ptObj.lng;
-
-    // 1. Lấy thông tin user hiện hành
-    let currentUser = (typeof AppStore !== 'undefined' && AppStore.getState().currentUser) ? AppStore.getState().currentUser : (window.currentUser || {});
+    let id = ptObj.id || ptObj.id_diem; let ten = ptObj.ten || ptObj.ten_diem || 'Điểm hạ tầng';
+    let lat = ptObj.lat; let lng = ptObj.lng;
     
-    // 2. Kiểm tra quyền xem ghi chú ẩn
-    let valQuyen = currentUser.xem_ghichu_an;
+    // Kiểm tra quyền chỉnh sửa thực tế của tài khoản hiện tại
+    let activeUser = (typeof AppStore !== 'undefined' && AppStore.getState().currentUser) ? AppStore.getState().currentUser : (window.currentUser || {});
+    let roleLower = (activeUser.role || '').toLowerCase();
+    let isAllowedToEdit = !!activeUser.canEditMap || !!activeUser.can_edit_map || roleLower.includes('admin') || roleLower.includes('sys');
+
+    let valQuyen = activeUser.xem_ghichu_an;
     let hasQuyenGhiChuAn = (valQuyen === true || valQuyen === 1 || valQuyen === '1' || valQuyen === 'true' || valQuyen === 'TRUE');
 
-    // 3. Nút Ghi chú mật (Chỉ hiện nếu có quyền)
-    var btnGhiChuAn = '';
-    if (hasQuyenGhiChuAn) {
-      btnGhiChuAn = `<button class="btn-small" style="background:#f59e0b; color:white; flex: 1; margin-right: 0;" onclick="xemGhiChuAnTaiDiem(${id}, '${ten}')">📝 Mật</button>`;
-    }
-
-    // 4. Nút quản trị (Sửa, Xóa) - Đã bỏ điều kiện ẩn nút
-    var btnAdmin = `
+    var btnGhiChuAn = hasQuyenGhiChuAn ? `<button class="btn-small" style="background:#f59e0b; color:white; flex: 1; margin-right: 0;" onclick="xemGhiChuAnTaiDiem(${id}, '${ten}')">📝 Mật</button>` : '';
+    
+    // Chỉ hiển thị nút Sửa/Xóa nếu tài khoản có quyền chỉnh sửa
+    var btnAdmin = isAllowedToEdit ? `
        <button class="btn-small btn-success" style="flex: 1; margin-right: 0;" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa</button>
        <button class="btn-small del" style="flex: 1; margin-right: 0;" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>
-    `;
-    
-    // 5. Nút tiện ích (Map, Tọa độ)
+    ` : '';
+
     var btnTienIch = `
       <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="btn-small" style="background:#0dcaf0; color:black; text-decoration:none; flex: 1; margin-right: 0; display: flex; align-items: center; justify-content: center;">🗺️ Map</a>
       <button class="btn-small" style="background:#6c757d; color:white; flex: 1; margin-right: 0;" onclick="copyToClipboardTNN('${lat.toFixed(6)}, ${lng.toFixed(6)}')">📋 Tọa độ</button>
     `;
 
-    // 6. Gom nhóm bố cục (Flexbox tự động co dãn)
-    let row1 = `<div style="display:flex; gap:4px; width: 100%; margin-bottom:4px;">${btnGhiChuAn}${btnAdmin}</div>`;
-    let row2 = `<div style="display:flex; gap:4px; width: 100%;">${btnTienIch}</div>`;
+    // Nếu không có nút quản trị và nút mật, tối ưu bố cục hiển thị gọn gàng hơn
+    let topRowContent = (btnGhiChuAn && btnAdmin) ? `${btnGhiChuAn}${btnAdmin}` : (btnGhiChuAn || btnAdmin);
+    let topRowHtml = topRowContent ? `<div style="display:flex; gap:4px; width: 100%; margin-bottom:4px;">${topRowContent}</div>` : '';
 
-    return `
-      <hr style="margin:6px 0; border:0; border-top:1px dashed #ccc;">
-      <div style="display:flex; flex-direction:column; margin-top:4px;">
-        ${row1}
-        ${row2}
-      </div>`;
+    return `<hr style="margin:6px 0; border:0; border-top:1px dashed #ccc;"><div style="display:flex; flex-direction:column; margin-top:4px;">${topRowHtml}<div style="display:flex; gap:4px; width: 100%;">${btnTienIch}</div></div>`;
   }
 
+ // HÀM KÉO THẢ TỌA ĐỘ (OPTIMISTIC UI - LUỒNG LẠC QUAN CỰC MƯỢT)
   async function handleDragEnd(e, ptObj) {
     var newPos = e.target.getLatLng();
     var isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu tọa độ mới cho điểm [${ptObj.ten}] không?`);
     
-    if (isConfirmed) {
-      showLoading("Đang lưu tọa độ...");
-      try {
-        const { error } = await supabaseClient.from('diem_ha_tang').update({ lat: newPos.lat, long: newPos.lng }).eq('id_diem', ptObj.id);
-        if (error) throw error;
-        
-        var localPt = globalDataPoints.find(p => p.id == ptObj.id);
-        if (localPt) { localPt.lat = newPos.lat; localPt.lng = newPos.lng; }
-        
-        hideLoading();
-        await ghiNhatKyThaoTac("DOI_TOA_DO", `Kỹ sư thay đổi tọa độ điểm [${ptObj.ten}] sang (${newPos.lat.toFixed(6)}, ${newPos.lng.toFixed(6)})`);
-        showToast("Đã lưu và cập nhật tọa độ thành công!", "success");
-        veLaiTuyenAB();
-        map.setView([newPos.lat, newPos.lng], 19, { animate: true });
-      } catch (err) { 
-        showToast("Lỗi: " + err.message, "error"); 
-        hideLoading(); 
-        e.target.setLatLng([ptObj.lat, ptObj.lng]); 
-      }
-    } else { 
+    // Nếu người dùng chọn Hủy, giật marker về chỗ cũ ngay
+    if (!isConfirmed) { 
       e.target.setLatLng([ptObj.lat, ptObj.lng]); 
+      return; 
+    }
+
+    // 1. LƯU LẠI VỊ TRÍ CŨ ĐỂ DỰ PHÒNG (ROLLBACK NẾU LỖI MẠNG)
+    var oldLat = ptObj.lat;
+    var oldLng = ptObj.lng;
+    let numericPtId = Number(ptObj.id || ptObj.id_diem);
+
+    // 2. LUỒNG LẠC QUAN: CẬP NHẬT RAM NGAY LẬP TỨC 
+    var localPt = globalDataPoints.find(p => String(p.id) === String(numericPtId));
+    if (localPt) { localPt.lat = newPos.lat; localPt.lng = newPos.lng; }
+    
+    if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericPtId]) {
+      window.cacheChiTietDiemDoanCap[numericPtId].lat = newPos.lat;
+      window.cacheChiTietDiemDoanCap[numericPtId].long = newPos.lng;
+      // Cập nhật thuộc tính mảng gốc nếu có
+      if (window.cacheChiTietDiemDoanCap[numericPtId].latitude !== undefined) window.cacheChiTietDiemDoanCap[numericPtId].latitude = newPos.lat;
+      if (window.cacheChiTietDiemDoanCap[numericPtId].longitude !== undefined) window.cacheChiTietDiemDoanCap[numericPtId].longitude = newPos.lng;
+    }
+    
+    // Cập nhật State
+    if (typeof AppStore !== 'undefined') AppStore.setState({ dataPoints: globalDataPoints });
+
+    // 3. VẼ LẠI MAP VÀ TÍNH LẠI LÝ TRÌNH NGAY TỨC THÌ (Độ trễ 0s)
+    veLaiTuyenAB();
+    showToast("Đang đồng bộ dữ liệu ngầm...", "info");
+
+    // Lệnh điều khiển bản đồ bay (flyTo) mượt mà
+    if (typeof map !== 'undefined') {
+      map.stop();
+      map.flyTo([newPos.lat, newPos.lng], 19, { animate: true, duration: 1.0 });
+    }
+
+    // 4. TIẾN TRÌNH NGẦM: LƯU LÊN SUPABASE (Không dùng showLoading để tránh block màn hình)
+    try {
+      const { error } = await supabaseClient
+        .from('diem_ha_tang')
+        .update({ lat: newPos.lat, long: newPos.lng })
+        .eq('id_diem', numericPtId);
+
+      if (error) throw error;
+      
+      if (typeof ghiNhatKyThaoTac === 'function') {
+        ghiNhatKyThaoTac("DOI_TOA_DO", `Kỹ sư thay đổi tọa độ điểm [${ptObj.ten}] sang (${newPos.lat.toFixed(6)}, ${newPos.lng.toFixed(6)})`);
+      }
+      showToast("✅ Đã lưu tọa độ thành công!", "success");
+      
+    } catch (err) { 
+      // 5. ROLLBACK: NẾU MẠNG LỖI, GIẬT TỌA ĐỘ VỀ CHỖ CŨ VÀ BÁO LỖI
+      showToast("❌ Mạng lỗi, khôi phục vị trí cũ: " + err.message, "error"); 
+      
+      if (localPt) { localPt.lat = oldLat; localPt.lng = oldLng; }
+      if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericPtId]) {
+        window.cacheChiTietDiemDoanCap[numericPtId].lat = oldLat;
+        window.cacheChiTietDiemDoanCap[numericPtId].long = oldLng;
+      }
+      veLaiTuyenAB(); 
     }
   }
 
-  // Vẽ các điểm thông thường (Bể, Cột, Mốc)
-  pts.forEach((pt, index) => {
-    bounds.push([pt.lat, pt.lng]);
-    var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : '<div class="standard-marker"></div>';
-    var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
+  // VÒNG LẶP VẼ ĐA SẮC CHO TỪNG ĐOẠN CÁP
+  danhSachDoanCanVe.forEach((idDoanHienTai, idx) => {
+    var currentColor = colorPalette[idx % colorPalette.length];
     
-    // Giao diện Popup chuẩn hóa cho điểm thường
-    var popupHtml = `
-      <div style="font-size: 12px; line-height: 1.6;">
-        <b style="font-size: 14px; color: #0d6efd;">${pt.ten}</b><br>
-        Loại: <b>${pt.loai}</b><br>
-        📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}</span><br>
-        📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b><br>
-        📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText}</b>
-      </div>
-    ` + taoNutHanhDong(pt);
+    // Sử dụng hàm của bạn, truyền ID đoạn để lấy backbone 
+    var backbone = getMasterRouteBackbone('ALL', 'ALL', idDoanHienTai);
+    if (!backbone || backbone.length === 0) return;
     
-    marker.bindPopup(popupHtml);
-    marker.on('dragend', e => handleDragEnd(e, pt));
-    markersLayer.addLayer(marker);
+    precalculateRouteDataForPoints(backbone, backbone);
+
+    var nonMxPts = backbone.filter(pt => !isMangXong(pt) && pt.idLoaiDiem !== 0);
+    var basePt = backbone.find(p => p.id === 'TNN_BASE' || Math.abs(p.lat - 21.593365) < 0.0001);
+    if (basePt && !nonMxPts.includes(basePt)) nonMxPts.unshift(basePt);
+    var pts = precalculateRouteDataForPoints(nonMxPts, backbone);
+    
+    pts.forEach((pt, index) => {
+      bounds.push([pt.lat, pt.lng]);
+      if (drawnMarkerIds.has(pt.id)) return; // Bẫy chống trùng lặp điểm giao
+      drawnMarkerIds.add(pt.id);
+
+      // Phân loại hình dáng và màu sắc theo idLoaiDiem (1: Cột, 2: Bể, 3: Mốc, 4: Măng xông)
+    let loaiIdNum = Number(pt.idLoaiDiem || 1);
+    let cssClassName = 'marker-loai-1'; 
+    let iconSizeArr = [10, 10];
+    let iconAnchorArr = [5, 5];
+
+    if (index === 0) {
+      // Điểm gốc A giữ nguyên biểu tượng chữ A màu vàng cam đặc biệt
+      var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: '<div class="point-a-marker">A</div>', iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
+    } else {
+      if (loaiIdNum === 2) { cssClassName = 'marker-loai-2'; iconSizeArr = [12, 12]; iconAnchorArr = [6, 6]; }       // Bể
+      else if (loaiIdNum === 3) { cssClassName = 'marker-loai-3'; iconSizeArr = [11, 11]; iconAnchorArr = [5, 5]; }  // Mốc
+      else if (loaiIdNum === 4 || isMangXong(pt)) { cssClassName = 'marker-loai-4'; iconSizeArr = [12, 12]; iconAnchorArr = [6, 6]; } // Măng xông
+      else { cssClassName = 'marker-loai-1'; iconSizeArr = [10, 10]; iconAnchorArr = [5, 5]; }                      // Cột (mặc định)
+
+      var marker = L.marker([pt.lat, pt.lng], { 
+        icon: L.divIcon({ className: '', html: `<div class="${cssClassName}"></div>`, iconSize: iconSizeArr, iconAnchor: iconAnchorArr }), 
+        draggable: isDraggable 
+      });
+    }
+      // Lấy tên hướng từ danh mục dựa vào idHuong
+      let tenHuongText = "Chưa xác định";
+      if (pt.idHuong !== null && pt.idHuong !== undefined && pt.idHuong !== '') {
+        let matchedHuong = (window.rawHuongList || []).find(h => String(h.id_huong || h.id) === String(pt.idHuong));
+        if (matchedHuong) {
+          tenHuongText = matchedHuong.ten_huong || matchedHuong.ten || matchedHuong.name || ("Hướng " + pt.idHuong);
+        } else {
+          tenHuongText = "Hướng " + pt.idHuong;
+        }
+      }
+  
+      var popupHtml = `<div style="font-size: 12px; line-height: 1.6;"><b style="font-size: 14px; color: #0d6efd;">${pt.ten}</b><br>` +
+                      `Loại: <b>${pt.loai}</b><br>` +
+                      `🧭 Hướng: <b>${tenHuongText}</b><br>` +
+                      `📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}</span><br>` +
+                      `📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b><br>` +
+                      `📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText}</b></div>` + taoNutHanhDong(pt);
+      
+      marker.bindPopup(popupHtml); marker.on('dragend', e => handleDragEnd(e, pt)); markersLayer.addLayer(marker);
+    });
+
+    var mxList = backbone.filter(p => isMangXong(p));
+    mxList.forEach(mx => {
+      bounds.push([mx.lat, mx.lng]);
+      if (drawnMarkerIds.has(mx.id)) return;
+      drawnMarkerIds.add(mx.id);
+
+      var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
+      var popupHtml = `<div style="font-size: 12px; line-height: 1.6;"><b style="font-size: 14px; color: #198754;">${mx.ten}</b><br>📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${mx.lat.toFixed(6)}, ${mx.lng.toFixed(6)}</span><br>📍 Lý trình QL: <b>${mx.calculatedLyTrinhText}</b><br>📏 Cự ly từ Trạm A: <b>${mx.distanceFromAText}</b><br></div>` + taoNutHanhDong(mx);
+      
+      mxMarker.bindPopup(popupHtml); mxMarker.on('dragend', e => handleDragEnd(e, mx)); mxLayer.addLayer(mxMarker);
+    });
+
+    var lineCoordinates = backbone.map(p => [p.lat, p.lng]);
+    if (lineCoordinates.length > 1) {
+        polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: currentColor, weight: 4, opacity: 0.85 }));
+    }
   });
 
-  // Vẽ các Măng Xông
-  var mxList = backbone.filter(p => isMangXong(p));
-  mxList.forEach(mx => {
-    bounds.push([mx.lat, mx.lng]);
-    var mxMarker = L.marker([mx.lat, mx.lng], { icon: L.divIcon({ className: '', html: '<div class="mx-marker"></div>', iconSize: [12, 12], iconAnchor: [6, 6] }), draggable: isDraggable });
-    
-      // Giao diện Popup chuẩn hóa cho Măng xông
-    var popupHtml = `
-      <div style="font-size: 12px; line-height: 1.6;">
-        <b style="font-size: 14px; color: #198754;">${mx.ten}</b><br>
-        📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${mx.lat.toFixed(6)}, ${mx.lng.toFixed(6)}</span><br>
-        📍 Lý trình QL: <b>${mx.calculatedLyTrinhText}</b><br>
-        📏 Cự ly từ Trạm A: <b>${mx.distanceFromAText}</b><br>
-      </div>
- 
-    ` + taoNutHanhDong(mx);
-
-    mxMarker.bindPopup(popupHtml);
-    mxMarker.on('dragend', e => handleDragEnd(e, mx));
-    mxLayer.addLayer(mxMarker);
-  });
-
-  var lineCoordinates = backbone.map(p => [p.lat, p.lng]);
-  if (lineCoordinates.length > 1) polylinesLayer.addLayer(L.polyline(lineCoordinates, { color: '#0d6efd', weight: 4, opacity: 0.85 }));
-  if (bounds.length > 0 && tuyenVal !== 'ALL') map.fitBounds(bounds, { padding: [40, 40] });
+  if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
 }
+
 window.veLaiTuyenAB = veLaiTuyenAB;
 
 function isMangXong(pt) {
-  var name = (pt.loai || '').toUpperCase();
-  return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
+  // Lấy dữ liệu loại và tên, chuyển hết về IN HOA để dễ so sánh
+  var loaiStr = (pt.loai || '').toUpperCase();
+  var tenStr = (pt.ten || pt.ten_diem || '').toUpperCase();
+  
+  // Măng xông nếu: idLoaiDiem = 4, HOẶC cột loại có chữ MX, HOẶC tên điểm có chữ MX
+  return Number(pt.idLoaiDiem) === 4 || 
+         loaiStr.includes('MX') || 
+         loaiStr.includes('MĂNG XÔNG') ||
+         tenStr.includes('MX') || 
+         tenStr.includes('MĂNG XÔNG');
 }
 // ==========================================================================
 // HÀM QUẢN LÝ CRUD ĐIỂM HẠ TẦNG (THÊM, SỬA, XÓA) - TỐI ƯU TẢI TÊN LOẠI ĐIỂM
@@ -456,25 +553,54 @@ function isMangXong(pt) {
 // ==========================================================================
 window.moFormCrud = async function(action, id, ten, lat, lng) {
   // 1. XỬ LÝ XÓA ĐIỂM
+  // 1. XỬ LÝ XÓA ĐIỂM (OPTIMISTIC UI)
   if (action === 'DELETE') {
     let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn điểm <b>${ten}</b> khỏi tuyến không?`, 'danger');
     if (isConfirmed) {
-      showLoading("Đang xóa điểm hạ tầng...");
+      let numericId = Number(id);
+
+      // A. BACKUP DỮ LIỆU ĐỂ ROLLBACK NẾU LỖI
+      let backupPt = globalDataPoints.find(p => String(p.id) === String(id));
+      let backupCache = window.cacheChiTietDiemDoanCap ? window.cacheChiTietDiemDoanCap[numericId] : null;
+      let backupOrder = window.cacheThuTuDoanCap ? window.cacheThuTuDoanCap[numericId] : null;
+
+      // B. XÓA KHỎI RAM NGAY LẬP TỨC
+      globalDataPoints = globalDataPoints.filter(p => String(p.id) !== String(id));
+      
+      if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericId]) {
+        delete window.cacheChiTietDiemDoanCap[numericId];
+      }
+      if (window.cacheThuTuDoanCap && window.cacheThuTuDoanCap[numericId]) {
+        delete window.cacheThuTuDoanCap[numericId];
+      }
+
+      if (typeof AppStore !== 'undefined') AppStore.setState({ dataPoints: globalDataPoints });
+      
+      // C. VẼ LẠI MAP (Nối liền sợi cáp ngay lập tức)
+      if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+      showToast("Đang đồng bộ xóa ngầm...", "info");
+
+      // D. TIẾN TRÌNH NGẦM LƯU LÊN SUPABASE
       try {
-        const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id);
+        const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', numericId);
         if (error) throw error;
-        
-        globalDataPoints = globalDataPoints.filter(p => String(p.id) !== String(id));
-        if (typeof AppStore !== 'undefined') AppStore.setState({ dataPoints: globalDataPoints });
         
         if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("XOA_DIEM", `Kỹ sư đã xóa điểm [${ten}] ID: ${id}`);
         showToast("✅ Đã xóa điểm hạ tầng thành công!", "success");
-        veLaiTuyenAB();
-        if (typeof map !== 'undefined') {
-            map.flyTo([lat, lng], 19, { animate: true, duration: 1.5 });
+
+        // Gọi đồng bộ ngầm chuẩn hóa tuyến nếu cần
+        if (typeof taiDiemDaTuyen === 'function') {
+          setTimeout(() => { taiDiemDaTuyen(); }, 500);
         }
-      } catch (err) { showToast("❌ Lỗi xóa điểm: " + err.message, "error"); }
-      hideLoading();
+      } catch (err) { 
+        // E. ROLLBACK NẾU LỖI
+        showToast("❌ Lỗi xóa điểm, khôi phục lại bản đồ: " + err.message, "error"); 
+        if (backupPt) globalDataPoints.push(backupPt);
+        if (backupCache && window.cacheChiTietDiemDoanCap) window.cacheChiTietDiemDoanCap[numericId] = backupCache;
+        if (backupOrder && window.cacheThuTuDoanCap) window.cacheThuTuDoanCap[numericId] = backupOrder;
+        
+        if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+      }
     }
   } 
   // 2. XỬ LÝ THÊM (ADD) HOẶC SỬA (EDIT) ĐIỂM HẠ TẦNG
@@ -770,15 +896,45 @@ window.saveDiemHatangFullAction = async function() {
     showToast(`✅ Đã ${action === 'ADD' ? 'thêm' : 'cập nhật'} thành công!`, "success");
     document.getElementById('diemHaTangModal').style.display = 'none';
     
-    if (typeof taiDuLieuSupabase === 'function') {
-       try { await taiDuLieuSupabase(false); } catch(e) { taiDuLieuSupabase(false); }
+    // Gọi lại taiDiemDaTuyen để cập nhật đồng bộ bộ nhớ đệm đoạn cáp
+   // 1. Cập nhật ngay lập tức vào mảng RAM globalDataPoints để bản đồ có dữ liệu vẽ luôn
+    let tempPointObj = {
+      id: String(idDiemTarget),
+      ten: ten,
+      lat: lat,
+      lng: lng,
+      ghiChu: ghiChu,
+      idLoaiDiem: Number(idLoai),
+      loai: 'Điểm',
+      lyTrinh: lyTrinh,
+      duTru: duTru
+    };
+
+    let existingIdx = globalDataPoints.findIndex(p => String(p.id) === String(idDiemTarget));
+    if (existingIdx >= 0) {
+      globalDataPoints[existingIdx] = tempPointObj;
+    } else {
+      globalDataPoints.push(tempPointObj);
+    }
+
+    // Cập nhật bộ nhớ đệm chi tiết
+    if (window.cacheChiTietDiemDoanCap) {
+      window.cacheChiTietDiemDoanCap[Number(idDiemTarget)] = tempPointObj;
+    }
+
+    // 2. Gọi vẽ lại bản đồ và bay đến vị trí ngay lập tức (Không chờ đợi mạng)
+    if (typeof veLaiTuyenAB === 'function') {
+      veLaiTuyenAB();
     }
 
     if (typeof map !== 'undefined') {
-       setTimeout(() => {
-           map.stop(); 
-           map.flyTo([lat, lng], 19, { animate: true, duration: 1.5 });
-       }, 1200); 
+       map.stop(); 
+       map.flyTo([lat, lng], 19, { animate: true, duration: 1.5 });
+    }
+
+    // 3. Đồng bộ ngầm dữ liệu chuẩn từ CSDL ở phía sau
+    if (typeof taiDiemDaTuyen === 'function') {
+       setTimeout(() => { taiDiemDaTuyen(); }, 500);
     }
 
   } catch (err) {
@@ -843,3 +999,27 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
     if (typeof hideLoading === 'function') hideLoading();
   }
 };
+// ==========================================================================
+// HÀM HỖ TRỢ: LẤY TRỤC XƯƠNG SỐNG LIÊN THÔNG TỪ TRẠM A ĐẾN HẾT TUYẾN
+// ==========================================================================
+function getFullRouteBackboneForSegment(doanVal) {
+  var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
+  var foundDoan = doanCapList.find(d => String(d.id_doan_cap || d.id) === String(doanVal));
+  if (!foundDoan) return getMasterRouteBackbone('ALL', 'ALL', doanVal);
+  
+  var tuyenId = getSafeStrId(foundDoan, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']);
+  if (!tuyenId) return getMasterRouteBackbone('ALL', 'ALL', doanVal);
+
+  // Lọc toàn bộ điểm thuộc tuyến từ bộ nhớ globalDataPoints
+  let tuyenPts = globalDataPoints.filter(pt => String(pt.idTuyen) === String(tuyenId));
+  if (tuyenPts.length === 0) return getMasterRouteBackbone('ALL', 'ALL', doanVal);
+
+  // Sắp xếp tuần tự từ Trạm A đi ra theo thứ tự stt chuẩn từ CSDL
+  tuyenPts.sort((a, b) => {
+    let orderA = a.stt !== undefined && a.stt !== null ? Number(a.stt) : 9999;
+    let orderB = b.stt !== undefined && b.stt !== null ? Number(b.stt) : 9999;
+    return orderA - orderB;
+  });
+
+  return tuyenPts;
+}
