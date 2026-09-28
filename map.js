@@ -455,8 +455,26 @@ function veLaiTuyenAB() {
       if (drawnMarkerIds.has(pt.id)) return; // Bẫy chống trùng lặp điểm giao
       drawnMarkerIds.add(pt.id);
 
-      var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : '<div class="standard-marker"></div>';
-      var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
+      // Phân loại hình dáng và màu sắc theo idLoaiDiem (1: Cột, 2: Bể, 3: Mốc, 4: Măng xông)
+    let loaiIdNum = Number(pt.idLoaiDiem || 1);
+    let cssClassName = 'marker-loai-1'; 
+    let iconSizeArr = [10, 10];
+    let iconAnchorArr = [5, 5];
+
+    if (index === 0) {
+      // Điểm gốc A giữ nguyên biểu tượng chữ A màu vàng cam đặc biệt
+      var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: '<div class="point-a-marker">A</div>', iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
+    } else {
+      if (loaiIdNum === 2) { cssClassName = 'marker-loai-2'; iconSizeArr = [12, 12]; iconAnchorArr = [6, 6]; }       // Bể
+      else if (loaiIdNum === 3) { cssClassName = 'marker-loai-3'; iconSizeArr = [11, 11]; iconAnchorArr = [5, 5]; }  // Mốc
+      else if (loaiIdNum === 4 || isMangXong(pt)) { cssClassName = 'marker-loai-4'; iconSizeArr = [12, 12]; iconAnchorArr = [6, 6]; } // Măng xông
+      else { cssClassName = 'marker-loai-1'; iconSizeArr = [10, 10]; iconAnchorArr = [5, 5]; }                      // Cột (mặc định)
+
+      var marker = L.marker([pt.lat, pt.lng], { 
+        icon: L.divIcon({ className: '', html: `<div class="${cssClassName}"></div>`, iconSize: iconSizeArr, iconAnchor: iconAnchorArr }), 
+        draggable: isDraggable 
+      });
+    }
       // Lấy tên hướng từ danh mục dựa vào idHuong
       let tenHuongText = "Chưa xác định";
       if (pt.idHuong !== null && pt.idHuong !== undefined && pt.idHuong !== '') {
