@@ -1030,18 +1030,24 @@ async function ganVaSapXepMangXongTheoTuKhoa() {
   }
 }
 // ==========================================================================
-// MỞ KHÓA SỰ KIỆN FOCUS VÀ NHẬP LIỆU CHO TEXTBOX TỪ KHÓA MĂNG XÔNG
+// KÍCH HOẠT QUYỀN NHẬP LIỆU VÀ FOCUS CHO TEXTBOX TỪ KHÓA MĂNG XÔNG
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', function() {
   setTimeout(function() {
     var txtBox = document.getElementById('txtTuKhoaGanMX');
     if (txtBox) {
-      // Cho phép ô textbox nhận trọn vẹn sự kiện chuột và bàn phím, không bị bản đồ chặn
-      ['mousedown', 'click', 'focus', 'touchstart', 'pointerdown', 'keydown', 'keypress', 'keyup'].forEach(function(eventType) {
+      // Sử dụng cơ chế sự kiện của Leaflet nếu tồn tại để cô lập sự kiện trên input
+      if (typeof L !== 'undefined' && L.DomEvent) {
+        L.DomEvent.disableClickPropagation(txtBox);
+        L.DomEvent.disableScrollPropagation(txtBox);
+      }
+      
+      // Ngăn lan truyền sự kiện gốc để trình duyệt cho phép nhấp chuột và gõ phím bình thường
+      ['click', 'mousedown', 'focus', 'touchstart', 'pointerdown', 'keydown', 'keypress', 'keyup'].forEach(function(eventType) {
         txtBox.addEventListener(eventType, function(e) {
           e.stopPropagation();
         });
       });
     }
-  }, 500);
+  }, 300);
 });
