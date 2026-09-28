@@ -115,15 +115,15 @@
       <div class="form-group"><label>    Chọn Đài VT:</label><select id="selectDai" onchange="onDaiChange()"></select></div>
       <div class="form-group"><label>    Chọn Trạm VT:</label><select id="selectTram" onchange="onTramChange()"></select></div>
      <!-- ========================================================== -->
-      <!-- KHU VỰC TÌM KIẾM VÀ GÁN MĂNG XÔNG THEO TỪ KHÓA (ĐÃ TỈNH CHỈNH GIAO DIỆN) -->
+      <!-- KHU VỰC TÌM KIẾM VÀ GÁN MĂNG XÔNG THEO TỪ KHÓA (ĐÃ TỐI ƯU GIAO DIỆN) -->
       <!-- ========================================================== -->
-      <div class="form-group" style="margin-top: 8px; background: #f8f9fa; padding: 6px; border-radius: 4px; border: 1px solid #dee2e6;">
+      <div class="form-group" style="margin-top: 8px; background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #dee2e6;">
         <label style="font-size: 11px; font-weight: bold; color: #333; display: block; margin-bottom: 4px;">Gắn Măng Xông theo từ khóa:</label>
-        <div style="display: flex; gap: 4px; align-items: center;">
-          <!-- Textbox được làm rộng ra với flex: 3 và màu nền trắng rõ ràng để dễ nhập liệu -->
-          <input type="text" id="txtTuKhoaGanMX" placeholder="VD: 96TQG, MX..." style="flex: 3; padding: 5px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 3px; background: #fff; outline: none;">
-          <!-- Nút bấm được làm hẹp lại, ôm sát chữ -->
-          <button class="btn-action" style="background: #0d6efd; font-size: 11px; padding: 5px 8px; white-space: nowrap; flex: 0 0 auto;" onclick="ganVaSapXepMangXongTheoTuKhoa()">🔍 Thực hiện</button>
+        <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
+          <!-- Textbox được cấu hình min-width: 0 và box-sizing để cố định không bị co lại -->
+          <input type="text" id="txtTuKhoaGanMX" placeholder="VD: 96TQG, MX..." style="flex: 1; width: 100%; min-width: 0; padding: 6px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; box-sizing: border-box; outline: none;">
+          <!-- Nút bấm cố định kích thước, không bị co giãn -->
+          <button class="btn-action" style="background: #0d6efd; font-size: 11px; padding: 6px 10px; white-space: nowrap; flex-shrink: 0;" onclick="ganVaSapXepMangXongTheoTuKhoa()">🔍 Thực hiện</button>
         </div>
       </div>
       <!-- BỘ LỌC CÂY: TUYẾN & ĐOẠN CÁP (TREE-VIEW) -->
