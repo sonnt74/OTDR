@@ -218,27 +218,6 @@ async function taiDuLieuDoanCapDiem(doanVal) {
 }
 
 /**
- * 2. HÀM XÂY DỰNG TUYẾN BACKBONE (ĐỒNG BỘ): 
- * Giúp hàm veLaiTuyenAB() cũ của bạn hoạt động hoàn hảo, không cần sửa đổi gì bên trong.
- */
-/**
- * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ CỦA BẢNG DOAN_CAP_DIEM
- */
-/**
- * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ CỦA BẢNG DOAN_CAP_DIEM (Đã Fix dứt điểm lỗi lặp code)
- */
-/**
- * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ CỦA BẢNG DOAN_CAP_DIEM 
- * (Đã nâng cấp để vét đủ 100% điểm từ cache, chống thiếu điểm, sai lý trình và lặp vòng)
- */
-/**
- * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ CỦA BẢNG DOAN_CAP_DIEM
- * (Tự động vét đủ 100% dữ liệu từ CSDL, vượt qua mọi giới hạn tải ban đầu của bản đồ)
- */
-/**
- * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ (Đọc trực tiếp từ kho đệm không giới hạn 1000 điểm)
- */
-/**
  * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ (CÁCH LY VÙNG NHỚ THEO ĐOẠN CÁP)
  * Khắc phục triệt để lỗi nối chéo nét đứt khi chọn nhiều đoạn cáp cùng lúc.
  */
