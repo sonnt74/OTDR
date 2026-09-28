@@ -478,7 +478,7 @@ html, body {
 .checklist-item input { margin-right: 8px; cursor: pointer; transform: scale(1.1); }
 
 /* Bảng màu Marker theo chuẩn GIS */
-.marker-loai-1 { background-color: #0d6efd; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.4); width: 10px; height: 10px; } /* Cột */
-.marker-loai-2 { background-color: #795548; border: 2px solid #fff; border-radius: 2px; box-shadow: 0 0 3px rgba(0,0,0,0.4); width: 12px; height: 12px; } /* Bể */
-.marker-loai-3 { background-color: #9c27b0; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.4); width: 11px; height: 11px; } /* Mốc */
+.marker-loai-3 { background-color: #0d6efd; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.4); width: 10px; height: 10px; } /* Cột */
+.marker-loai-1 { background-color: #795548; border: 2px solid #fff; border-radius: 2px; box-shadow: 0 0 3px rgba(0,0,0,0.4); width: 12px; height: 12px; } /* Bể */
+.marker-loai-2 { background-color: #9c27b0; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.4); width: 11px; height: 11px; } /* Mốc */
 .marker-loai-4 { background-color: #198754; border: 2px solid #fff; transform: rotate(45deg); box-shadow: 0 0 5px rgba(0,0,0,0.4); width: 12px; height: 12px; } /* Măng xông */
