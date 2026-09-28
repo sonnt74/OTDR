@@ -149,36 +149,72 @@ function getDistanceAlongRoute(targetPt, pathPts) {
  * 1. HÀM TẢI DỮ LIỆU ĐỆM TỪ BẢNG doan_cap_diem (Chạy ngầm khi đổi đoạn cáp)
  * Bạn hãy gọi hàm này ở sự kiện onchange của dropdown chọn Đoạn cáp: taiDuLieuDoanCapDiem(doanVal);
  */
-window.cacheThuTuDoanCap = {}; // Bộ nhớ tạm lưu thứ tự
+window.cacheThuTuDoanCap = {};
+window.cacheChiTietDiemDoanCap = {}; // Bộ nhớ đệm lưu chi tiết toàn bộ điểm của đoạn cáp
 
 async function taiDuLieuDoanCapDiem(doanVal) {
   if (!doanVal || doanVal === 'ALL') {
     window.cacheThuTuDoanCap = {};
+    window.cacheChiTietDiemDoanCap = {};
     return;
   }
 
   try {
-    let { data, error } = await supabaseClient
-      .from('doan_cap_diem')
-      .select('id_diem, thu_tu')
-      .eq('id_doan_cap', Number(doanVal));
+    // 1. Vét toàn bộ liên kết id_diem, thu_tu từ doan_cap_diem (Vượt mốc 1000 bản ghi bằng phân trang)
+    let segmentLinks = [];
+    let offset = 0;
+    let fetchMore = true;
+    while (fetchMore) {
+      let { data: chunk, error } = await supabaseClient
+        .from('doan_cap_diem')
+        .select('id_diem, thu_tu')
+        .eq('id_doan_cap', Number(doanVal))
+        .range(offset, offset + 999);
 
-    if (error) {
-      console.error("Lỗi tải bảng doan_cap_diem:", error);
-      window.cacheThuTuDoanCap = {};
-      return;
+      if (error) throw error;
+      if (chunk && chunk.length > 0) {
+        segmentLinks = segmentLinks.concat(chunk);
+        offset += 1000;
+        if (chunk.length < 1000) fetchMore = false;
+      } else {
+        fetchMore = false;
+      }
     }
 
-    // Đưa vào object để tra cứu siêu nhanh dạng { id_diem: thu_tu }
     window.cacheThuTuDoanCap = {};
-    if (data) {
-      data.forEach(row => {
+    window.cacheChiTietDiemDoanCap = {};
+
+    if (segmentLinks.length > 0) {
+      segmentLinks.forEach(row => {
         window.cacheThuTuDoanCap[Number(row.id_diem)] = row.thu_tu;
       });
+
+      // 2. Lấy toàn bộ chi tiết tọa độ từ diem_ha_tang theo lô 500 ID (Vượt mốc giới hạn RAM)
+      let allIds = segmentLinks.map(l => Number(l.id_diem));
+      const batchSize = 500;
+      
+      for (let i = 0; i < allIds.length; i += batchSize) {
+        let batchIds = allIds.slice(i, i + batchSize);
+        if (batchIds.length === 0) continue;
+
+        const { data: batchData, error: errBatch } = await supabaseClient
+          .from('diem_ha_tang')
+          .select('*')
+          .in('id_diem', batchIds);
+
+        if (errBatch) throw errBatch;
+        if (batchData) {
+          batchData.forEach(pt => {
+            let pId = Number(pt.id_diem || pt.id);
+            window.cacheChiTietDiemDoanCap[pId] = pt;
+          });
+        }
+      }
     }
   } catch (err) {
-    console.error("Lỗi kết nối:", err);
+    console.error("Lỗi tải cache đoạn cáp:", err);
     window.cacheThuTuDoanCap = {};
+    window.cacheChiTietDiemDoanCap = {};
   }
 }
 
@@ -200,40 +236,45 @@ async function taiDuLieuDoanCapDiem(doanVal) {
  * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ CỦA BẢNG DOAN_CAP_DIEM
  * (Tự động vét đủ 100% dữ liệu từ CSDL, vượt qua mọi giới hạn tải ban đầu của bản đồ)
  */
+/**
+ * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ (Đọc trực tiếp từ kho đệm không giới hạn 1000 điểm)
+ */
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   if (!doanVal || doanVal === 'ALL') {
     return [];
   }
 
-  // 1. Lấy danh sách ID điểm từ bộ nhớ đệm cacheThuTuDoanCap
-  let cachedIds = Object.keys(window.cacheThuTuDoanCap || {}).map(id => Number(id));
+  let cachedIds = Object.keys(window.cacheThuTuDoanCap || {});
   if (cachedIds.length === 0) {
-    // Fallback về cách lọc cũ nếu cache chưa sẵn sàng
     return globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
   }
 
-  // 2. Thu thập điểm từ globalDataPoints sẵn có trên RAM trước
   let segmentPts = [];
-  let foundIdsSet = new Set();
 
-  cachedIds.forEach(numId => {
-    let foundPt = globalDataPoints.find(p => Number(p.id || p.id_diem) === numId);
-    if (foundPt) {
-      let clonedPt = Object.assign({}, foundPt);
-      let thuTuVal = window.cacheThuTuDoanCap[numId];
+  cachedIds.forEach(idStr => {
+    let numId = Number(idStr);
+    let thuTuVal = window.cacheThuTuDoanCap[numId];
+
+    // Lấy trực tiếp từ bộ nhớ cache chi tiết đã vét đủ từ CSDL, hoặc fallback qua globalDataPoints
+    let ptObj = window.cacheChiTietDiemDoanCap[numId] || globalDataPoints.find(p => Number(p.id || p.id_diem) === numId);
+
+    if (ptObj) {
+      let clonedPt = Object.assign({}, ptObj);
+      // Chuẩn hóa định dạng trường dữ liệu để bản đồ và hàm lý trình đọc chính xác
+      clonedPt.id = clonedPt.id_diem || clonedPt.id;
+      clonedPt.lat = parseFloat(clonedPt.lat || clonedPt.latitude || 0);
+      clonedPt.lng = parseFloat(clonedPt.lng || clonedPt.longitude || clonedPt.long || 0);
       clonedPt.thu_tu = (thuTuVal !== undefined && thuTuVal !== null) ? Number(thuTuVal) : 9999;
+      
       segmentPts.push(clonedPt);
-      foundIdsSet.add(numId);
     }
   });
 
-  // 3. Nếu số lượng điểm trên RAM không khớp với cache (bị thiếu do giới hạn load 1000 điểm),
-  // chúng ta tiến hành đồng bộ ngầm hoặc bổ sung các điểm còn thiếu.
-  // (Đảm bảo trả về mảng đã sắp xếp chuẩn theo thu_tu từ nhỏ đến lớn)
+  if (segmentPts.length === 0) return [];
+
+  // Sắp xếp tuyệt đối theo đúng cột thu_tu từ nhỏ đến lớn (1 đến n)
   let sortedByThuTu = segmentPts.sort((a, b) => {
-    let tA = (a.thu_tu !== undefined && a.thu_tu !== null) ? Number(a.thu_tu) : 9999;
-    let tB = (b.thu_tu !== undefined && b.thu_tu !== null) ? Number(b.thu_tu) : 9999;
-    return tA - tB;
+    return (a.thu_tu || 9999) - (b.thu_tu || 9999);
   });
 
   return sortedByThuTu;
