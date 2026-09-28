@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (TÌM KIẾM THÔNG MINH - BỎ QUA KÝ TỰ ĐẶC BIỆT)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (ĐÃ KHẮC PHỤC LỖI TÊN CỘT ten_diem)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -944,11 +944,12 @@ async function xuLyChuanHoaThuTuDoanCap() {
     if (errLink) throw errLink;
     let assignedIds = (existingLinks || []).map(l => Number(l.id_diem));
 
-    // 6. Lọc thông minh: Làm sạch từ khóa và tên điểm (bỏ khoảng trắng, dấu gạch dưới, gạch ngang) để so sánh chuẩn xác
+    // 6. Lọc thông minh: Kiểm tra đúng cột ten_diem trong CSDL, làm sạch ký tự để so sánh
     let cleanKeyword = keyword.replace(/[\s_\-]/g, '');
 
     let matchedPts = allPts.filter(p => {
-      let pName = (p.ten || "").toLowerCase();
+      // Đọc chính xác cột ten_diem từ bảng điểm hạ tầng
+      let pName = (p.ten_diem || p.ten || p.name || "").toLowerCase();
       let cleanPName = pName.replace(/[\s_\-]/g, '');
       let pId = Number(p.id);
 
@@ -957,7 +958,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
       return matchKeyword && notAssigned;
     });
 
-    console.log("🔍 Từ khóa gốc:", keyword, "| Từ khóa làm sạch:", cleanKeyword);
+    console.log("🔍 Từ khóa tìm kiếm:", keyword, "| Làm sạch:", cleanKeyword);
     console.log("🔍 Các điểm khớp và chưa gán:", matchedPts);
 
     if (matchedPts.length === 0) {
