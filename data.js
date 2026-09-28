@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (ÉP KIỂU TỌA ĐỘ SỐ & SẮP XẾP KHOẢNG CÁCH CHUẨN XÁC)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (VÉT DỮ LIỆU VƯỢT 1000 DÒNG & SẮP XẾP THEO STT)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -937,7 +937,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
       }
 
       if (matchedPtsRaw.length > 0) {
-        // Lấy danh sách toàn bộ id_diem đã được gán trên hệ thống
+        // Lấy danh sách toàn bộ id_diem đã được gán trên hệ thống (vượt mốc 1000 bản ghi)
         let assignedIds = [];
         let aOffset = 0;
         let aFetchMore = true;
@@ -956,14 +956,15 @@ async function xuLyChuanHoaThuTuDoanCap() {
           }
         }
 
-        // Lọc điểm chưa gán
+        // Lọc: Điểm nào có rồi thì bỏ qua, chưa có thì giữ lại
         let matchedPts = matchedPtsRaw.filter(p => !assignedIds.includes(Number(p.id_diem || p.id)));
 
+        // Chèn các điểm chưa có vào bảng doan_cap_diem
         if (matchedPts.length > 0) {
           let newInserts = matchedPts.map(pt => ({
             id_doan_cap: Number(doanVal),
             id_diem: Number(pt.id_diem || pt.id),
-            thu_tu: 999
+            thu_tu: 999 // Tạm thời để số lớn, bước sau sẽ sắp xếp lại
           }));
           const { error: insErr } = await supabaseClient
             .from('doan_cap_diem')
@@ -973,7 +974,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
       }
     }
 
-    // 4. Lấy toàn bộ id_diem thuộc đoạn cáp này từ doan_cap_diem
+    // 4. Lấy toàn bộ id_diem thuộc đoạn cáp này từ doan_cap_diem (vượt mốc 1000 bản ghi)
     let segmentLinks = [];
     let segOffset = 0;
     let segFetchMore = true;
@@ -1000,7 +1001,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
     let segmentPointIds = segmentLinks.map(l => Number(l.id_diem));
 
-    // 5. Lấy tọa độ chi tiết từ diem_ha_tang bằng cách chia lô 500 ID
+    // 5. Lấy thông tin chi tiết từ diem_ha_tang bằng cách chia lô 500 ID để tránh giới hạn câu lệnh .in()
     let segmentPointObjects = [];
     const batchSize = 500;
     for (let i = 0; i < segmentPointIds.length; i += batchSize) {
@@ -1019,56 +1020,18 @@ async function xuLyChuanHoaThuTuDoanCap() {
     }
 
     if (!segmentPointObjects || segmentPointObjects.length === 0) {
-      throw new Error("Không tìm thấy thông tin tọa độ các điểm thuộc đoạn cáp này!");
+      throw new Error("Không tìm thấy thông tin chi tiết các điểm thuộc đoạn cáp này!");
     }
 
-    // Chuẩn hóa tọa độ: Ép kiểu sang số thực (float) để tránh lỗi NaN khi tính khoảng cách
-    segmentPointObjects.forEach(pt => {
-      pt._lat = parseFloat(pt.lat || pt.latitude || 0);
-      pt._lng = parseFloat(pt.lng || pt.longitude || 0);
-    });
+    // 6. SẮP XẾP TUẦN TỰ THEO SỐ THỨ TỰ (stt) TĂNG DẦN
+    // Giúp loại bỏ hoàn toàn hiện tượng lặp vòng, nhảy cóc do khoảng cách không gian gây ra
+    segmentPointObjects.sort((a, b) => (Number(a.stt) || 0) - (Number(b.stt) || 0));
 
-    // 6. XÁC ĐỊNH ĐIỂM GỐC A TỪ TỌA ĐỘ CỐ ĐỊNH (21.593808, 105.840167)
-    const REF_LAT = 21.593808;
-    const REF_LNG = 105.840167;
+    let sortedChain = segmentPointObjects;
 
-    let startIdx = 0;
-    let minRefDist = Infinity;
+    console.log("⛓️ Chuỗi măng xông sau khi sắp xếp theo stt:", sortedChain.map(p => ({ id: p.id_diem || p.id, ten: p.ten_diem, stt: p.stt })));
 
-    for (let i = 0; i < segmentPointObjects.length; i++) {
-      let distToRef = calculateHaversine(REF_LAT, REF_LNG, segmentPointObjects[i]._lat, segmentPointObjects[i]._lng);
-      if (distToRef < minRefDist) {
-        minRefDist = distToRef;
-        startIdx = i;
-      }
-    }
-
-    console.log("📍 Điểm gốc A được chọn làm mốc:", segmentPointObjects[startIdx]);
-
-    // Khởi tạo chuỗi sắp xếp bắt đầu từ Điểm gốc A
-    let sortedChain = [segmentPointObjects[startIdx]];
-    let remaining = segmentPointObjects.filter((_, idx) => idx !== startIdx);
-
-    // THUẬT TOÁN NEAREST NEIGHBOR THỰC THỤ DỰA TRÊN KHOẢNG CÁCH LAT/LONG THỰC TẾ
-    while (remaining.length > 0) {
-      let lastPt = sortedChain[sortedChain.length - 1];
-      let nearestIdx = 0;
-      let minNutDist = Infinity;
-
-      for (let i = 0; i < remaining.length; i++) {
-        let dist = calculateHaversine(lastPt._lat, lastPt._lng, remaining[i]._lat, remaining[i]._lng);
-        if (dist < minNutDist) {
-          minNutDist = dist;
-          nearestIdx = i;
-        }
-      }
-      sortedChain.push(remaining[nearestIdx]);
-      remaining.splice(nearestIdx, 1);
-    }
-
-    console.log("⛓️ Chuỗi măng xông sau khi sắp xếp khoảng cách:", sortedChain.map(p => ({ id: p.id_diem || p.id, ten: p.ten_diem })));
-
-    // 7. Cập nhật lại số thứ tự (thu_tu: 1, 2, 3...) vào CSDL theo đúng thứ tự chuỗi không gian
+    // 7. Cập nhật lại số thứ tự (thu_tu: 1, 2, 3...) vào CSDL theo từng nhóm 500 bản ghi
     const updateBatchSize = 500;
     for (let i = 0; i < sortedChain.length; i += updateBatchSize) {
       let chunkChain = sortedChain.slice(i, i + updateBatchSize);
@@ -1086,7 +1049,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
     }
 
     hideLoading();
-    showToast(`✅ Đã chuẩn hóa thứ tự thành công cho tổng số ${sortedChain.length} điểm theo khoảng cách!`, "success");
+    showToast(`✅ Đã chuẩn hóa thứ tự thành công cho tổng số ${sortedChain.length} điểm!`, "success");
 
     // Tải lại dữ liệu bản đồ để hiển thị ngay lập tức
     if (typeof taiDiemDaTuyen === 'function') {
