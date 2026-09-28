@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (VÉT DỮ LIỆU VƯỢT 1000 DÒNG & SẮP XẾP THEO STT)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (HỖ TRỢ LINH HOẠT TÊN CỘT ten VÀ stt/thu_tu)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -920,24 +920,41 @@ async function xuLyChuanHoaThuTuDoanCap() {
       let offset = 0;
       let fetchMore = true;
       while (fetchMore) {
+        // Hỗ trợ tìm kiếm theo cả ten và ten_diem
         const { data: chunk, error } = await supabaseClient
           .from('diem_ha_tang')
           .select('*')
-          .ilike('ten_diem', `%${keyword}%`)
+          .or(`ten.ilike.%${keyword}%,ten_diem.ilike.%${keyword}%`)
           .range(offset, offset + 999);
 
-        if (error) throw error;
-        if (chunk && chunk.length > 0) {
-          matchedPtsRaw = matchedPtsRaw.concat(chunk);
-          offset += 1000;
-          if (chunk.length < 1000) fetchMore = false;
+        if (error) {
+          // Nếu bảng không có cột ten_diem, thử tìm riêng cột ten
+          const { data: chunkFallback, error: errFb } = await supabaseClient
+            .from('diem_ha_tang')
+            .select('*')
+            .ilike('ten', `%${keyword}%`)
+            .range(offset, offset + 999);
+          if (errFb) throw errFb;
+          if (chunkFallback && chunkFallback.length > 0) {
+            matchedPtsRaw = matchedPtsRaw.concat(chunkFallback);
+            offset += 1000;
+            if (chunkFallback.length < 1000) fetchMore = false;
+          } else {
+            fetchMore = false;
+          }
         } else {
-          fetchMore = false;
+          if (chunk && chunk.length > 0) {
+            matchedPtsRaw = matchedPtsRaw.concat(chunk);
+            offset += 1000;
+            if (chunk.length < 1000) fetchMore = false;
+          } else {
+            fetchMore = false;
+          }
         }
       }
 
       if (matchedPtsRaw.length > 0) {
-        // Lấy danh sách toàn bộ id_diem đã được gán trên hệ thống (vượt mốc 1000 bản ghi)
+        // Lấy danh sách toàn bộ id_diem đã được gán trên hệ thống
         let assignedIds = [];
         let aOffset = 0;
         let aFetchMore = true;
@@ -956,15 +973,14 @@ async function xuLyChuanHoaThuTuDoanCap() {
           }
         }
 
-        // Lọc: Điểm nào có rồi thì bỏ qua, chưa có thì giữ lại
+        // Lọc điểm chưa gán
         let matchedPts = matchedPtsRaw.filter(p => !assignedIds.includes(Number(p.id_diem || p.id)));
 
-        // Chèn các điểm chưa có vào bảng doan_cap_diem
         if (matchedPts.length > 0) {
           let newInserts = matchedPts.map(pt => ({
             id_doan_cap: Number(doanVal),
             id_diem: Number(pt.id_diem || pt.id),
-            thu_tu: 999 // Tạm thời để số lớn, bước sau sẽ sắp xếp lại
+            thu_tu: 999
           }));
           const { error: insErr } = await supabaseClient
             .from('doan_cap_diem')
@@ -974,7 +990,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
       }
     }
 
-    // 4. Lấy toàn bộ id_diem thuộc đoạn cáp này từ doan_cap_diem (vượt mốc 1000 bản ghi)
+    // 4. Lấy toàn bộ id_diem thuộc đoạn cáp này từ doan_cap_diem
     let segmentLinks = [];
     let segOffset = 0;
     let segFetchMore = true;
@@ -1001,7 +1017,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
     let segmentPointIds = segmentLinks.map(l => Number(l.id_diem));
 
-    // 5. Lấy thông tin chi tiết từ diem_ha_tang bằng cách chia lô 500 ID để tránh giới hạn câu lệnh .in()
+    // 5. Lấy thông tin chi tiết từ diem_ha_tang bằng cách chia lô 500 ID
     let segmentPointObjects = [];
     const batchSize = 500;
     for (let i = 0; i < segmentPointIds.length; i += batchSize) {
@@ -1023,13 +1039,20 @@ async function xuLyChuanHoaThuTuDoanCap() {
       throw new Error("Không tìm thấy thông tin chi tiết các điểm thuộc đoạn cáp này!");
     }
 
-    // 6. SẮP XẾP TUẦN TỰ THEO SỐ THỨ TỰ (stt) TĂNG DẦN
-    // Giúp loại bỏ hoàn toàn hiện tượng lặp vòng, nhảy cóc do khoảng cách không gian gây ra
-    segmentPointObjects.sort((a, b) => (Number(a.stt) || 0) - (Number(b.stt) || 0));
+    // 6. SẮP XẾP TUẦN TỰ AN TOÀN (Sử dụng stt, thu_tu, so_thu_tu hoặc fallback về id_diem)
+    segmentPointObjects.sort((a, b) => {
+      let valA = Number(a.stt ?? a.thu_tu ?? a.so_thu_tu ?? a.id_diem ?? a.id) || 0;
+      let valB = Number(b.stt ?? b.thu_tu ?? b.so_thu_tu ?? b.id_diem ?? b.id) || 0;
+      return valA - valB;
+    });
 
     let sortedChain = segmentPointObjects;
 
-    console.log("⛓️ Chuỗi măng xông sau khi sắp xếp theo stt:", sortedChain.map(p => ({ id: p.id_diem || p.id, ten: p.ten_diem, stt: p.stt })));
+    console.log("⛓️ Chuỗi măng xông sau khi sắp xếp:", sortedChain.map(p => ({ 
+      id: p.id_diem || p.id, 
+      ten: p.ten || p.ten_diem, 
+      stt: p.stt ?? p.thu_tu ?? p.so_thu_tu 
+    })));
 
     // 7. Cập nhật lại số thứ tự (thu_tu: 1, 2, 3...) vào CSDL theo từng nhóm 500 bản ghi
     const updateBatchSize = 500;
