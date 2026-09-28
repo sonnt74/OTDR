@@ -398,49 +398,73 @@ function veLaiTuyenAB() {
     return `<hr style="margin:6px 0; border:0; border-top:1px dashed #ccc;"><div style="display:flex; flex-direction:column; margin-top:4px;"><div style="display:flex; gap:4px; width: 100%; margin-bottom:4px;">${btnGhiChuAn}${btnAdmin}</div><div style="display:flex; gap:4px; width: 100%;">${btnTienIch}</div></div>`;
   }
 
-  // HÀM KÉO THẢ TỌA ĐỘ (GIỮ NGUYÊN 100% CỦA BẠN)
+ // HÀM KÉO THẢ TỌA ĐỘ (OPTIMISTIC UI - LUỒNG LẠC QUAN CỰC MƯỢT)
   async function handleDragEnd(e, ptObj) {
-  var newPos = e.target.getLatLng();
-  var isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu tọa độ mới cho điểm [${ptObj.ten}] không?`);
-  if (isConfirmed) {
-    showLoading("Đang lưu tọa độ...");
+    var newPos = e.target.getLatLng();
+    var isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu tọa độ mới cho điểm [${ptObj.ten}] không?`);
+    
+    // Nếu người dùng chọn Hủy, giật marker về chỗ cũ ngay
+    if (!isConfirmed) { 
+      e.target.setLatLng([ptObj.lat, ptObj.lng]); 
+      return; 
+    }
+
+    // 1. LƯU LẠI VỊ TRÍ CŨ ĐỂ DỰ PHÒNG (ROLLBACK NẾU LỖI MẠNG)
+    var oldLat = ptObj.lat;
+    var oldLng = ptObj.lng;
+    let numericPtId = Number(ptObj.id || ptObj.id_diem);
+
+    // 2. LUỒNG LẠC QUAN: CẬP NHẬT RAM NGAY LẬP TỨC 
+    var localPt = globalDataPoints.find(p => String(p.id) === String(numericPtId));
+    if (localPt) { localPt.lat = newPos.lat; localPt.lng = newPos.lng; }
+    
+    if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericPtId]) {
+      window.cacheChiTietDiemDoanCap[numericPtId].lat = newPos.lat;
+      window.cacheChiTietDiemDoanCap[numericPtId].long = newPos.lng;
+      // Cập nhật thuộc tính mảng gốc nếu có
+      if (window.cacheChiTietDiemDoanCap[numericPtId].latitude !== undefined) window.cacheChiTietDiemDoanCap[numericPtId].latitude = newPos.lat;
+      if (window.cacheChiTietDiemDoanCap[numericPtId].longitude !== undefined) window.cacheChiTietDiemDoanCap[numericPtId].longitude = newPos.lng;
+    }
+    
+    // Cập nhật State
+    if (typeof AppStore !== 'undefined') AppStore.setState({ dataPoints: globalDataPoints });
+
+    // 3. VẼ LẠI MAP VÀ TÍNH LẠI LÝ TRÌNH NGAY TỨC THÌ (Độ trễ 0s)
+    veLaiTuyenAB();
+    showToast("Đang đồng bộ dữ liệu ngầm...", "info");
+
+    // Lệnh điều khiển bản đồ bay (flyTo) mượt mà
+    if (typeof map !== 'undefined') {
+      map.stop();
+      map.flyTo([newPos.lat, newPos.lng], 19, { animate: true, duration: 1.0 });
+    }
+
+    // 4. TIẾN TRÌNH NGẦM: LƯU LÊN SUPABASE (Không dùng showLoading để tránh block màn hình)
     try {
-      const { error } = await supabaseClient.from('diem_ha_tang').update({ lat: newPos.lat, long: newPos.lng }).eq('id_diem', ptObj.id);
+      const { error } = await supabaseClient
+        .from('diem_ha_tang')
+        .update({ lat: newPos.lat, long: newPos.lng })
+        .eq('id_diem', numericPtId);
+
       if (error) throw error;
       
-      // 1. Cập nhật tọa độ mới vào mảng RAM chung
-      var localPt = globalDataPoints.find(p => p.id == ptObj.id);
-      if (localPt) { localPt.lat = newPos.lat; localPt.lng = newPos.lng; }
-      
-      // 2. Cập nhật đồng bộ vào bộ nhớ đệm chi tiết đoạn cáp
-      let numericPtId = Number(ptObj.id);
-      if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericPtId]) {
-        window.cacheChiTietDiemDoanCap[numericPtId].lat = newPos.lat;
-        window.cacheChiTietDiemDoanCap[numericPtId].long = newPos.lng;
+      if (typeof ghiNhatKyThaoTac === 'function') {
+        ghiNhatKyThaoTac("DOI_TOA_DO", `Kỹ sư thay đổi tọa độ điểm [${ptObj.ten}] sang (${newPos.lat.toFixed(6)}, ${newPos.lng.toFixed(6)})`);
       }
-
-      hideLoading();
-      if(typeof ghiNhatKyThaoTac==='function') await ghiNhatKyThaoTac("DOI_TOA_DO", `Kỹ sư thay đổi tọa độ điểm [${ptObj.ten}] sang (${newPos.lat.toFixed(6)}, ${newPos.lng.toFixed(6)})`);
-      showToast("Đã lưu tọa độ thành công!", "success");
+      showToast("✅ Đã lưu tọa độ thành công!", "success");
       
-      // 3. Vẽ lại tuyến cáp ngay lập tức
-      veLaiTuyenAB();
-
-      // 4. Lệnh điều khiển bản đồ bay (flyTo) mượt mà đến vị trí điểm vừa kéo thả
-      if (typeof map !== 'undefined') {
-        map.stop();
-        map.flyTo([newPos.lat, newPos.lng], 19, { animate: true, duration: 1.5 });
-      }
-
     } catch (err) { 
-      showToast("Lỗi: " + err.message, "error"); 
-      hideLoading(); 
-      e.target.setLatLng([ptObj.lat, ptObj.lng]); 
+      // 5. ROLLBACK: NẾU MẠNG LỖI, GIẬT TỌA ĐỘ VỀ CHỖ CŨ VÀ BÁO LỖI
+      showToast("❌ Mạng lỗi, khôi phục vị trí cũ: " + err.message, "error"); 
+      
+      if (localPt) { localPt.lat = oldLat; localPt.lng = oldLng; }
+      if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericPtId]) {
+        window.cacheChiTietDiemDoanCap[numericPtId].lat = oldLat;
+        window.cacheChiTietDiemDoanCap[numericPtId].long = oldLng;
+      }
+      veLaiTuyenAB(); 
     }
-  } else { 
-    e.target.setLatLng([ptObj.lat, ptObj.lng]); 
   }
-}
 
   // VÒNG LẶP VẼ ĐA SẮC CHO TỪNG ĐOẠN CÁP
   danhSachDoanCanVe.forEach((idDoanHienTai, idx) => {
@@ -512,44 +536,54 @@ function isMangXong(pt) {
 // ==========================================================================
 window.moFormCrud = async function(action, id, ten, lat, lng) {
   // 1. XỬ LÝ XÓA ĐIỂM
+  // 1. XỬ LÝ XÓA ĐIỂM (OPTIMISTIC UI)
   if (action === 'DELETE') {
     let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn điểm <b>${ten}</b> khỏi tuyến không?`, 'danger');
     if (isConfirmed) {
-      showLoading("Đang xóa điểm hạ tầng...");
-      try {
-        const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', id);
-        if (error) throw error;
-        
-        globalDataPoints = globalDataPoints.filter(p => String(p.id) !== String(id));
-        
-        let numericId = Number(id);
-        if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericId]) {
-          delete window.cacheChiTietDiemDoanCap[numericId];
-        }
-        if (window.cacheThuTuDoanCap && window.cacheThuTuDoanCap[numericId]) {
-          delete window.cacheThuTuDoanCap[numericId];
-        }
+      let numericId = Number(id);
 
-        if (typeof AppStore !== 'undefined') AppStore.setState({ dataPoints: globalDataPoints });
+      // A. BACKUP DỮ LIỆU ĐỂ ROLLBACK NẾU LỖI
+      let backupPt = globalDataPoints.find(p => String(p.id) === String(id));
+      let backupCache = window.cacheChiTietDiemDoanCap ? window.cacheChiTietDiemDoanCap[numericId] : null;
+      let backupOrder = window.cacheThuTuDoanCap ? window.cacheThuTuDoanCap[numericId] : null;
+
+      // B. XÓA KHỎI RAM NGAY LẬP TỨC
+      globalDataPoints = globalDataPoints.filter(p => String(p.id) !== String(id));
+      
+      if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericId]) {
+        delete window.cacheChiTietDiemDoanCap[numericId];
+      }
+      if (window.cacheThuTuDoanCap && window.cacheThuTuDoanCap[numericId]) {
+        delete window.cacheThuTuDoanCap[numericId];
+      }
+
+      if (typeof AppStore !== 'undefined') AppStore.setState({ dataPoints: globalDataPoints });
+      
+      // C. VẼ LẠI MAP (Nối liền sợi cáp ngay lập tức)
+      if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+      showToast("Đang đồng bộ xóa ngầm...", "info");
+
+      // D. TIẾN TRÌNH NGẦM LƯU LÊN SUPABASE
+      try {
+        const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', numericId);
+        if (error) throw error;
         
         if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("XOA_DIEM", `Kỹ sư đã xóa điểm [${ten}] ID: ${id}`);
         showToast("✅ Đã xóa điểm hạ tầng thành công!", "success");
-        
-        // Vẽ lại bản đồ ngay lập tức
-        if (typeof veLaiTuyenAB === 'function') {
-          veLaiTuyenAB();
-        }
 
-        if (typeof map !== 'undefined') {
-            map.flyTo([lat, lng], 19, { animate: true, duration: 1.5 });
-        }
-
-        // Đồng bộ lại dữ liệu ngầm phía sau
+        // Gọi đồng bộ ngầm chuẩn hóa tuyến nếu cần
         if (typeof taiDiemDaTuyen === 'function') {
           setTimeout(() => { taiDiemDaTuyen(); }, 500);
         }
-      } catch (err) { showToast("❌ Lỗi xóa điểm: " + err.message, "error"); }
-      hideLoading();
+      } catch (err) { 
+        // E. ROLLBACK NẾU LỖI
+        showToast("❌ Lỗi xóa điểm, khôi phục lại bản đồ: " + err.message, "error"); 
+        if (backupPt) globalDataPoints.push(backupPt);
+        if (backupCache && window.cacheChiTietDiemDoanCap) window.cacheChiTietDiemDoanCap[numericId] = backupCache;
+        if (backupOrder && window.cacheThuTuDoanCap) window.cacheThuTuDoanCap[numericId] = backupOrder;
+        
+        if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+      }
     }
   } 
   // 2. XỬ LÝ THÊM (ADD) HOẶC SỬA (EDIT) ĐIỂM HẠ TẦNG
