@@ -31,13 +31,12 @@ function khoiTaoBanDoLeaflet() {
     { position: 'topright' }
   ).addTo(map);
 
-  // Sự kiện tự động nạp điểm theo vùng xem khi kéo/zoom bản đồ
+ // Sự kiện tự động nạp điểm theo vùng xem khi kéo/zoom bản đồ
   map.on('moveend', function() {
     clearTimeout(moveEndDebounceTimer);
     moveEndDebounceTimer = setTimeout(function() {
-      var selectTuyen = document.getElementById('selectTuyen');
-      var tuyenVal = selectTuyen ? selectTuyen.value : 'ALL';
-      if (tuyenVal === 'ALL' && typeof taiDiemTheoVungXem === 'function') {
+      var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
+      if (checkedDoan.length === 0 && typeof taiDiemTheoVungXem === 'function') {
         taiDiemTheoVungXem();
       }
     }, 400);
