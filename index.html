@@ -115,17 +115,30 @@
       <div class="form-group"><label>    Chọn Đài VT:</label><select id="selectDai" onchange="onDaiChange()"></select></div>
       <div class="form-group"><label>    Chọn Trạm VT:</label><select id="selectTram" onchange="onTramChange()"></select></div>
      <!-- ========================================================== -->
-      <!-- KHU VỰC TÌM KIẾM VÀ GÁN MĂNG XÔNG THEO TỪ KHÓA (ĐÃ TỐI ƯU GIAO DIỆN) -->
-      <!-- ========================================================== -->
-      <div class="form-group" style="margin-top: 8px; background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #dee2e6;">
-        <label style="font-size: 11px; font-weight: bold; color: #333; display: block; margin-bottom: 4px;">Gắn Măng Xông theo từ khóa:</label>
-        <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
-          <!-- Textbox được cấu hình min-width: 0 và box-sizing để cố định không bị co lại -->
-          <input type="text" id="txtTuKhoaGanMX" placeholder="VD: 96TQG, MX..." style="flex: 1; width: 100%; min-width: 20; padding: 6px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; box-sizing: border-box; outline: none;">
-          <!-- Nút bấm cố định kích thước, không bị co giãn -->
-          <button class="btn-action" style="background: #0d6efd; font-size: 11px; padding: 6px 10px; white-space: nowrap; flex-shrink: 0;" onclick="ganVaSapXepMangXongTheoTuKhoa()">🔍 Thực hiện</button>
-        </div>
-      </div>
+<!-- NÚT MỞ POPUP NHẬP TỪ KHÓA VÀ KHUNG MODAL NỔI ĐỘC LẬP -->
+<!-- ========================================================== -->
+<div class="form-group" style="margin-top: 8px;">
+  <button class="btn-action" style="background: #0d6efd; font-size: 11px; padding: 6px; width: 100%; cursor: pointer;" onclick="moModalNhapTuKhoa()">🔍 Gắn Măng Xông theo từ khóa...</button>
+</div>
+
+<!-- Khung Modal Popup nổi (giúp nhập liệu mượt mà, không bị xung đột với bản đồ) -->
+<div id="modalGanMX" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99999; justify-content: center; align-items: center;">
+  <div style="background: #fff; padding: 16px; border-radius: 6px; width: 320px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+    <h4 style="margin: 0 0 8px 0; font-size: 13px; color: #333; font-weight: bold;">Nhập từ khóa tìm kiếm Măng Xông</h4>
+    <p style="margin: 0 0 10px 0; font-size: 11px; color: #666;">Hệ thống sẽ quét các điểm chưa gán có tên chứa từ khóa này.</p>
+    
+    <!-- Textbox bên trong Modal nằm ở lớp độc lập, nhận focus 100% -->
+    <input type="text" id="txtTuKhoaModal" placeholder="VD: 96TQG, MX..." style="width: 100%; padding: 7px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-bottom: 12px; outline: none; background: #fff;" onkeydown="if(event.key === 'Enter') thucHienGanTheoTuKhoaModal()">
+    
+    <div style="display: flex; justify-content: flex-end; gap: 6px;">
+      <button onclick="dongModalNhapTuKhoa()" style="padding: 5px 12px; font-size: 11px; background: #6c757d; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Hủy</button>
+      <button onclick="thucHienGanTheoTuKhoaModal()" style="padding: 5px 12px; font-size: 11px; background: #0d6efd; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Thực hiện</button>
+    </div>
+  </div>
+</div>
+<!-- ========================================================== -->
+<!-- KẾT THÚ KHUNG MODAL -->
+<!-- ========================================================== -->
       <!-- BỘ LỌC CÂY: TUYẾN & ĐOẠN CÁP (TREE-VIEW) -->
       <label style="font-weight: bold; margin-top: 10px; font-size: 12px; color: #475569;">Chọn Tuyến & Đoạn Cáp:</label>
       <div id="khayTreeChecklist" class="checklist-box" style="max-height: 120px; overflow-y: auto; background: #fff; padding: 6px; border: 1px solid var(--border-color); border-radius: 5px; margin-bottom: 4px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);">
