@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (VÉT DỮ LIỆU VƯỢT 1000 DÒNG & SẮP XẾP TỪ GỐC A)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (GỐC A TỪ TỌA ĐỘ CỐ ĐỊNH & SẮP XẾP GẦN NHẤT)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -1023,13 +1023,26 @@ async function xuLyChuanHoaThuTuDoanCap() {
       throw new Error("Không tìm thấy thông tin tọa độ các điểm thuộc đoạn cáp này!");
     }
 
-    // 6. Xác định Điểm gốc A: Điểm có số thứ tự (stt) nhỏ nhất làm mốc xuất phát
-    segmentPointObjects.sort((a, b) => (Number(a.stt) || 0) - (Number(b.stt) || 0));
+    // 6. XÁC ĐỊNH ĐIỂM GỐC A DỰA TRÊN TỌA ĐỘ CỐ ĐỊNH (21.593808, 105.840167)
+    const REF_LAT = 21.593808;
+    const REF_LNG = 105.840167;
 
-    let sortedChain = [segmentPointObjects[0]]; // Điểm gốc A
-    let remaining = segmentPointObjects.slice(1);
+    let startIdx = 0;
+    let minRefDist = Infinity;
 
-    // Thuật toán Nearest Neighbor dựa trên tọa độ lat, lng bắt đầu từ điểm gốc A
+    for (let i = 0; i < segmentPointObjects.length; i++) {
+      let distToRef = calculateHaversine(REF_LAT, REF_LNG, segmentPointObjects[i].lat, segmentPointObjects[i].lng);
+      if (distToRef < minRefDist) {
+        minRefDist = distToRef;
+        startIdx = i;
+      }
+    }
+
+    // Khởi tạo chuỗi sắp xếp bắt đầu từ Điểm gốc A gần tọa độ chuẩn nhất
+    let sortedChain = [segmentPointObjects[startIdx]];
+    let remaining = segmentPointObjects.filter((_, idx) => idx !== startIdx);
+
+    // Thuật toán Nearest Neighbor xâu chuỗi các điểm gần nhất tiếp theo
     while (remaining.length > 0) {
       let lastPt = sortedChain[sortedChain.length - 1];
       let nearestIdx = 0;
