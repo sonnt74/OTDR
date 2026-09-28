@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (ĐÃ KHẮC PHỤC GIỚI HẠN 1000 BẢN GHI CỦA SUPABASE)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (HỖ TRỢ CHUNK DỮ LIỆU VƯỢT MỐC 1000 BẢN GHI)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -916,7 +916,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
   try {
     // 3. Nếu người dùng có nhập từ khóa, tiến hành tìm và gán thêm điểm mới vào đoạn cáp
     if (keyword) {
-      // Dùng .range(0, 9999) để lấy trọn vẹn kết quả vượt mốc 1000 bản ghi
       const { data: matchedPtsRaw, error: errPts } = await supabaseClient
         .from('diem_ha_tang')
         .select('*')
@@ -926,13 +925,23 @@ async function xuLyChuanHoaThuTuDoanCap() {
       if (errPts) throw errPts;
 
       if (matchedPtsRaw && matchedPtsRaw.length > 0) {
-        // Lấy danh sách tất cả các điểm đã được gán trên toàn hệ thống (mở rộng range)
-        const { data: assignedLinks } = await supabaseClient
-          .from('doan_cap_diem')
-          .select('id_diem')
-          .range(0, 9999);
-          
-        let assignedIds = (assignedLinks || []).map(l => Number(l.id_diem));
+        // Lấy danh sách tất cả các điểm đã được gán trên toàn hệ thống (phân trang lặp nếu > 1000)
+        let assignedIds = [];
+        let offset = 0;
+        let fetchMore = true;
+        while (fetchMore) {
+          const { data: chunk } = await supabaseClient
+            .from('doan_cap_diem')
+            .select('id_diem')
+            .range(offset, offset + 999);
+          if (chunk && chunk.length > 0) {
+            assignedIds = assignedIds.concat(chunk.map(l => Number(l.id_diem)));
+            offset += 1000;
+            if (chunk.length < 1000) fetchMore = false;
+          } else {
+            fetchMore = false;
+          }
+        }
 
         // Lọc các điểm chưa gán
         let matchedPts = matchedPtsRaw.filter(p => !assignedIds.includes(Number(p.id_diem || p.id)));
@@ -948,28 +957,51 @@ async function xuLyChuanHoaThuTuDoanCap() {
       }
     }
 
-    // 4. Lấy toàn bộ danh sách id_diem hiện có thuộc đoạn cáp này từ bảng doan_cap_diem (mở rộng range)
-    const { data: segmentLinks, error: errSegLink } = await supabaseClient
-      .from('doan_cap_diem')
-      .select('id_diem')
-      .eq('id_doan_cap', Number(doanVal))
-      .range(0, 9999);
+    // 4. Lấy toàn bộ danh sách id_diem hiện có thuộc đoạn cáp này từ bảng doan_cap_diem (vượt 1000 dòng)
+    let segmentLinks = [];
+    let segOffset = 0;
+    let segFetchMore = true;
+    while (segFetchMore) {
+      const { data: chunk, error: errSegLink } = await supabaseClient
+        .from('doan_cap_diem')
+        .select('id_diem')
+        .eq('id_doan_cap', Number(doanVal))
+        .range(segOffset, segOffset + 999);
 
-    if (errSegLink) throw errSegLink;
+      if (errSegLink) throw errSegLink;
+      if (chunk && chunk.length > 0) {
+        segmentLinks = segmentLinks.concat(chunk);
+        segOffset += 1000;
+        if (chunk.length < 1000) segFetchMore = false;
+      } else {
+        segFetchMore = false;
+      }
+    }
+
     if (!segmentLinks || segmentLinks.length === 0) {
       throw new Error("Đoạn cáp này chưa có điểm nào được gán! Hãy nhập từ khóa để gán điểm.");
     }
 
     let segmentPointIds = segmentLinks.map(l => Number(l.id_diem));
 
-    // 5. Lấy thông tin tọa độ chi tiết của các điểm đó từ bảng diem_ha_tang (mở rộng range)
-    const { data: segmentPointObjects, error: errPtObjs } = await supabaseClient
-      .from('diem_ha_tang')
-      .select('*')
-      .in('id_diem', segmentPointIds)
-      .range(0, 9999);
+    // 5. Lấy thông tin tọa độ chi tiết bằng cách CHIA NHÓM (BATCH 500 ID) để vượt qua giới hạn của Supabase
+    let segmentPointObjects = [];
+    const batchSize = 500;
+    for (let i = 0; i < segmentPointIds.length; i += batchSize) {
+      let batchIds = segmentPointIds.slice(i, i + batchSize);
+      if (batchIds.length === 0) continue;
 
-    if (errPtObjs) throw errPtObjs;
+      const { data: batchData, error: errBatch } = await supabaseClient
+        .from('diem_ha_tang')
+        .select('*')
+        .in('id_diem', batchIds);
+
+      if (errBatch) throw errBatch;
+      if (batchData) {
+        segmentPointObjects = segmentPointObjects.concat(batchData);
+      }
+    }
+
     if (!segmentPointObjects || segmentPointObjects.length === 0) {
       throw new Error("Không tìm thấy thông tin tọa độ các điểm thuộc đoạn cáp này!");
     }
@@ -996,21 +1028,25 @@ async function xuLyChuanHoaThuTuDoanCap() {
       remaining.splice(nearestIdx, 1);
     }
 
-    // 7. Cập nhật lại số thứ tự (thu_tu: 1, 2, 3...) chuẩn xác vào CSDL
-    let updateBatch = sortedChain.map((pt, idx) => ({
-      id_doan_cap: Number(doanVal),
-      id_diem: Number(pt.id_diem || pt.id),
-      thu_tu: idx + 1
-    }));
+    // 7. Cập nhật lại số thứ tự (thu_tu: 1, 2, 3...) chuẩn xác vào CSDL theo từng nhóm 500 bản ghi
+    const updateBatchSize = 500;
+    for (let i = 0; i < sortedChain.length; i += updateBatchSize) {
+      let chunkChain = sortedChain.slice(i, i + updateBatchSize);
+      let updateBatch = chunkChain.map((pt, idx) => ({
+        id_doan_cap: Number(doanVal),
+        id_diem: Number(pt.id_diem || pt.id),
+        thu_tu: i + idx + 1
+      }));
 
-    const { error: errUpdateOrder } = await supabaseClient
-      .from('doan_cap_diem')
-      .upsert(updateBatch, { onConflict: 'id_doan_cap,id_diem' });
+      const { error: errUpdateOrder } = await supabaseClient
+        .from('doan_cap_diem')
+        .upsert(updateBatch, { onConflict: 'id_doan_cap,id_diem' });
 
-    if (errUpdateOrder) throw errUpdateOrder;
+      if (errUpdateOrder) throw errUpdateOrder;
+    }
 
     hideLoading();
-    showToast(`✅ Đã chuẩn hóa thứ tự thành công cho ${sortedChain.length} điểm!`, "success");
+    showToast(`✅ Đã chuẩn hóa thứ tự thành công cho tổng số ${sortedChain.length} điểm!`, "success");
 
     // Tải lại dữ liệu bản đồ để hiển thị ngay lập tức
     if (typeof taiDiemDaTuyen === 'function') {
