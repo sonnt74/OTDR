@@ -457,7 +457,23 @@ function veLaiTuyenAB() {
 
       var iconHtml = (index === 0) ? '<div class="point-a-marker">A</div>' : '<div class="standard-marker"></div>';
       var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: iconHtml, iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
-      var popupHtml = `<div style="font-size: 12px; line-height: 1.6;"><b style="font-size: 14px; color: #0d6efd;">${pt.ten}</b><br>Loại: <b>${pt.loai}</b><br>📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}</span><br>📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b><br>📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText}</b></div>` + taoNutHanhDong(pt);
+      // Lấy tên hướng từ danh mục dựa vào idHuong
+      let tenHuongText = "Chưa xác định";
+      if (pt.idHuong !== null && pt.idHuong !== undefined && pt.idHuong !== '') {
+        let matchedHuong = (window.rawHuongList || []).find(h => String(h.id_huong || h.id) === String(pt.idHuong));
+        if (matchedHuong) {
+          tenHuongText = matchedHuong.ten_huong || matchedHuong.ten || matchedHuong.name || ("Hướng " + pt.idHuong);
+        } else {
+          tenHuongText = "Hướng " + pt.idHuong;
+        }
+      }
+  
+      var popupHtml = `<div style="font-size: 12px; line-height: 1.6;"><b style="font-size: 14px; color: #0d6efd;">${pt.ten}</b><br>` +
+                      `Loại: <b>${pt.loai}</b><br>` +
+                      `🧭 Hướng: <b>${tenHuongText}</b><br>` +
+                      `📍 Tọa độ: <span style="color:#dc3545; font-weight:bold;">${pt.lat.toFixed(6)}, ${pt.lng.toFixed(6)}</span><br>` +
+                      `📍 Lý trình QL: <b>${pt.calculatedLyTrinhText}</b><br>` +
+                      `📏 Cự ly từ Trạm A: <b>${pt.distanceFromAText}</b></div>` + taoNutHanhDong(pt);
       
       marker.bindPopup(popupHtml); marker.on('dragend', e => handleDragEnd(e, pt)); markersLayer.addLayer(marker);
     });
