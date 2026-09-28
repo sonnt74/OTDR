@@ -418,8 +418,16 @@ function veLaiTuyenAB() {
 window.veLaiTuyenAB = veLaiTuyenAB;
 
 function isMangXong(pt) {
-  var name = (pt.loai || '').toUpperCase();
-  return Number(pt.idLoaiDiem) === 4 || name.includes('MX') || name.includes('MĂNG XÔNG');
+  // Lấy dữ liệu loại và tên, chuyển hết về IN HOA để dễ so sánh
+  var loaiStr = (pt.loai || '').toUpperCase();
+  var tenStr = (pt.ten || pt.ten_diem || '').toUpperCase();
+  
+  // Măng xông nếu: idLoaiDiem = 4, HOẶC cột loại có chữ MX, HOẶC tên điểm có chữ MX
+  return Number(pt.idLoaiDiem) === 4 || 
+         loaiStr.includes('MX') || 
+         loaiStr.includes('MĂNG XÔNG') ||
+         tenStr.includes('MX') || 
+         tenStr.includes('MĂNG XÔNG');
 }
 // ==========================================================================
 // HÀM QUẢN LÝ CRUD ĐIỂM HẠ TẦNG (THÊM, SỬA, XÓA) - TỐI ƯU TẢI TÊN LOẠI ĐIỂM
