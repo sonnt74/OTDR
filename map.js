@@ -409,6 +409,14 @@ function veLaiTuyenAB() {
         if (error) throw error;
         var localPt = globalDataPoints.find(p => p.id == ptObj.id);
         if (localPt) { localPt.lat = newPos.lat; localPt.lng = newPos.lng; }
+        
+        // Cập nhật tọa độ mới vào bộ nhớ đệm chi tiết đoạn cáp
+        let numericPtId = Number(ptObj.id);
+        if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericPtId]) {
+          window.cacheChiTietDiemDoanCap[numericPtId].lat = newPos.lat;
+          window.cacheChiTietDiemDoanCap[numericPtId].long = newPos.lng;
+        }
+        
         hideLoading();
         if(typeof ghiNhatKyThaoTac==='function') await ghiNhatKyThaoTac("DOI_TOA_DO", `Kỹ sư thay đổi tọa độ điểm [${ptObj.ten}] sang (${newPos.lat.toFixed(6)}, ${newPos.lng.toFixed(6)})`);
         showToast("Đã lưu tọa độ thành công!", "success");
@@ -496,11 +504,28 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
         if (error) throw error;
         
         globalDataPoints = globalDataPoints.filter(p => String(p.id) !== String(id));
+
+        // Xóa điểm khỏi bộ nhớ đệm đoạn cáp để đồng bộ ngay lập tức
+        let numericId = Number(id);
+        if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericId]) {
+          delete window.cacheChiTietDiemDoanCap[numericId];
+        }
+        if (window.cacheThuTuDoanCap && window.cacheThuTuDoanCap[numericId]) {
+          delete window.cacheThuTuDoanCap[numericId];
+        }
+        
         if (typeof AppStore !== 'undefined') AppStore.setState({ dataPoints: globalDataPoints });
         
         if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("XOA_DIEM", `Kỹ sư đã xóa điểm [${ten}] ID: ${id}`);
         showToast("✅ Đã xóa điểm hạ tầng thành công!", "success");
-        veLaiTuyenAB();
+        
+        // Gọi lại hàm tải đoạn cáp thay vì chỉ vẽ lại
+        if (typeof taiDiemDaTuyen === 'function') {
+          await taiDiemDaTuyen();
+        } else {
+          veLaiTuyenAB();
+        }
+        
         if (typeof map !== 'undefined') {
             map.flyTo([lat, lng], 19, { animate: true, duration: 1.5 });
         }
@@ -801,8 +826,9 @@ window.saveDiemHatangFullAction = async function() {
     showToast(`✅ Đã ${action === 'ADD' ? 'thêm' : 'cập nhật'} thành công!`, "success");
     document.getElementById('diemHaTangModal').style.display = 'none';
     
-    if (typeof taiDuLieuSupabase === 'function') {
-       try { await taiDuLieuSupabase(false); } catch(e) { taiDuLieuSupabase(false); }
+    // Gọi lại taiDiemDaTuyen để cập nhật đồng bộ bộ nhớ đệm đoạn cáp
+    if (typeof taiDiemDaTuyen === 'function') {
+       try { await taiDiemDaTuyen(); } catch(e) { console.error(e); }
     }
 
     if (typeof map !== 'undefined') {
