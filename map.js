@@ -192,38 +192,52 @@ async function taiDuLieuDoanCapDiem(doanVal) {
 /**
  * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ CỦA BẢNG DOAN_CAP_DIEM (Đã Fix dứt điểm lỗi lặp code)
  */
+/**
+ * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ CỦA BẢNG DOAN_CAP_DIEM 
+ * (Đã nâng cấp để vét đủ 100% điểm từ cache, chống thiếu điểm, sai lý trình và lặp vòng)
+ */
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   if (!doanVal || doanVal === 'ALL') {
     return [];
   }
 
-  // 1. Lọc các điểm thuộc đoạn cáp OR các điểm mới vét có ID nằm trong sổ tay cacheThuTuDoanCap
-  let segmentPts = globalDataPoints.filter(pt => {
-    return String(pt.idDoanCap) === String(doanVal) || window.cacheThuTuDoanCap[Number(pt.id)] !== undefined;
+  // 1. Kiểm tra xem bộ nhớ cache thứ tự đã có dữ liệu chưa
+  let cachedIds = Object.keys(window.cacheThuTuDoanCap || {});
+  if (cachedIds.length === 0) {
+    // Nếu chưa có trong cache, fallback về cách lọc cũ trong globalDataPoints
+    let fallbackPts = globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
+    return fallbackPts;
+  }
+
+  // 2. Thu thập tất cả các điểm thuộc đoạn cáp bằng cách đối chiếu với globalDataPoints và cache
+  let segmentPts = [];
+  let addedIds = new Set();
+
+  cachedIds.forEach(idStr => {
+    let numId = Number(idStr);
+    let thuTuVal = window.cacheThuTuDoanCap[numId];
+
+    // Tìm điểm trong globalDataPoints
+    let foundPt = globalDataPoints.find(p => Number(p.id || p.id_diem) === numId);
+
+    if (foundPt) {
+      // Nếu tìm thấy trên RAM, clone ra để tránh ảnh hưởng dữ liệu gốc và gắn số thứ tự chuẩn
+      let clonedPt = Object.assign({}, foundPt);
+      clonedPt.thu_tu = (thuTuVal !== undefined && thuTuVal !== null) ? Number(thuTuVal) : 9999;
+      if (!addedIds.has(String(numId))) {
+        segmentPts.push(clonedPt);
+        addedIds.add(String(numId));
+      }
+    }
   });
 
   if (segmentPts.length === 0) return [];
 
-  // 2. Chống trùng lặp điểm bằng Map ID (Đảm bảo bản đồ không vẽ đè 2 điểm giống nhau)
-  let uniqueMap = new Map();
-  segmentPts.forEach(p => {
-    if (p.id && !uniqueMap.has(String(p.id))) {
-      uniqueMap.set(String(p.id), p);
-    }
-  });
-  let cleanPts = Array.from(uniqueMap.values());
-
-  // 3. Gán số thứ tự chuẩn từ bộ nhớ đệm (doan_cap_diem) vào đối tượng điểm
-  cleanPts.forEach(pt => {
-    let thuTuCSDL = window.cacheThuTuDoanCap[Number(pt.id)];
-    // Nếu điểm có thứ tự chuẩn, dùng nó. Nếu điểm bị rác/chưa có, đẩy về 9999 ở cuối
-    pt.thu_tu = (thuTuCSDL !== undefined && thuTuCSDL !== null) ? Number(thuTuCSDL) : 9999;
-  });
-
-  // 4. Sắp xếp tuyệt đối theo đúng cột thu_tu từ nhỏ đến lớn (1 đến n)
-  // Loại bỏ hoàn toàn khối lệnh sort bằng stt gây lỗi lặp vòng cũ
-  let sortedByThuTu = cleanPts.sort((a, b) => {
-    return a.thu_tu - b.thu_tu;
+  // 3. Sắp xếp tuyệt đối theo đúng cột thu_tu từ nhỏ đến lớn (1 đến n)
+  let sortedByThuTu = segmentPts.sort((a, b) => {
+    let tA = (a.thu_tu !== undefined && a.thu_tu !== null) ? Number(a.thu_tu) : 9999;
+    let tB = (b.thu_tu !== undefined && b.thu_tu !== null) ? Number(b.thu_tu) : 9999;
+    return tA - tB;
   });
 
   return sortedByThuTu;
