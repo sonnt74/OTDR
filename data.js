@@ -946,8 +946,10 @@ function chonDoanCapPhanTich(callback) {
 // ==========================================================================
 // HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (XÁC ĐỊNH ĐIỂM GỐC A DỰA TRÊN THỨ TỰ THỰC TẾ)
 // ==========================================================================
+// ==========================================================================
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (ĐÃ GỌN GÀNG, KHÔNG CONSOLE & DÙNG PROMPT CHUYÊN NGHIỆP)
+// ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
-  // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
   var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
   if (checkedDoan.length === 0) {
     showToast("Vui lòng tích chọn 1 đoạn cáp trên cây Checklist!", "warning");
@@ -960,15 +962,14 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
   let doanVal = checkedDoan[0];
 
-  // 2. Hộp thoại nhập từ khóa (Tùy chọn: nhập để gán thêm, hoặc để trống để sắp xếp lại)
-  let keywordInput = prompt("Nhập từ khóa tìm kiếm Măng Xông cần gán thêm (Bỏ trống nếu chỉ sắp xếp lại các điểm hiện có):", "");
+  // Sử dụng hộp thoại tùy chỉnh chuyên nghiệp thay vì lệnh prompt() mặc định của trình duyệt
+  let keywordInput = await showPromptDialog("Nhập từ khóa tìm kiếm Măng Xông cần gán thêm (Bỏ trống nếu chỉ sắp xếp lại các điểm hiện có):", "");
   if (keywordInput === null) return; // Người dùng bấm Hủy
   
   let keyword = keywordInput.trim();
 
   showLoading("Đang xử lý chuẩn hóa thứ tự đoạn cáp...");
   try {
-    // 3. Nếu có từ khóa, quét vét toàn bộ bảng diem_ha_tang (vượt mốc 1000 bản ghi bằng phân trang)
     if (keyword) {
       let matchedPtsRaw = [];
       let offset = 0;
@@ -1029,7 +1030,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
       }
     }
 
-    // 4. Lấy toàn bộ id_diem và thu_tu cũ thuộc đoạn cáp này từ doan_cap_diem
     let segmentLinks = [];
     let segOffset = 0;
     let segFetchMore = true;
@@ -1056,7 +1056,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
       throw new Error("Đoạn cáp này chưa có điểm nào được gán! Hãy nhập từ khóa để gán điểm.");
     }
 
-    // Tạo bản đồ ánh xạ thứ tự cũ để ưu tiên nhận diện điểm đầu
     let existingThuTuMap = {};
     segmentLinks.forEach(l => {
       existingThuTuMap[Number(l.id_diem)] = Number(l.thu_tu);
@@ -1064,7 +1063,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
     let segmentPointIds = segmentLinks.map(l => Number(l.id_diem));
 
-    // 5. Lấy tọa độ chi tiết từ diem_ha_tang bằng cách chia lô 500 ID
     let segmentPointObjects = [];
     const batchSize = 500;
     
@@ -1087,7 +1085,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
       throw new Error("Không tìm thấy thông tin tọa độ các điểm thuộc đoạn cáp này!");
     }
 
-    // 6. LÀM SẠCH VÀ ÉP KIỂU TỌA ĐỘ
     let validPoints = [];
     segmentPointObjects.forEach(pt => {
       let parsedLat = parseFloat(pt.lat || pt.latitude);
@@ -1097,8 +1094,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
         pt._lat = parsedLat;
         pt._lng = parsedLng;
         validPoints.push(pt);
-      } else {
-        console.warn("⚠️ Bỏ qua điểm lỗi tọa độ:", pt.ten_diem || pt.ten, pt);
       }
     });
 
@@ -1106,7 +1101,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
        throw new Error("Tất cả các điểm trong đoạn cáp đều bị lỗi hoặc không có tọa độ hợp lệ!");
     }
 
-    // 7. XÁC ĐỊNH ĐIỂM GỐC A (Ưu tiên điểm có thu_tu nhỏ nhất từ trước, hoặc điểm đầu tiên)
     let startIdx = 0;
     let minThuTu = Infinity;
 
@@ -1119,14 +1113,10 @@ async function xuLyChuanHoaThuTuDoanCap() {
       }
     }
 
-    // Nếu tất cả đều chưa có thu_tu, mặc định lấy điểm đầu tiên trong danh sách
     if (minThuTu === 9999 || minThuTu === Infinity) {
       startIdx = 0;
     }
 
-    console.log("📍 Điểm gốc A được xác định chuẩn xác:", validPoints[startIdx]);
-
-    // 8. THUẬT TOÁN NEAREST NEIGHBOR (LAN TRUYỀN LIỀN MẠCH TỪ ĐIỂM GỐC)
     let sortedChain = [validPoints[startIdx]];
     let remaining = validPoints.filter((_, idx) => idx !== startIdx);
 
@@ -1147,12 +1137,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
       remaining.splice(nearestIdx, 1);
     }
 
-    console.log("⛓️ Chuỗi điểm sau khi tính toán chuẩn:", sortedChain.map(p => ({ 
-      id: p.id_diem || p.id, 
-      ten: p.ten_diem || p.ten 
-    })));
-
-    // 9. CẬP NHẬT THỨ TỰ (thu_tu) VÀO CSDL THEO NHÓM BATCH 500
     const updateBatchSize = 500;
     for (let i = 0; i < sortedChain.length; i += updateBatchSize) {
       let chunkChain = sortedChain.slice(i, i + updateBatchSize);
@@ -1172,7 +1156,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
     hideLoading();
     showToast(`✅ Chuẩn hóa thành công ${sortedChain.length} điểm liên tục từ điểm gốc!`, "success");
 
-    // Tải lại dữ liệu bản đồ
     if (typeof taiDiemDaTuyen === 'function') {
       await taiDiemDaTuyen();
     }
@@ -1180,6 +1163,5 @@ async function xuLyChuanHoaThuTuDoanCap() {
   } catch (err) {
     hideLoading();
     showToast("❌ Lỗi: " + err.message, "error");
-    console.error("Lỗi chi tiết:", err);
   }
 }
