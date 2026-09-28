@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (HỖ TRỢ CẢ GÁN THÊM VÀ SẮP XẾP LẠI TỪ ĐIỂM GỐC A)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (ĐÃ KHẮC PHỤC GIỚI HẠN 1000 BẢN GHI CỦA SUPABASE)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -916,18 +916,22 @@ async function xuLyChuanHoaThuTuDoanCap() {
   try {
     // 3. Nếu người dùng có nhập từ khóa, tiến hành tìm và gán thêm điểm mới vào đoạn cáp
     if (keyword) {
+      // Dùng .range(0, 9999) để lấy trọn vẹn kết quả vượt mốc 1000 bản ghi
       const { data: matchedPtsRaw, error: errPts } = await supabaseClient
         .from('diem_ha_tang')
         .select('*')
-        .ilike('ten_diem', `%${keyword}%`);
+        .ilike('ten_diem', `%${keyword}%`)
+        .range(0, 9999);
 
       if (errPts) throw errPts;
 
       if (matchedPtsRaw && matchedPtsRaw.length > 0) {
-        // Lấy danh sách tất cả các điểm đã được gán trên toàn hệ thống
+        // Lấy danh sách tất cả các điểm đã được gán trên toàn hệ thống (mở rộng range)
         const { data: assignedLinks } = await supabaseClient
           .from('doan_cap_diem')
-          .select('id_diem');
+          .select('id_diem')
+          .range(0, 9999);
+          
         let assignedIds = (assignedLinks || []).map(l => Number(l.id_diem));
 
         // Lọc các điểm chưa gán
@@ -944,11 +948,12 @@ async function xuLyChuanHoaThuTuDoanCap() {
       }
     }
 
-    // 4. Lấy toàn bộ danh sách id_diem hiện có thuộc đoạn cáp này từ bảng doan_cap_diem
+    // 4. Lấy toàn bộ danh sách id_diem hiện có thuộc đoạn cáp này từ bảng doan_cap_diem (mở rộng range)
     const { data: segmentLinks, error: errSegLink } = await supabaseClient
       .from('doan_cap_diem')
       .select('id_diem')
-      .eq('id_doan_cap', Number(doanVal));
+      .eq('id_doan_cap', Number(doanVal))
+      .range(0, 9999);
 
     if (errSegLink) throw errSegLink;
     if (!segmentLinks || segmentLinks.length === 0) {
@@ -957,11 +962,12 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
     let segmentPointIds = segmentLinks.map(l => Number(l.id_diem));
 
-    // 5. Lấy thông tin tọa độ chi tiết của các điểm đó từ bảng diem_ha_tang
+    // 5. Lấy thông tin tọa độ chi tiết của các điểm đó từ bảng diem_ha_tang (mở rộng range)
     const { data: segmentPointObjects, error: errPtObjs } = await supabaseClient
       .from('diem_ha_tang')
       .select('*')
-      .in('id_diem', segmentPointIds);
+      .in('id_diem', segmentPointIds)
+      .range(0, 9999);
 
     if (errPtObjs) throw errPtObjs;
     if (!segmentPointObjects || segmentPointObjects.length === 0) {
