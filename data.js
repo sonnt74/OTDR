@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (HỖ TRỢ CHUNK DỮ LIỆU VƯỢT MỐC 1000 BẢN GHI)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (VÉT DỮ LIỆU VƯỢT 1000 BẢN GHI & SẮP XẾP GẦN NHẤT)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -906,7 +906,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
   let doanVal = checkedDoan[0];
 
-  // 2. Hộp thoại nhập từ khóa (Có thể bỏ trống nếu chỉ muốn sắp xếp lại các điểm đã có)
+  // 2. Hộp thoại nhập từ khóa (Tùy chọn: nhập để gán thêm, hoặc để trống để sắp xếp lại)
   let keywordInput = prompt("Nhập từ khóa tìm kiếm Măng Xông cần gán thêm (Bỏ trống nếu chỉ sắp xếp lại các điểm hiện có):", "");
   if (keywordInput === null) return; // Người dùng bấm Hủy
   
@@ -914,50 +914,67 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
   showLoading("Đang xử lý chuẩn hóa thứ tự đoạn cáp...");
   try {
-    // 3. Nếu người dùng có nhập từ khóa, tiến hành tìm và gán thêm điểm mới vào đoạn cáp
+    // 3. Nếu có từ khóa, tiến hành quét vét toàn bộ bảng diem_ha_tang (vượt mốc 1000 bản ghi bằng phân trang)
     if (keyword) {
-      const { data: matchedPtsRaw, error: errPts } = await supabaseClient
-        .from('diem_ha_tang')
-        .select('*')
-        .ilike('ten_diem', `%${keyword}%`)
-        .range(0, 9999);
+      let matchedPtsRaw = [];
+      let offset = 0;
+      let fetchMore = true;
+      while (fetchMore) {
+        const { data: chunk, error } = await supabaseClient
+          .from('diem_ha_tang')
+          .select('*')
+          .ilike('ten_diem', `%${keyword}%`)
+          .range(offset, offset + 999);
 
-      if (errPts) throw errPts;
+        if (error) throw error;
+        if (chunk && chunk.length > 0) {
+          matchedPtsRaw = matchedPtsRaw.concat(chunk);
+          offset += 1000;
+          if (chunk.length < 1000) fetchMore = false;
+        } else {
+          fetchMore = false;
+        }
+      }
 
-      if (matchedPtsRaw && matchedPtsRaw.length > 0) {
-        // Lấy danh sách tất cả các điểm đã được gán trên toàn hệ thống (phân trang lặp nếu > 1000)
+      if (matchedPtsRaw.length > 0) {
+        // Lấy danh sách toàn bộ id_diem đã được gán trên hệ thống (vượt mốc 1000 bản ghi)
         let assignedIds = [];
-        let offset = 0;
-        let fetchMore = true;
-        while (fetchMore) {
-          const { data: chunk } = await supabaseClient
+        let aOffset = 0;
+        let aFetchMore = true;
+        while (aFetchMore) {
+          const { data: aChunk } = await supabaseClient
             .from('doan_cap_diem')
             .select('id_diem')
-            .range(offset, offset + 999);
-          if (chunk && chunk.length > 0) {
-            assignedIds = assignedIds.concat(chunk.map(l => Number(l.id_diem)));
-            offset += 1000;
-            if (chunk.length < 1000) fetchMore = false;
+            .range(aOffset, aOffset + 999);
+
+          if (aChunk && aChunk.length > 0) {
+            assignedIds = assignedIds.concat(aChunk.map(l => Number(l.id_diem)));
+            aOffset += 1000;
+            if (aChunk.length < 1000) aFetchMore = false;
           } else {
-            fetchMore = false;
+            aFetchMore = false;
           }
         }
 
-        // Lọc các điểm chưa gán
+        // Lọc: Điểm nào có rồi thì bỏ qua, chưa có thì giữ lại
         let matchedPts = matchedPtsRaw.filter(p => !assignedIds.includes(Number(p.id_diem || p.id)));
 
+        // Chèn các điểm chưa có vào bảng doan_cap_diem
         if (matchedPts.length > 0) {
           let newInserts = matchedPts.map(pt => ({
             id_doan_cap: Number(doanVal),
             id_diem: Number(pt.id_diem || pt.id),
             thu_tu: 999 // Tạm thời để số lớn, bước sau sẽ sắp xếp lại
           }));
-          await supabaseClient.from('doan_cap_diem').insert(newInserts);
+          const { error: insErr } = await supabaseClient
+            .from('doan_cap_diem')
+            .insert(newInserts);
+          if (insErr) throw insErr;
         }
       }
     }
 
-    // 4. Lấy toàn bộ danh sách id_diem hiện có thuộc đoạn cáp này từ bảng doan_cap_diem (vượt 1000 dòng)
+    // 4. Lấy toàn bộ id_diem thuộc đoạn cáp này từ doan_cap_diem (vượt mốc 1000 bản ghi)
     let segmentLinks = [];
     let segOffset = 0;
     let segFetchMore = true;
@@ -984,7 +1001,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
     let segmentPointIds = segmentLinks.map(l => Number(l.id_diem));
 
-    // 5. Lấy thông tin tọa độ chi tiết bằng cách CHIA NHÓM (BATCH 500 ID) để vượt qua giới hạn của Supabase
+    // 5. Lấy tọa độ chi tiết từ diem_ha_tang bằng cách chia lô 500 ID để tránh giới hạn câu lệnh .in()
     let segmentPointObjects = [];
     const batchSize = 500;
     for (let i = 0; i < segmentPointIds.length; i += batchSize) {
@@ -1006,7 +1023,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
       throw new Error("Không tìm thấy thông tin tọa độ các điểm thuộc đoạn cáp này!");
     }
 
-    // 6. Thuật toán sắp xếp không gian từ điểm gốc A (ưu tiên điểm có stt nhỏ nhất làm mốc)
+    // 6. Thuật toán sắp xếp không gian Nearest Neighbor bắt đầu từ điểm gốc A (stt nhỏ nhất)
     segmentPointObjects.sort((a, b) => (a.stt || 0) - (b.stt || 0));
 
     let sortedChain = [segmentPointObjects[0]]; // Điểm gốc A
@@ -1028,7 +1045,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
       remaining.splice(nearestIdx, 1);
     }
 
-    // 7. Cập nhật lại số thứ tự (thu_tu: 1, 2, 3...) chuẩn xác vào CSDL theo từng nhóm 500 bản ghi
+    // 7. Cập nhật lại số thứ tự (thu_tu: 1, 2, 3...) vào CSDL theo từng nhóm 500 bản ghi
     const updateBatchSize = 500;
     for (let i = 0; i < sortedChain.length; i += updateBatchSize) {
       let chunkChain = sortedChain.slice(i, i + updateBatchSize);
