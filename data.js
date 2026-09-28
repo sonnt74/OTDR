@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (TÌM ĐIỂM GẦN NHẤT + BẢO VỆ KIỂU DỮ LIỆU TỌA ĐỘ)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (ĐÃ FIX LỖI 42703 CỘT ten_diem)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -919,37 +919,23 @@ async function xuLyChuanHoaThuTuDoanCap() {
       let matchedPtsRaw = [];
       let offset = 0;
       let fetchMore = true;
+      
       while (fetchMore) {
-        // Hỗ trợ tìm kiếm theo cả ten và ten_diem
+        // ĐÃ SỬA LỖI 42703: Chỉ truy vấn đúng cột ten_diem có thực trong cơ sở dữ liệu
         const { data: chunk, error } = await supabaseClient
           .from('diem_ha_tang')
           .select('*')
-          .or(`ten.ilike.%${keyword}%,ten_diem.ilike.%${keyword}%`)
+          .ilike('ten_diem', `%${keyword}%`)
           .range(offset, offset + 999);
 
-        if (error) {
-          // Fallback: Nếu bảng không có cột ten_diem, thử tìm riêng cột ten
-          const { data: chunkFallback, error: errFb } = await supabaseClient
-            .from('diem_ha_tang')
-            .select('*')
-            .ilike('ten', `%${keyword}%`)
-            .range(offset, offset + 999);
-          if (errFb) throw errFb;
-          if (chunkFallback && chunkFallback.length > 0) {
-            matchedPtsRaw = matchedPtsRaw.concat(chunkFallback);
-            offset += 1000;
-            if (chunkFallback.length < 1000) fetchMore = false;
-          } else {
-            fetchMore = false;
-          }
+        if (error) throw error;
+        
+        if (chunk && chunk.length > 0) {
+          matchedPtsRaw = matchedPtsRaw.concat(chunk);
+          offset += 1000;
+          if (chunk.length < 1000) fetchMore = false;
         } else {
-          if (chunk && chunk.length > 0) {
-            matchedPtsRaw = matchedPtsRaw.concat(chunk);
-            offset += 1000;
-            if (chunk.length < 1000) fetchMore = false;
-          } else {
-            fetchMore = false;
-          }
+          fetchMore = false;
         }
       }
 
@@ -958,6 +944,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
         let assignedIds = [];
         let aOffset = 0;
         let aFetchMore = true;
+        
         while (aFetchMore) {
           const { data: aChunk } = await supabaseClient
             .from('doan_cap_diem')
@@ -982,6 +969,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
             id_diem: Number(pt.id_diem || pt.id),
             thu_tu: 999
           }));
+          
           const { error: insErr } = await supabaseClient
             .from('doan_cap_diem')
             .insert(newInserts);
@@ -994,6 +982,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
     let segmentLinks = [];
     let segOffset = 0;
     let segFetchMore = true;
+    
     while (segFetchMore) {
       const { data: chunk, error: errSegLink } = await supabaseClient
         .from('doan_cap_diem')
@@ -1002,6 +991,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
         .range(segOffset, segOffset + 999);
 
       if (errSegLink) throw errSegLink;
+      
       if (chunk && chunk.length > 0) {
         segmentLinks = segmentLinks.concat(chunk);
         segOffset += 1000;
@@ -1020,6 +1010,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
     // 5. Lấy tọa độ chi tiết từ diem_ha_tang bằng cách chia lô 500 ID
     let segmentPointObjects = [];
     const batchSize = 500;
+    
     for (let i = 0; i < segmentPointIds.length; i += batchSize) {
       let batchIds = segmentPointIds.slice(i, i + batchSize);
       if (batchIds.length === 0) continue;
@@ -1039,20 +1030,18 @@ async function xuLyChuanHoaThuTuDoanCap() {
       throw new Error("Không tìm thấy thông tin tọa độ các điểm thuộc đoạn cáp này!");
     }
 
-    // 6. LÀM SẠCH VÀ ÉP KIỂU TỌA ĐỘ (Xử lý dứt điểm lỗi NaN gây lặp vòng)
+    // 6. LÀM SẠCH VÀ ÉP KIỂU TỌA ĐỘ (Giữ nguyên phần xử lý NaN rất tốt trước đó)
     let validPoints = [];
     segmentPointObjects.forEach(pt => {
-      // Chuyển đổi an toàn sang số thực Float, linh hoạt bắt các tên trường lat/lng/long
       let parsedLat = parseFloat(pt.lat || pt.latitude);
       let parsedLng = parseFloat(pt.lng || pt.longitude || pt.long);
       
-      // Chỉ giữ lại những điểm có tọa độ hợp lệ (không bị rỗng hoặc lỗi chữ)
       if (!isNaN(parsedLat) && !isNaN(parsedLng) && parsedLat !== 0 && parsedLng !== 0) {
         pt._lat = parsedLat;
         pt._lng = parsedLng;
         validPoints.push(pt);
       } else {
-        console.warn("⚠️ Bỏ qua điểm lỗi tọa độ:", pt.ten || pt.ten_diem, pt);
+        console.warn("⚠️ Bỏ qua điểm lỗi tọa độ:", pt.ten_diem || pt.ten, pt);
       }
     });
 
@@ -1087,7 +1076,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
       let minNutDist = Infinity;
 
       for (let i = 0; i < remaining.length; i++) {
-        // Lúc này các biến _lat, _lng đã được đảm bảo chắc chắn là số, calculateHaversine sẽ hoạt động đúng 100%
         let dist = calculateHaversine(lastPt._lat, lastPt._lng, remaining[i]._lat, remaining[i]._lng);
         
         if (dist < minNutDist) {
@@ -1101,7 +1089,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
     console.log("⛓️ Chuỗi điểm sau khi tính toán Haversine chuẩn:", sortedChain.map(p => ({ 
       id: p.id_diem || p.id, 
-      ten: p.ten || p.ten_diem 
+      ten: p.ten_diem || p.ten 
     })));
 
     // 9. CẬP NHẬT THỨ TỰ (thu_tu) VÀO CSDL THEO NHÓM BATCH 500
