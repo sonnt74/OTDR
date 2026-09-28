@@ -238,42 +238,32 @@ async function taiDuLieuDoanCapDiem(doanVal) {
 /**
  * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ (Đọc trực tiếp từ kho đệm không giới hạn 1000 điểm)
  */
+/**
+ * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ (CÁCH LY VÙNG NHỚ THEO ĐOẠN CÁP)
+ * Khắc phục triệt để lỗi nối chéo nét đứt khi chọn nhiều đoạn cáp cùng lúc.
+ */
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   if (!doanVal || doanVal === 'ALL') {
     return [];
   }
 
-  let cachedIds = Object.keys(window.cacheThuTuDoanCap || {});
-  if (cachedIds.length === 0) {
-    return globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
+  // 1. ƯU TIÊN CAO NHẤT: Lấy từ ngăn kéo bộ nhớ độc lập của chính đoạn cáp đó.
+  // Dữ liệu trong này đã được data.js nạp đủ 100% (vượt mốc 1000) và sắp xếp chuẩn tuyệt đối.
+  if (window.segmentPointsCache && window.segmentPointsCache[String(doanVal)]) {
+    // Trả về bản sao chép (clone) để tránh tham chiếu làm hỏng cache gốc khi tính toán lý trình
+    return window.segmentPointsCache[String(doanVal)].map(pt => Object.assign({}, pt));
   }
 
-  let segmentPts = [];
-
-  cachedIds.forEach(idStr => {
-    let numId = Number(idStr);
-    let thuTuVal = window.cacheThuTuDoanCap[numId];
-
-    // Lấy trực tiếp từ bộ nhớ cache chi tiết đã vét đủ từ CSDL, hoặc fallback qua globalDataPoints
-    let ptObj = window.cacheChiTietDiemDoanCap[numId] || globalDataPoints.find(p => Number(p.id || p.id_diem) === numId);
-
-    if (ptObj) {
-      let clonedPt = Object.assign({}, ptObj);
-      // Chuẩn hóa định dạng trường dữ liệu để bản đồ và hàm lý trình đọc chính xác
-      clonedPt.id = clonedPt.id_diem || clonedPt.id;
-      clonedPt.lat = parseFloat(clonedPt.lat || clonedPt.latitude || 0);
-      clonedPt.lng = parseFloat(clonedPt.lng || clonedPt.longitude || clonedPt.long || 0);
-      clonedPt.thu_tu = (thuTuVal !== undefined && thuTuVal !== null) ? Number(thuTuVal) : 9999;
-      
-      segmentPts.push(clonedPt);
-    }
-  });
+  // 2. PHƯƠNG ÁN DỰ PHÒNG (Fallback): Nếu cache chưa kịp nạp, lọc từ mảng RAM chung
+  let segmentPts = globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
 
   if (segmentPts.length === 0) return [];
 
-  // Sắp xếp tuyệt đối theo đúng cột thu_tu từ nhỏ đến lớn (1 đến n)
+  // Sắp xếp lại theo thứ tự (thu_tu hoặc stt) nếu rơi vào phương án dự phòng
   let sortedByThuTu = segmentPts.sort((a, b) => {
-    return (a.thu_tu || 9999) - (b.thu_tu || 9999);
+    let orderA = a.thu_tu !== undefined && a.thu_tu !== null ? a.thu_tu : (a.stt !== undefined && a.stt !== null ? a.stt : 9999);
+    let orderB = b.thu_tu !== undefined && b.thu_tu !== null ? b.thu_tu : (b.stt !== undefined && b.stt !== null ? b.stt : 9999);
+    return orderA - orderB;
   });
 
   return sortedByThuTu;
