@@ -890,9 +890,9 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// TỰ ĐỘNG NHẬN DIỆN VÀ GÁN MĂNG XÔNG THIẾU CHO ĐOẠN CÁP (THEO TÊN & SỐ THỨ TỰ)
+// GÁN MĂNG XÔNG THEO TỪ KHÓA TEXTBOX VÀ SẮP XẾP THỨ TỰ BẰNG THUẬT TOÁN GẦN NHẤT
 // ==========================================================================
-async function tuDongGanMangXongChoDoanCap() {
+async function ganVaSapXepMangXongTheoTuKhoa() {
   var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
   if (checkedDoan.length === 0) {
     showToast("Vui lòng tích chọn 1 đoạn cáp trên cây Checklist!", "warning");
@@ -904,73 +904,121 @@ async function tuDongGanMangXongChoDoanCap() {
   }
 
   let doanVal = checkedDoan[0];
-  let isConfirmed = await showConfirmDialog("Bạn có muốn hệ thống tự động quét tìm măng xông theo tên và số thứ tự để gán vào đoạn cáp này không?");
+  let keywordInput = document.getElementById('txtTuKhoaGanMX');
+  let keyword = keywordInput ? keywordInput.value.trim().toLowerCase() : "";
+
+  if (!keyword) {
+    showToast("Vui lòng nhập từ khóa tìm kiếm (VD: 96TQG, MX...) vào ô trống!", "warning");
+    if (keywordInput) keywordInput.focus();
+    return;
+  }
+
+  let isConfirmed = await showConfirmDialog(`Bạn có muốn tìm các điểm chứa từ khóa "${keyword}", gán vào đoạn cáp và sắp xếp lại thứ tự không?`);
   if (!isConfirmed) return;
 
-  showLoading("Đang quét tìm măng xông còn thiếu...");
+  showLoading("Đang xử lý gán và sắp xếp măng xông...");
   try {
-    // 1. Lấy thông tin đoạn cáp hiện tại
+    // 1. Lấy thông tin đoạn cáp và Tuyến chứa nó
     var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
     var curDoan = doanCapList.find(d => String(d.id_doan_cap || d.id) === String(doanVal));
-    if (!curDoan) throw new Error("Không tìm thấy thông tin đoạn cáp trên giao diện!");
+    if (!curDoan) throw new Error("Không tìm thấy thông tin đoạn cáp!");
 
     let tuyenId = getSafeStrId(curDoan, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']);
-    let maDoan = String(curDoan.ten_doan_cap || curDoan.ma_doancap || curDoan.ten || "").trim().toLowerCase();
-    
     if (!tuyenId) throw new Error("Đoạn cáp này không thuộc tuyến nào!");
 
-    // 2. Lấy tất cả điểm hạ tầng thuộc tuyến từ View trong CSDL
+    // 2. Lấy toàn bộ điểm thuộc tuyến từ CSDL
     const { data: allPts, error: errPts } = await supabaseClient
       .from('v_diem_ha_tang_full')
       .select('*')
       .eq('id_tuyen', Number(tuyenId));
 
     if (errPts) throw errPts;
-    if (!allPts || allPts.length === 0) throw new Error("Không tìm thấy điểm hạ tầng nào thuộc tuyến này!");
+    if (!allPts || allPts.length === 0) throw new Error("Không tìm thấy điểm nào thuộc tuyến này!");
 
     // 3. Lấy danh sách các điểm đã được gán vào đoạn này trước đó
-    const { data: assignedLinks, error: errLink } = await supabaseClient
+    const { data: existingLinks, error: errLink } = await supabaseClient
       .from('doan_cap_diem')
-      .select('id_diem, thu_tu')
+      .select('id_diem')
       .eq('id_doan_cap', Number(doanVal));
 
     if (errLink) throw errLink;
-    let assignedIds = (assignedLinks || []).map(l => Number(l.id_diem));
-    let maxThuTu = (assignedLinks || []).reduce((max, l) => Math.max(max, Number(l.thu_tu || 0)), 0);
+    let assignedIds = (existingLinks || []).map(l => Number(l.id_diem));
 
-    // 4. Lọc các điểm chưa gán và khớp điều kiện (Tên chứa mã đoạn HOẶC là Măng xông chưa ai nhận)
-    let missingPoints = allPts.filter(p => {
-      let pId = Number(p.id);
-      if (assignedIds.includes(pId)) return false; // Đã gán rồi thì bỏ qua
-
+    // 4. Lọc các điểm có tên chứa từ khóa và chưa được gán
+    let matchedPts = allPts.filter(p => {
       let pName = (p.ten || "").toLowerCase();
-      let isMX = typeof isMangXong === 'function' ? isMangXong(p) : (p.loai && p.loai.toLowerCase().includes('măng xông'));
-
-      // Điều kiện nhận diện: Tên chứa từ khóa của đoạn (ví dụ '96tqg') HOẶC là măng xông nằm trong vùng tuyến
-      let matchName = maDoan.length > 0 && pName.includes(maDoan);
-
-      return matchName || isMX;
+      let pId = Number(p.id);
+      let matchKeyword = pName.includes(keyword);
+      let notAssigned = !assignedIds.includes(pId);
+      return matchKeyword && notAssigned;
     });
 
-    if (missingPoints.length === 0) {
-      throw new Error("Không tìm thấy măng xông nào mới chưa gán phù hợp với đoạn này!");
+    // 5. Nếu có điểm mới thỏa mãn, tiến hành gán vào bảng doan_cap_diem
+    if (matchedPts.length > 0) {
+      let newInserts = matchedPts.map(pt => ({
+        id_doan_cap: Number(doanVal),
+        id_diem: Number(pt.id),
+        thu_tu: 999 // Tạm thời gán số lớn, bước sau sẽ sắp xếp lại chuẩn bằng thuật toán gần nhất
+      }));
+
+      const { error: errIns } = await supabaseClient
+        .from('doan_cap_diem')
+        .upsert(newInserts, { onConflict: 'id_doan_cap,id_diem' });
+
+      if (errIns) throw errIns;
     }
 
-    // 5. Chuẩn bị dữ liệu chèn vào bảng trung gian doan_cap_diem
-    let inserts = missingPoints.map((pt, idx) => ({
-      id_doan_cap: Number(doanVal),
-      id_diem: Number(pt.id),
-      thu_tu: maxThuTu + idx + 1
-    }));
-
-    const { error: errIns } = await supabaseClient
+    // 6. Lấy toàn bộ danh sách điểm hiện tại của đoạn (cả cũ và mới vừa gán) để sắp xếp bằng thuật toán gần nhất
+    const { data: finalLinks, error: errFinalLink } = await supabaseClient
       .from('doan_cap_diem')
-      .upsert(inserts, { onConflict: 'id_doan_cap,id_diem' });
+      .select('id_diem')
+      .eq('id_doan_cap', Number(doanVal));
 
-    if (errIns) throw errIns;
+    if (errFinalLink) throw errFinalLink;
+    let allSegmentPointIds = (finalLinks || []).map(l => Number(l.id_diem));
+
+    let segmentPointObjects = allPts.filter(p => allSegmentPointIds.includes(Number(p.id)));
+
+    if (segmentPointObjects.length > 0) {
+      // Sắp xếp điểm xuất phát (ưu tiên điểm có stt nhỏ nhất hoặc điểm đầu tiên làm mốc)
+      segmentPointObjects.sort((a, b) => (a.stt || 0) - (b.stt || 0));
+
+      // Áp dụng thuật toán gần nhất (Nearest Neighbor) để xâu chuỗi tuần tự liên tục
+      let sortedChain = [segmentPointObjects[0]];
+      let remaining = segmentPointObjects.slice(1);
+
+      while (remaining.length > 0) {
+        let lastPt = sortedChain[sortedChain.length - 1];
+        let nearestIdx = 0;
+        let minNutDist = Infinity;
+
+        for (let i = 0; i < remaining.length; i++) {
+          let dist = calculateHaversine(lastPt.lat, lastPt.lng, remaining[i].lat, remaining[i].lng);
+          if (dist < minNutDist) {
+            minNutDist = dist;
+            nearestIdx = i;
+          }
+        }
+        sortedChain.push(remaining[nearestIdx]);
+        remaining.splice(nearestIdx, 1);
+      }
+
+      // 7. Cập nhật lại số thứ tự (thu_tu) chuẩn xác theo chuỗi vừa sắp xếp vào CSDL
+      let updateBatch = sortedChain.map((pt, idx) => ({
+        id_doan_cap: Number(doanVal),
+        id_diem: Number(pt.id),
+        thu_tu: idx + 1
+      }));
+
+      const { error: errUpdateOrder } = await supabaseClient
+        .from('doan_cap_diem')
+        .upsert(updateBatch, { onConflict: 'id_doan_cap,id_diem' });
+
+      if (errUpdateOrder) throw errUpdateOrder;
+    }
 
     hideLoading();
-    showToast(`✅ Đã tự động gán thành công ${inserts.length} măng xông vào đoạn cáp!`, "success");
+    showToast(`✅ Đã gán và sắp xếp thành công tổng số ${segmentPointObjects.length} điểm cho đoạn cáp!`, "success");
 
     // Tải lại dữ liệu bản đồ để hiển thị ngay lập tức
     await taiDiemDaTuyen();
@@ -978,6 +1026,6 @@ async function tuDongGanMangXongChoDoanCap() {
   } catch (err) {
     hideLoading();
     showToast("❌ Lỗi: " + err.message, "error");
-    console.error("Lỗi tự động gán măng xông:", err);
+    console.error("Lỗi gán măng xông theo từ khóa:", err);
   }
 }
