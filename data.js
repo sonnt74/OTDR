@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (DÙNG INSERT CHẮC CHẮN GÁN ĐƯỢC VÀO CSDL)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (TÌM KIẾM THÔNG MINH - BỎ QUA KÝ TỰ ĐẶC BIỆT)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -944,28 +944,31 @@ async function xuLyChuanHoaThuTuDoanCap() {
     if (errLink) throw errLink;
     let assignedIds = (existingLinks || []).map(l => Number(l.id_diem));
 
-    // 6. Lọc các điểm có tên chứa từ khóa và chưa được gán
+    // 6. Lọc thông minh: Làm sạch từ khóa và tên điểm (bỏ khoảng trắng, dấu gạch dưới, gạch ngang) để so sánh chuẩn xác
+    let cleanKeyword = keyword.replace(/[\s_\-]/g, '');
+
     let matchedPts = allPts.filter(p => {
       let pName = (p.ten || "").toLowerCase();
+      let cleanPName = pName.replace(/[\s_\-]/g, '');
       let pId = Number(p.id);
-      let matchKeyword = pName.includes(keyword);
+
+      let matchKeyword = cleanPName.includes(cleanKeyword);
       let notAssigned = !assignedIds.includes(pId);
       return matchKeyword && notAssigned;
     });
 
-    // In kết quả ra console (F12) để bạn dễ theo dõi
-    console.log("🔍 Từ khóa tìm kiếm:", keyword);
+    console.log("🔍 Từ khóa gốc:", keyword, "| Từ khóa làm sạch:", cleanKeyword);
     console.log("🔍 Các điểm khớp và chưa gán:", matchedPts);
 
     if (matchedPts.length === 0) {
       throw new Error(`Không tìm thấy điểm nào chưa gán chứa từ khóa "${keyword}"!`);
     }
 
-    // 7. Chèn dữ liệu mới vào bảng doan_cap_diem bằng lệnh .insert() chuẩn xác
+    // 7. Chèn dữ liệu mới vào bảng doan_cap_diem bằng lệnh .insert()
     let newInserts = matchedPts.map(pt => ({
       id_doan_cap: Number(doanVal),
       id_diem: Number(pt.id),
-      thu_tu: 999 // Tạm thời để số lớn, bước sau thuật toán gần nhất sẽ sắp xếp lại
+      thu_tu: 999 // Tạm thời để số lớn, thuật toán gần nhất sẽ sắp xếp lại ngay sau đây
     }));
 
     const { error: errIns } = await supabaseClient
