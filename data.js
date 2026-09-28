@@ -1029,3 +1029,19 @@ async function ganVaSapXepMangXongTheoTuKhoa() {
     console.error("Lỗi gán măng xông theo từ khóa:", err);
   }
 }
+// ==========================================================================
+// MỞ KHÓA SỰ KIỆN FOCUS VÀ NHẬP LIỆU CHO TEXTBOX TỪ KHÓA MĂNG XÔNG
+// ==========================================================================
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(function() {
+    var txtBox = document.getElementById('txtTuKhoaGanMX');
+    if (txtBox) {
+      // Cho phép ô textbox nhận trọn vẹn sự kiện chuột và bàn phím, không bị bản đồ chặn
+      ['mousedown', 'click', 'focus', 'touchstart', 'pointerdown', 'keydown', 'keypress', 'keyup'].forEach(function(eventType) {
+        txtBox.addEventListener(eventType, function(e) {
+          e.stopPropagation();
+        });
+      });
+    }
+  }, 500);
+});
