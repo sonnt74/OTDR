@@ -352,19 +352,33 @@ function veLaiTuyenAB() {
   function taoNutHanhDong(ptObj) {
     let id = ptObj.id || ptObj.id_diem; let ten = ptObj.ten || ptObj.ten_diem || 'Điểm hạ tầng';
     let lat = ptObj.lat; let lng = ptObj.lng;
-    let valQuyen = currentUser.xem_ghichu_an;
+    
+    // Kiểm tra quyền chỉnh sửa thực tế của tài khoản hiện tại
+    let activeUser = (typeof AppStore !== 'undefined' && AppStore.getState().currentUser) ? AppStore.getState().currentUser : (window.currentUser || {});
+    let roleLower = (activeUser.role || '').toLowerCase();
+    let isAllowedToEdit = !!activeUser.canEditMap || !!activeUser.can_edit_map || roleLower.includes('admin') || roleLower.includes('sys');
+
+    let valQuyen = activeUser.xem_ghichu_an;
     let hasQuyenGhiChuAn = (valQuyen === true || valQuyen === 1 || valQuyen === '1' || valQuyen === 'true' || valQuyen === 'TRUE');
 
     var btnGhiChuAn = hasQuyenGhiChuAn ? `<button class="btn-small" style="background:#f59e0b; color:white; flex: 1; margin-right: 0;" onclick="xemGhiChuAnTaiDiem(${id}, '${ten}')">📝 Mật</button>` : '';
-    var btnAdmin = `
+    
+    // Chỉ hiển thị nút Sửa/Xóa nếu tài khoản có quyền chỉnh sửa
+    var btnAdmin = isAllowedToEdit ? `
        <button class="btn-small btn-success" style="flex: 1; margin-right: 0;" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa</button>
        <button class="btn-small del" style="flex: 1; margin-right: 0;" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>
-    `;
+    ` : '';
+
     var btnTienIch = `
       <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="btn-small" style="background:#0dcaf0; color:black; text-decoration:none; flex: 1; margin-right: 0; display: flex; align-items: center; justify-content: center;">🗺️ Map</a>
       <button class="btn-small" style="background:#6c757d; color:white; flex: 1; margin-right: 0;" onclick="copyToClipboardTNN('${lat.toFixed(6)}, ${lng.toFixed(6)}')">📋 Tọa độ</button>
     `;
-    return `<hr style="margin:6px 0; border:0; border-top:1px dashed #ccc;"><div style="display:flex; flex-direction:column; margin-top:4px;"><div style="display:flex; gap:4px; width: 100%; margin-bottom:4px;">${btnGhiChuAn}${btnAdmin}</div><div style="display:flex; gap:4px; width: 100%;">${btnTienIch}</div></div>`;
+
+    // Nếu không có nút quản trị và nút mật, tối ưu bố cục hiển thị gọn gàng hơn
+    let topRowContent = (btnGhiChuAn && btnAdmin) ? `${btnGhiChuAn}${btnAdmin}` : (btnGhiChuAn || btnAdmin);
+    let topRowHtml = topRowContent ? `<div style="display:flex; gap:4px; width: 100%; margin-bottom:4px;">${topRowContent}</div>` : '';
+
+    return `<hr style="margin:6px 0; border:0; border-top:1px dashed #ccc;"><div style="display:flex; flex-direction:column; margin-top:4px;">${topRowHtml}<div style="display:flex; gap:4px; width: 100%;">${btnTienIch}</div></div>`;
   }
 
  // HÀM KÉO THẢ TỌA ĐỘ (OPTIMISTIC UI - LUỒNG LẠC QUAN CỰC MƯỢT)
