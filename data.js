@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (TÌM KIẾM TRỰC TIẾP TRÊN CSDL - TRÁNH LỖI PHÂN TRANG)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (TÌM KIẾM TRỰC TIẾP TRÊN CSDL VỚI CỘT ten_diem)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -918,15 +918,15 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
   showLoading("Đang quét tìm, gán và sắp xếp thứ tự măng xông...");
   try {
-    // 3. TÌM KIẾM TRỰC TIẾP TRÊN CSDL DÙNG .ilike (Bỏ qua giới hạn phân trang 1000 dòng)
+    // 3. TÌM KIẾM TRỰC TIẾP TRÊN CSDL BẰNG CỘT CHUẨN TEN_DIEM (Bỏ qua cột ten không tồn tại)
     const { data: matchedPtsRaw, error: errPts } = await supabaseClient
       .from('diem_ha_tang')
       .select('*')
-      .or(`ten_diem.ilike.%${keyword}%,ten.ilike.%${keyword}%`);
+      .ilike('ten_diem', `%${keyword}%`);
 
     if (errPts) throw errPts;
     if (!matchedPtsRaw || matchedPtsRaw.length === 0) {
-      throw new Error(`Không tìm thấy điểm nào trong CSDL chứa từ khóa "${keyword}"!`);
+      throw new Error(`Không tìm thấy điểm nào trong CSDL có tên chứa từ khóa "${keyword}"!`);
     }
 
     // 4. Lấy danh sách tất cả id_diem đã được gán vào bảng doan_cap_diem
