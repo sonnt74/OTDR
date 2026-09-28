@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (HỖ TRỢ LINH HOẠT TÊN CỘT ten VÀ stt/thu_tu)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (TÌM ĐIỂM GẦN NHẤT + BẢO VỆ KIỂU DỮ LIỆU TỌA ĐỘ)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -928,7 +928,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
           .range(offset, offset + 999);
 
         if (error) {
-          // Nếu bảng không có cột ten_diem, thử tìm riêng cột ten
+          // Fallback: Nếu bảng không có cột ten_diem, thử tìm riêng cột ten
           const { data: chunkFallback, error: errFb } = await supabaseClient
             .from('diem_ha_tang')
             .select('*')
@@ -973,7 +973,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
           }
         }
 
-        // Lọc điểm chưa gán
+        // Lọc điểm chưa gán và tiến hành chèn
         let matchedPts = matchedPtsRaw.filter(p => !assignedIds.includes(Number(p.id_diem || p.id)));
 
         if (matchedPts.length > 0) {
@@ -1017,7 +1017,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
     let segmentPointIds = segmentLinks.map(l => Number(l.id_diem));
 
-    // 5. Lấy thông tin chi tiết từ diem_ha_tang bằng cách chia lô 500 ID
+    // 5. Lấy tọa độ chi tiết từ diem_ha_tang bằng cách chia lô 500 ID
     let segmentPointObjects = [];
     const batchSize = 500;
     for (let i = 0; i < segmentPointIds.length; i += batchSize) {
@@ -1036,25 +1036,75 @@ async function xuLyChuanHoaThuTuDoanCap() {
     }
 
     if (!segmentPointObjects || segmentPointObjects.length === 0) {
-      throw new Error("Không tìm thấy thông tin chi tiết các điểm thuộc đoạn cáp này!");
+      throw new Error("Không tìm thấy thông tin tọa độ các điểm thuộc đoạn cáp này!");
     }
 
-    // 6. SẮP XẾP TUẦN TỰ AN TOÀN (Sử dụng stt, thu_tu, so_thu_tu hoặc fallback về id_diem)
-    segmentPointObjects.sort((a, b) => {
-      let valA = Number(a.stt ?? a.thu_tu ?? a.so_thu_tu ?? a.id_diem ?? a.id) || 0;
-      let valB = Number(b.stt ?? b.thu_tu ?? b.so_thu_tu ?? b.id_diem ?? b.id) || 0;
-      return valA - valB;
+    // 6. LÀM SẠCH VÀ ÉP KIỂU TỌA ĐỘ (Xử lý dứt điểm lỗi NaN gây lặp vòng)
+    let validPoints = [];
+    segmentPointObjects.forEach(pt => {
+      // Chuyển đổi an toàn sang số thực Float, linh hoạt bắt các tên trường lat/lng/long
+      let parsedLat = parseFloat(pt.lat || pt.latitude);
+      let parsedLng = parseFloat(pt.lng || pt.longitude || pt.long);
+      
+      // Chỉ giữ lại những điểm có tọa độ hợp lệ (không bị rỗng hoặc lỗi chữ)
+      if (!isNaN(parsedLat) && !isNaN(parsedLng) && parsedLat !== 0 && parsedLng !== 0) {
+        pt._lat = parsedLat;
+        pt._lng = parsedLng;
+        validPoints.push(pt);
+      } else {
+        console.warn("⚠️ Bỏ qua điểm lỗi tọa độ:", pt.ten || pt.ten_diem, pt);
+      }
     });
 
-    let sortedChain = segmentPointObjects;
+    if (validPoints.length === 0) {
+       throw new Error("Tất cả các điểm trong đoạn cáp đều bị lỗi hoặc không có tọa độ hợp lệ!");
+    }
 
-    console.log("⛓️ Chuỗi măng xông sau khi sắp xếp:", sortedChain.map(p => ({ 
+    // 7. XÁC ĐỊNH ĐIỂM GỐC A TỪ TỌA ĐỘ CỐ ĐỊNH 
+    const REF_LAT = 21.593808;
+    const REF_LNG = 105.840167;
+
+    let startIdx = 0;
+    let minRefDist = Infinity;
+
+    for (let i = 0; i < validPoints.length; i++) {
+      let distToRef = calculateHaversine(REF_LAT, REF_LNG, validPoints[i]._lat, validPoints[i]._lng);
+      if (distToRef < minRefDist) {
+        minRefDist = distToRef;
+        startIdx = i;
+      }
+    }
+
+    console.log("📍 Điểm gốc A gần mốc nhất:", validPoints[startIdx]);
+
+    // 8. THUẬT TOÁN NEAREST NEIGHBOR (KHÔNG GIAN LIỀN MẠCH)
+    let sortedChain = [validPoints[startIdx]];
+    let remaining = validPoints.filter((_, idx) => idx !== startIdx);
+
+    while (remaining.length > 0) {
+      let lastPt = sortedChain[sortedChain.length - 1];
+      let nearestIdx = 0;
+      let minNutDist = Infinity;
+
+      for (let i = 0; i < remaining.length; i++) {
+        // Lúc này các biến _lat, _lng đã được đảm bảo chắc chắn là số, calculateHaversine sẽ hoạt động đúng 100%
+        let dist = calculateHaversine(lastPt._lat, lastPt._lng, remaining[i]._lat, remaining[i]._lng);
+        
+        if (dist < minNutDist) {
+          minNutDist = dist;
+          nearestIdx = i;
+        }
+      }
+      sortedChain.push(remaining[nearestIdx]);
+      remaining.splice(nearestIdx, 1);
+    }
+
+    console.log("⛓️ Chuỗi điểm sau khi tính toán Haversine chuẩn:", sortedChain.map(p => ({ 
       id: p.id_diem || p.id, 
-      ten: p.ten || p.ten_diem, 
-      stt: p.stt ?? p.thu_tu ?? p.so_thu_tu 
+      ten: p.ten || p.ten_diem 
     })));
 
-    // 7. Cập nhật lại số thứ tự (thu_tu: 1, 2, 3...) vào CSDL theo từng nhóm 500 bản ghi
+    // 9. CẬP NHẬT THỨ TỰ (thu_tu) VÀO CSDL THEO NHÓM BATCH 500
     const updateBatchSize = 500;
     for (let i = 0; i < sortedChain.length; i += updateBatchSize) {
       let chunkChain = sortedChain.slice(i, i + updateBatchSize);
@@ -1072,9 +1122,9 @@ async function xuLyChuanHoaThuTuDoanCap() {
     }
 
     hideLoading();
-    showToast(`✅ Đã chuẩn hóa thứ tự thành công cho tổng số ${sortedChain.length} điểm!`, "success");
+    showToast(`✅ Chuẩn hóa thành công ${sortedChain.length} điểm theo khoảng cách không gian!`, "success");
 
-    // Tải lại dữ liệu bản đồ để hiển thị ngay lập tức
+    // Tải lại dữ liệu bản đồ
     if (typeof taiDiemDaTuyen === 'function') {
       await taiDiemDaTuyen();
     }
