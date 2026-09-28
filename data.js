@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (TRUY VẤN TRỰC TIẾP BẢNG GỐC diem_ha_tang)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (TÌM DIÊM TỪ BẢNG GỐC, GÁN VÀ SẮP XẾP GẦN NHẤT)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -918,33 +918,23 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
   showLoading("Đang quét tìm, gán và sắp xếp thứ tự măng xông...");
   try {
-    // 3. Lấy thông tin đoạn cáp và Tuyến chứa nó
-    var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
-    var curDoan = doanCapList.find(d => String(d.id_doan_cap || d.id) === String(doanVal));
-    if (!curDoan) throw new Error("Không tìm thấy thông tin đoạn cáp!");
-
-    let tuyenId = getSafeStrId(curDoan, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']);
-    if (!tuyenId) throw new Error("Đoạn cáp này không thuộc tuyến nào!");
-
-    // 4. TRUY VẤN TRỰC TIẾP BẢNG GỐC diem_ha_tang ĐỂ KHÔNG BỊ VIEW LỌC MẤT ĐIỂM MỒ CÔI
+    // 3. Lấy toàn bộ dữ liệu điểm từ bảng gốc diem_ha_tang
     const { data: allPts, error: errPts } = await supabaseClient
       .from('diem_ha_tang')
-      .select('*')
-      .eq('id_tuyen', Number(tuyenId));
+      .select('*');
 
     if (errPts) throw errPts;
-    if (!allPts || allPts.length === 0) throw new Error("Không tìm thấy điểm hạ tầng nào trong bảng diem_ha_tang thuộc tuyến này!");
+    if (!allPts || allPts.length === 0) throw new Error("Không có dữ liệu trong bảng diem_ha_tang!");
 
-    // 5. Lấy danh sách các điểm đã được gán vào đoạn này trước đó
-    const { data: existingLinks, error: errLink } = await supabaseClient
+    // 4. Lấy danh sách tất cả id_diem đã được gán vào bảng doan_cap_diem trước đó
+    const { data: assignedLinks, error: errLink } = await supabaseClient
       .from('doan_cap_diem')
-      .select('id_diem')
-      .eq('id_doan_cap', Number(doanVal));
+      .select('id_diem');
 
     if (errLink) throw errLink;
-    let assignedIds = (existingLinks || []).map(l => Number(l.id_diem));
+    let assignedIds = (assignedLinks || []).map(l => Number(l.id_diem));
 
-    // 6. Lọc thông minh trên bảng gốc: Kiểm tra ten_diem, làm sạch ký tự để so sánh
+    // 5. Lọc thông minh: Khớp từ khóa (bỏ qua khoảng trắng, dấu _, -) và chưa được gán
     let cleanKeyword = keyword.replace(/[\s_\-]/g, '');
 
     let matchedPts = allPts.filter(p => {
@@ -957,18 +947,18 @@ async function xuLyChuanHoaThuTuDoanCap() {
       return matchKeyword && notAssigned;
     });
 
-    console.log("🔍 Tổng số điểm thô quét được từ bảng gốc:", allPts.length);
-    console.log("🔍 Từ khóa:", keyword, "| Các điểm khớp & chưa gán:", matchedPts);
+    console.log("🔍 Từ khóa tìm kiếm:", keyword, "| Làm sạch:", cleanKeyword);
+    console.log("🔍 Các điểm mồ côi khớp:", matchedPts);
 
     if (matchedPts.length === 0) {
-      throw new Error(`Không tìm thấy điểm nào chưa gán chứa từ khóa "${keyword}" trong bảng gốc!`);
+      throw new Error(`Không tìm thấy điểm chưa gán nào chứa từ khóa "${keyword}"!`);
     }
 
-    // 7. Chèn dữ liệu mới vào bảng doan_cap_diem bằng lệnh .insert()
+    // 6. Gán các điểm tìm được vào bảng doan_cap_diem (với id_doan_cap đã chọn)
     let newInserts = matchedPts.map(pt => ({
       id_doan_cap: Number(doanVal),
       id_diem: Number(pt.id),
-      thu_tu: 999 // Tạm thời để số lớn, thuật toán gần nhất sẽ sắp xếp lại ngay sau đây
+      thu_tu: 999 // Tạm thời để số lớn, bước sau thuật toán gần nhất sẽ sắp xếp lại
     }));
 
     const { error: errIns } = await supabaseClient
@@ -977,15 +967,15 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
     if (errIns) throw errIns;
 
-    // 8. Lấy toàn bộ danh sách điểm của đoạn để chạy thuật toán gần nhất (Nearest Neighbor) sắp xếp thứ tự
-    const { data: finalLinks, error: errFinalLink } = await supabaseClient
+    // 7. Lấy toàn bộ danh sách các điểm thuộc đoạn cáp này để chạy thuật toán khoảng cách gần nhất (Nearest Neighbor)
+    const { data: segmentLinks, error: errSegLink } = await supabaseClient
       .from('doan_cap_diem')
       .select('id_diem')
       .eq('id_doan_cap', Number(doanVal));
 
-    if (errFinalLink) throw errFinalLink;
-    let allSegmentPointIds = (finalLinks || []).map(l => Number(l.id_diem));
-    let segmentPointObjects = allPts.filter(p => allSegmentPointIds.includes(Number(p.id)));
+    if (errSegLink) throw errSegLink;
+    let segmentPointIds = (segmentLinks || []).map(l => Number(l.id_diem));
+    let segmentPointObjects = allPts.filter(p => segmentPointIds.includes(Number(p.id)));
 
     if (segmentPointObjects.length > 0) {
       // Sắp xếp điểm xuất phát (ưu tiên điểm có stt nhỏ nhất làm mốc gốc)
@@ -1010,7 +1000,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
         remaining.splice(nearestIdx, 1);
       }
 
-      // 9. Cập nhật lại số thứ tự (thu_tu) chuẩn xác vào CSDL
+      // 8. Cập nhật lại số thứ tự (thu_tu) chuẩn xác vào CSDL
       let updateBatch = sortedChain.map((pt, idx) => ({
         id_doan_cap: Number(doanVal),
         id_diem: Number(pt.id),
@@ -1028,7 +1018,9 @@ async function xuLyChuanHoaThuTuDoanCap() {
     showToast(`✅ Đã gán thành công ${matchedPts.length} điểm mới và chuẩn hóa thứ tự!`, "success");
 
     // Tải lại dữ liệu bản đồ
-    await taiDiemDaTuyen();
+    if (typeof taiDiemDaTuyen === 'function') {
+      await taiDiemDaTuyen();
+    }
 
   } catch (err) {
     hideLoading();
