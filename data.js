@@ -890,7 +890,7 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (ĐÃ KHẮC PHỤC LỖI TÊN CỘT ten_diem)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (TRUY VẤN TRỰC TIẾP BẢNG GỐC diem_ha_tang)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
   // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
@@ -926,14 +926,14 @@ async function xuLyChuanHoaThuTuDoanCap() {
     let tuyenId = getSafeStrId(curDoan, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']);
     if (!tuyenId) throw new Error("Đoạn cáp này không thuộc tuyến nào!");
 
-    // 4. Lấy toàn bộ điểm thuộc tuyến từ CSDL
+    // 4. TRUY VẤN TRỰC TIẾP BẢNG GỐC diem_ha_tang ĐỂ KHÔNG BỊ VIEW LỌC MẤT ĐIỂM MỒ CÔI
     const { data: allPts, error: errPts } = await supabaseClient
-      .from('v_diem_ha_tang_full')
+      .from('diem_ha_tang')
       .select('*')
       .eq('id_tuyen', Number(tuyenId));
 
     if (errPts) throw errPts;
-    if (!allPts || allPts.length === 0) throw new Error("Không tìm thấy điểm nào thuộc tuyến này!");
+    if (!allPts || allPts.length === 0) throw new Error("Không tìm thấy điểm hạ tầng nào trong bảng diem_ha_tang thuộc tuyến này!");
 
     // 5. Lấy danh sách các điểm đã được gán vào đoạn này trước đó
     const { data: existingLinks, error: errLink } = await supabaseClient
@@ -944,11 +944,10 @@ async function xuLyChuanHoaThuTuDoanCap() {
     if (errLink) throw errLink;
     let assignedIds = (existingLinks || []).map(l => Number(l.id_diem));
 
-    // 6. Lọc thông minh: Kiểm tra đúng cột ten_diem trong CSDL, làm sạch ký tự để so sánh
+    // 6. Lọc thông minh trên bảng gốc: Kiểm tra ten_diem, làm sạch ký tự để so sánh
     let cleanKeyword = keyword.replace(/[\s_\-]/g, '');
 
     let matchedPts = allPts.filter(p => {
-      // Đọc chính xác cột ten_diem từ bảng điểm hạ tầng
       let pName = (p.ten_diem || p.ten || p.name || "").toLowerCase();
       let cleanPName = pName.replace(/[\s_\-]/g, '');
       let pId = Number(p.id);
@@ -958,11 +957,11 @@ async function xuLyChuanHoaThuTuDoanCap() {
       return matchKeyword && notAssigned;
     });
 
-    console.log("🔍 Từ khóa tìm kiếm:", keyword, "| Làm sạch:", cleanKeyword);
-    console.log("🔍 Các điểm khớp và chưa gán:", matchedPts);
+    console.log("🔍 Tổng số điểm thô quét được từ bảng gốc:", allPts.length);
+    console.log("🔍 Từ khóa:", keyword, "| Các điểm khớp & chưa gán:", matchedPts);
 
     if (matchedPts.length === 0) {
-      throw new Error(`Không tìm thấy điểm nào chưa gán chứa từ khóa "${keyword}"!`);
+      throw new Error(`Không tìm thấy điểm nào chưa gán chứa từ khóa "${keyword}" trong bảng gốc!`);
     }
 
     // 7. Chèn dữ liệu mới vào bảng doan_cap_diem bằng lệnh .insert()
