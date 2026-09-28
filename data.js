@@ -486,40 +486,97 @@ function onTramChange() {
 // Khởi tạo kho lưu trữ điểm độc lập cho từng đoạn cáp
 window.segmentPointsCache = {};
 
+// ==========================================================================
+// TẢI ĐIỂM ĐA TUYẾN THEO TREE-VIEW (VƯỢT MỐC 1000 ĐIỂM AN TOÀN TUYỆT ĐỐI)
+// ==========================================================================
+window.segmentPointsCache = {};
+
 async function taiDiemDaTuyen() {
   var selectedDoanIds = getCheckedDoanIds();
   
   if (selectedDoanIds.length === 0) {
     globalDataPoints = [];
     window.segmentPointsCache = {};
+    window.cacheThuTuDoanCap = {};
+    window.cacheChiTietDiemDoanCap = {};
     AppStore.setState({ dataPoints: [] });
     if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
     return;
   }
 
-  showLoading("Đang nạp dữ liệu các đoạn cáp...");
+  showLoading("Đang nạp dữ liệu các đoạn cáp lớn...");
   try {
-    window.segmentPointsCache = {}; // Reset kho cache
+    window.segmentPointsCache = {}; 
+    window.cacheThuTuDoanCap = {};
+    window.cacheChiTietDiemDoanCap = {};
 
     if (navigator.onLine && typeof supabaseClient !== 'undefined') {
-      // Tải điểm cho từng đoạn cáp một cách độc lập
+      let allCombinedPts = [];
+
       for (let i = 0; i < selectedDoanIds.length; i++) {
         let dId = selectedDoanIds[i];
-        
-        const { data: pts, error: errPts } = await supabaseClient
-          .from('v_diem_ha_tang_full')
-          .select('*')
-          .eq('id_doan_cap', Number(dId));
 
-        if (!errPts && pts) {
-          let formattedPts = pts.map(pt => ({
+        // 1. VÉT TOÀN BỘ LIÊN KẾT ID VÀ THỨ TỰ (Dùng phân trang vượt mốc 1000 điểm)
+        let segmentLinks = [];
+        let offset = 0;
+        let fetchMore = true;
+        while (fetchMore) {
+          let { data: chunk, error } = await supabaseClient
+            .from('doan_cap_diem')
+            .select('id_diem, thu_tu')
+            .eq('id_doan_cap', Number(dId))
+            .range(offset, offset + 999);
+
+          if (error) throw error;
+          if (chunk && chunk.length > 0) {
+            segmentLinks = segmentLinks.concat(chunk);
+            offset += 1000;
+            if (chunk.length < 1000) fetchMore = false;
+          } else {
+            fetchMore = false;
+          }
+        }
+
+        if (segmentLinks.length === 0) continue;
+
+        // Lưu vào bộ nhớ đệm cache thứ tự
+        segmentLinks.forEach(row => {
+          window.cacheThuTuDoanCap[Number(row.id_diem)] = row.thu_tu;
+        });
+
+        let allIds = segmentLinks.map(l => Number(l.id_diem));
+        let segmentPointObjects = [];
+        const batchSize = 500;
+
+        // 2. CHIA LÔ 500 ID ĐỂ TẢI CHI TIẾT TỌA ĐỘ TỪ BẢNG (Chống tràn giới hạn truy vấn)
+        for (let b = 0; b < allIds.length; b += batchSize) {
+          let batchIds = allIds.slice(b, b + batchSize);
+          if (batchIds.length === 0) continue;
+
+          const { data: batchData, error: errBatch } = await supabaseClient
+            .from('v_diem_ha_tang_full')
+            .select('*')
+            .in('id', batchIds);
+
+          if (errBatch) throw errBatch;
+          if (batchData) {
+            segmentPointObjects = segmentPointObjects.concat(batchData);
+          }
+        }
+
+        // 3. CHUẨN HÓA VÀ GẮN SỐ THỨ TỰ CHUẨN
+        let formattedPts = segmentPointObjects.map(pt => {
+          let pId = Number(pt.id);
+          let tVal = window.cacheThuTuDoanCap[pId];
+          
+          let formattedPt = {
             id: String(pt.id),
             ten: pt.ten || '',
             lat: parseFloat(pt.lat),
             lng: parseFloat(pt.lng),
             ghiChu: pt.ghi_chu || '',
             idTuyen: String(pt.id_tuyen),
-            idDoanCap: String(pt.id_doan_cap),
+            idDoanCap: String(pt.id_doan_cap || dId),
             idTram: String(pt.id_tram),
             idLoaiDiem: pt.id_loaidiem || 1,
             loai: pt.loai || 'Điểm',
@@ -527,29 +584,28 @@ async function taiDiemDaTuyen() {
             idHuong: pt.id_huong || null,
             ngayPs: pt.ngay_ps || '',
             duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-            stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1, 
-            ghichu_an: pt.ghichu_an || ''
-          }));
+            stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1,
+            ghichu_an: pt.ghichu_an || '',
+            thu_tu: (tVal !== undefined && tVal !== null) ? Number(tVal) : 9999
+          };
 
-          // Sắp xếp độc lập theo thứ tự stt của đoạn đó
-          formattedPts.sort((a, b) => a.stt - b.stt);
-          
-          // Lưu vào kho độc lập riêng cho đoạn này
-          window.segmentPointsCache[String(dId)] = formattedPts;
-        }
+          window.cacheChiTietDiemDoanCap[pId] = formattedPt;
+          return formattedPt;
+        });
+
+        // Sắp xếp tuyệt đối theo đúng thứ tự (thu_tu) từ CSDL
+        formattedPts.sort((a, b) => a.thu_tu - b.thu_tu);
+
+        window.segmentPointsCache[String(dId)] = formattedPts;
+        allCombinedPts = allCombinedPts.concat(formattedPts);
       }
 
-      // Tổng hợp vào globalDataPoints để vẽ bản đồ đa sắc
-      let allCombinedPts = [];
-      Object.keys(window.segmentPointsCache).forEach(dId => {
-        allCombinedPts = allCombinedPts.concat(window.segmentPointsCache[dId]);
-      });
       globalDataPoints = allCombinedPts;
-
       if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
     }
   } catch (err) {
     console.warn("Lỗi tải điểm đoạn cáp:", err.message);
+    showToast("❌ Lỗi tải điểm: " + err.message, "error");
   } finally {
     AppStore.setState({ dataPoints: globalDataPoints });
     capNhatComboDiemA();
