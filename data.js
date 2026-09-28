@@ -890,10 +890,10 @@ function chonDoanCapPhanTich(callback) {
   };
 }
 // ==========================================================================
-// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (NHẬP TỪ KHÓA QUA HỘP THOẠI & SẮP XẾP GẦN NHẤT)
+// HÀM CHUẨN HÓA THỨ TỰ ĐOẠN CÁP (DÙNG INSERT CHẮC CHẮN GÁN ĐƯỢC VÀO CSDL)
 // ==========================================================================
 async function xuLyChuanHoaThuTuDoanCap() {
-  // 1. Kiểm tra xem người dùng đã tích chọn đoạn cáp trên cây Checklist chưa
+  // 1. Kiểm tra xem người dùng đã tích chọn 1 đoạn cáp trên cây Checklist chưa
   var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
   if (checkedDoan.length === 0) {
     showToast("Vui lòng tích chọn 1 đoạn cáp trên cây Checklist!", "warning");
@@ -906,7 +906,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
 
   let doanVal = checkedDoan[0];
 
-  // 2. Bật hộp thoại nhập từ khóa ngay khi người dùng xác nhận thực hiện
+  // 2. Bật hộp thoại nhập từ khóa
   let keywordInput = prompt("Nhập từ khóa tìm kiếm Măng Xông cần gán (VD: 96TQG, MX...):", "");
   if (keywordInput === null) return; // Người dùng bấm Hủy
   
@@ -944,7 +944,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
     if (errLink) throw errLink;
     let assignedIds = (existingLinks || []).map(l => Number(l.id_diem));
 
-    // 6. Lọc các điểm có tên chứa từ khóa và chưa được gán vào đâu
+    // 6. Lọc các điểm có tên chứa từ khóa và chưa được gán
     let matchedPts = allPts.filter(p => {
       let pName = (p.ten || "").toLowerCase();
       let pId = Number(p.id);
@@ -953,22 +953,28 @@ async function xuLyChuanHoaThuTuDoanCap() {
       return matchKeyword && notAssigned;
     });
 
-    // 7. Nếu tìm thấy điểm mới, tiến hành thêm vào bảng trung gian doan_cap_diem
-    if (matchedPts.length > 0) {
-      let newInserts = matchedPts.map(pt => ({
-        id_doan_cap: Number(doanVal),
-        id_diem: Number(pt.id),
-        thu_tu: 999 // Tạm thời gán số lớn, bước sau sẽ sắp xếp lại bằng thuật toán gần nhất
-      }));
+    // In kết quả ra console (F12) để bạn dễ theo dõi
+    console.log("🔍 Từ khóa tìm kiếm:", keyword);
+    console.log("🔍 Các điểm khớp và chưa gán:", matchedPts);
 
-      const { error: errIns } = await supabaseClient
-        .from('doan_cap_diem')
-        .upsert(newInserts, { onConflict: 'id_doan_cap,id_diem' });
-
-      if (errIns) throw errIns;
+    if (matchedPts.length === 0) {
+      throw new Error(`Không tìm thấy điểm nào chưa gán chứa từ khóa "${keyword}"!`);
     }
 
-    // 8. Lấy toàn bộ danh sách điểm của đoạn (cả cũ và mới vừa gán) để chạy thuật toán gần nhất (Nearest Neighbor)
+    // 7. Chèn dữ liệu mới vào bảng doan_cap_diem bằng lệnh .insert() chuẩn xác
+    let newInserts = matchedPts.map(pt => ({
+      id_doan_cap: Number(doanVal),
+      id_diem: Number(pt.id),
+      thu_tu: 999 // Tạm thời để số lớn, bước sau thuật toán gần nhất sẽ sắp xếp lại
+    }));
+
+    const { error: errIns } = await supabaseClient
+      .from('doan_cap_diem')
+      .insert(newInserts);
+
+    if (errIns) throw errIns;
+
+    // 8. Lấy toàn bộ danh sách điểm của đoạn để chạy thuật toán gần nhất (Nearest Neighbor) sắp xếp thứ tự
     const { data: finalLinks, error: errFinalLink } = await supabaseClient
       .from('doan_cap_diem')
       .select('id_diem')
@@ -1001,7 +1007,7 @@ async function xuLyChuanHoaThuTuDoanCap() {
         remaining.splice(nearestIdx, 1);
       }
 
-      // 9. Cập nhật lại số thứ tự (thu_tu) chuẩn xác theo chuỗi không gian vào CSDL
+      // 9. Cập nhật lại số thứ tự (thu_tu) chuẩn xác vào CSDL
       let updateBatch = sortedChain.map((pt, idx) => ({
         id_doan_cap: Number(doanVal),
         id_diem: Number(pt.id),
@@ -1016,14 +1022,14 @@ async function xuLyChuanHoaThuTuDoanCap() {
     }
 
     hideLoading();
-    showToast(`✅ Đã chuẩn hóa thành công tổng số ${segmentPointObjects.length} điểm cho đoạn cáp!`, "success");
+    showToast(`✅ Đã gán thành công ${matchedPts.length} điểm mới và chuẩn hóa thứ tự!`, "success");
 
-    // Tải lại dữ liệu bản đồ để hiển thị ngay lập tức
+    // Tải lại dữ liệu bản đồ
     await taiDiemDaTuyen();
 
   } catch (err) {
     hideLoading();
     showToast("❌ Lỗi: " + err.message, "error");
-    console.error("Lỗi chuẩn hóa thứ tự đoạn cáp:", err);
+    console.error("Lỗi chi tiết:", err);
   }
 }
