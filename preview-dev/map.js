@@ -423,7 +423,13 @@ function veLaiTuyenAB() {
     }
 
     // 4. TIẾN TRÌNH NGẦM: LƯU LÊN SUPABASE (Không dùng showLoading để tránh block màn hình)
+    // 4. TIẾN TRÌNH NGẦM: LƯU LÊN SUPABASE HOẶC LƯU VÀO HÀNG ĐỢI OFFLINE NẾU MẤT MẠNG
     try {
+      // Kiểm tra nếu thiết bị mất kết nối mạng
+      if (!navigator.onLine) {
+        throw new Error("Mất kết nối Internet");
+      }
+
       const { error } = await supabaseClient
         .from('diem_ha_tang')
         .update({ lat: newPos.lat, long: newPos.lng })
@@ -437,15 +443,24 @@ function veLaiTuyenAB() {
       showToast("✅ Đã lưu tọa độ thành công!", "success");
       
     } catch (err) { 
-      // 5. ROLLBACK: NẾU MẠNG LỖI, GIẬT TỌA ĐỘ VỀ CHỖ CŨ VÀ BÁO LỖI
-      showToast("❌ Mạng lỗi, khôi phục vị trí cũ: " + err.message, "error"); 
-      
-      if (localPt) { localPt.lat = oldLat; localPt.lng = oldLng; }
-      if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericPtId]) {
-        window.cacheChiTietDiemDoanCap[numericPtId].lat = oldLat;
-        window.cacheChiTietDiemDoanCap[numericPtId].long = oldLng;
+      // 5. XỬ LÝ KHI MẤT MẠNG HOẶC LỖI KẾT NỐI
+      if (!navigator.onLine || err.message.includes('fetch') || err.message.includes('network') || err.message.includes('Internet')) {
+        // Lưu vào hàng đợi ngoại tuyến trong IndexedDB
+        if (typeof idbThemVaoHangDoiSync === 'function') {
+          await idbThemVaoHangDoiSync('UPDATE_COORD', { id_diem: numericPtId, lat: newPos.lat, long: newPos.lng });
+          showToast("📶 Mất mạng! Đã lưu thao tác kéo thả vào hàng đợi chờ đồng bộ.", "info");
+        }
+      } else {
+        // 6. ROLLBACK: NẾU LỖI SERVER KHÁC, GIẬT TỌA ĐỘ VỀ CHỖ CŨ
+        showToast("❌ Lỗi mạng, khôi phục vị trí cũ: " + err.message, "error"); 
+        
+        if (localPt) { localPt.lat = oldLat; localPt.lng = oldLng; }
+        if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericPtId]) {
+          window.cacheChiTietDiemDoanCap[numericPtId].lat = oldLat;
+          window.cacheChiTietDiemDoanCap[numericPtId].long = oldLng;
+        }
+        veLaiTuyenAB(); 
       }
-      veLaiTuyenAB(); 
     }
   }
 
@@ -581,25 +596,35 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
       showToast("Đang đồng bộ xóa ngầm...", "info");
 
       // D. TIẾN TRÌNH NGẦM LƯU LÊN SUPABASE
+      // D. TIẾN TRÌNH NGẦM LƯU LÊN SUPABASE HOẶC HÀNG ĐỢI OFFLINE
       try {
+        if (!navigator.onLine) {
+          throw new Error("Mất kết nối Internet");
+        }
         const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', numericId);
         if (error) throw error;
         
         if (typeof ghiNhatKyThaoTac === 'function') await ghiNhatKyThaoTac("XOA_DIEM", `Kỹ sư đã xóa điểm [${ten}] ID: ${id}`);
         showToast("✅ Đã xóa điểm hạ tầng thành công!", "success");
 
-        // Gọi đồng bộ ngầm chuẩn hóa tuyến nếu cần
         if (typeof taiDiemDaTuyen === 'function') {
           setTimeout(() => { taiDiemDaTuyen(); }, 500);
         }
       } catch (err) { 
-        // E. ROLLBACK NẾU LỖI
-        showToast("❌ Lỗi xóa điểm, khôi phục lại bản đồ: " + err.message, "error"); 
-        if (backupPt) globalDataPoints.push(backupPt);
-        if (backupCache && window.cacheChiTietDiemDoanCap) window.cacheChiTietDiemDoanCap[numericId] = backupCache;
-        if (backupOrder && window.cacheThuTuDoanCap) window.cacheThuTuDoanCap[numericId] = backupOrder;
-        
-        if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+        // NẾU MẤT MẠNG: LƯU HÀNG ĐỢI OFFLINE
+        if (!navigator.onLine || err.message.includes('fetch') || err.message.includes('network') || err.message.includes('Internet')) {
+          if (typeof idbThemVaoHangDoiSync === 'function') {
+            await idbThemVaoHangDoiSync('DELETE_POINT', { id_diem: numericId, ten: ten });
+            showToast("📶 Mất mạng! Đã lưu thao tác xóa vào hàng đợi chờ đồng bộ.", "info");
+          }
+        } else {
+          // E. ROLLBACK NẾU LỖI SERVER
+          showToast("❌ Lỗi xóa điểm, khôi phục lại bản đồ: " + err.message, "error"); 
+          if (backupPt) globalDataPoints.push(backupPt);
+          if (backupCache && window.cacheChiTietDiemDoanCap) window.cacheChiTietDiemDoanCap[numericId] = backupCache;
+          if (backupOrder && window.cacheThuTuDoanCap) window.cacheThuTuDoanCap[numericId] = backupOrder;
+          if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+        }
       }
     }
   } 
