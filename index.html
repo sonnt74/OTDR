@@ -419,5 +419,19 @@
       if (panel) panel.style.display = 'none';
     }
   </script>
+  <!-- ĐĂNG KÝ SERVICE WORKER CHO TILE CACHING OFFLINE -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js')
+          .then(function(registration) {
+            console.log('✅ Service Worker đăng ký thành công với scope: ', registration.scope);
+          })
+          .catch(function(error) {
+            console.log('❌ Service Worker đăng ký thất bại: ', error);
+          });
+      });
+    }
+  </script>
 </body>
 </html>
