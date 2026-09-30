@@ -526,15 +526,18 @@ function isMangXong(pt) {
  * HÀM QUẢN LÝ CRUD ĐIỂM HẠ TẦNG (THÊM, SỬA, XÓA) - ĐÃ CHUẨN HÓA CÚ PHÁP
  */
 window.moFormCrud = async function(action, id, ten, lat, lng) {
+  // 1. XỬ LÝ XÓA ĐIỂM (ĐÃ CHUẨN HÓA XÓA TRIỆT ĐỂ KHỎI MỌI BỘ NHỚ ĐỆM)
   if (action === 'DELETE') {
     let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn điểm <b>${ten}</b> khỏi tuyến không?`, 'danger');
     if (isConfirmed) {
       let numericId = Number(id);
 
+      // A. BACKUP DỮ LIỆU ĐỂ ROLLBACK NẾU LỖI
       let backupPt = globalDataPoints.find(p => String(p.id) === String(id));
       let backupCache = window.cacheChiTietDiemDoanCap ? window.cacheChiTietDiemDoanCap[numericId] : null;
       let backupOrder = window.cacheThuTuDoanCap ? window.cacheThuTuDoanCap[numericId] : null;
 
+      // B. XÓA SẠCH TRIỆT ĐỂ KHỎI MỌI MẢNG RAM VÀ BỘ NHỚ ĐỆM NGAY LẬP TỨC
       globalDataPoints = globalDataPoints.filter(p => String(p.id) !== String(id));
       
       if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericId]) {
@@ -544,15 +547,30 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
         delete window.cacheThuTuDoanCap[numericId];
       }
 
+      // Xóa trong cache đoạn cáp nếu có tồn tại
+      if (window.segmentPointsCache) {
+        Object.keys(window.segmentPointsCache).forEach(segKey => {
+          window.segmentPointsCache[segKey] = window.segmentPointsCache[segKey].filter(p => String(p.id || p.id_diem) !== String(numericId));
+        });
+      }
+
       if (typeof AppStore !== 'undefined') AppStore.setState({ dataPoints: globalDataPoints });
       
+      // C. VẼ LẠI BẢN ĐỒ NGAY LẬP TỨC ĐỂ MARKER BIẾN MẤT TỨC THÌ
+      if (typeof markersLayer !== 'undefined') markersLayer.clearLayers();
       if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
       showToast("Đang đồng bộ xóa ngầm...", "info");
 
+      // D. TIẾN TRÌNH NGẦM LƯU LÊN SUPABASE HOẶC HÀNG ĐỢI OFFLINE
       try {
         if (!navigator.onLine) {
           throw new Error("Mất kết nối Internet");
         }
+
+        // Bước 1: Xóa các liên kết trong bảng trung gian doan_cap_diem trước để tránh lỗi khóa ngoại
+        await supabaseClient.from('doan_cap_diem').delete().eq('id_diem', numericId);
+
+        // Bước 2: Xóa điểm chính trong bảng diem_ha_tang
         const { error } = await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', numericId);
         if (error) throw error;
         
@@ -569,6 +587,7 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
             showToast("📶 Mất mạng! Đã lưu thao tác xóa vào hàng đợi chờ đồng bộ.", "info");
           }
         } else {
+          // E. ROLLBACK NẾU LỖI SERVER
           showToast("❌ Lỗi xóa điểm, khôi phục lại bản đồ: " + err.message, "error"); 
           if (backupPt) globalDataPoints.push(backupPt);
           if (backupCache && window.cacheChiTietDiemDoanCap) window.cacheChiTietDiemDoanCap[numericId] = backupCache;
