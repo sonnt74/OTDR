@@ -411,6 +411,8 @@ async function dongBoDuLieuTonDong() {
   let queue = await idbLayHangDoiSync();
   if (!queue || queue.length === 0) return;
 
+  if (!navigator.onLine) return;
+
   showLoading(`Đang đẩy ${queue.length} thao tác ngoại tuyến lên máy chủ...`);
   for (let i = 0; i < queue.length; i++) {
     let task = queue[i];
@@ -420,11 +422,15 @@ async function dongBoDuLieuTonDong() {
       } else if (task.actionType === 'DELETE_POINT') {
          await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', task.payload.id_diem);
       }
+      // Xóa khỏi hàng đợi sau khi đẩy thành công lên server
       await idbXoaHangDoiSync(task.id);
     } catch (err) {
       console.error("Lỗi đồng bộ tác vụ ID " + task.id, err);
     }
   }
+  hideLoading();
+  showToast("✅ Đã đồng bộ toàn bộ dữ liệu ngoại tuyến lên máy chủ thành công!", "success");
+  if (typeof taiDuLieuSupabase === 'function') taiDuLieuSupabase(true);
 }
 
 /**
