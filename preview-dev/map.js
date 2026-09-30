@@ -842,22 +842,44 @@ window.saveDiemHatangFullAction = async function() {
         ngay_ps: ngayPs
     };
 
-    if (action === 'ADD') {
-      const { data: newDiem, error: errDiem } = await supabaseClient
-        .from('diem_ha_tang')
-        .insert([{ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu, id_huong: idHuong, ngay_ps: ngayPs }])
-        .select();
-      if (errDiem) throw errDiem;
-      idDiemTarget = newDiem[0].id_diem;
+    // KIỂM TRA KẾT NỐI MẠNG: NẾU MẤT MẠNG -> LƯU VÀO HÀNG ĐỢI OFFLINE (SYNC QUEUE)
+    if (!navigator.onLine) {
+      // Tự sinh ID âm tạm thời cho điểm thêm mới để không bị đụng độ ID khi đồng bộ
+      idDiemTarget = action === 'ADD' ? -Date.now() : Number(idDiemEdit);
+      
+      if (typeof idbThemVaoHangDoiSync === 'function') {
+        await idbThemVaoHangDoiSync(action === 'ADD' ? 'ADD_POINT' : 'EDIT_POINT', { 
+          ...payload, 
+          id_diem: idDiemTarget, 
+          doan_ids: checkedDoanIds 
+        });
+      }
+      showToast("📶 Đang ngoại tuyến! Đã lưu thao tác điểm vào hàng đợi cục bộ.", "info");
+      
     } else {
-      idDiemTarget = Number(idDiemEdit);
-      const { error: errUpdate } = await supabaseClient
-        .from('diem_ha_tang')
-        .update({ ten_diem: ten, id_loaidiem: Number(idLoai), lat: lat, long: lng, ly_trinh: lyTrinh, du_tru: duTru, ghi_chu: ghiChu, id_huong: idHuong, ngay_ps: ngayPs })
-        .eq('id_diem', idDiemTarget);
-      if (errUpdate) throw errUpdate;
+      // CÓ MẠNG: THỰC THI CHUẨN TRÊN SUPABASE NHƯ BÌNH THƯỜNG
+      if (action === 'ADD') {
+        const { data: newDiem, error: errDiem } = await supabaseClient
+          .from('diem_ha_tang')
+          .insert([payload])
+          .select();
+        if (errDiem) throw errDiem;
+        idDiemTarget = newDiem[0].id_diem;
+      } else {
+        idDiemTarget = Number(idDiemEdit);
+        const { error: errUpdate } = await supabaseClient
+          .from('diem_ha_tang')
+          .update(payload)
+          .eq('id_diem', idDiemTarget);
+        if (errUpdate) throw errUpdate;
 
-      await supabaseClient.from('doan_cap_diem').delete().eq('id_diem', idDiemTarget);
+        await supabaseClient.from('doan_cap_diem').delete().eq('id_diem', idDiemTarget);
+      }
+
+      for (let i = 0; i < checkedDoanIds.length; i++) {
+        let idDoan = Number(checkedDoanIds[i]);
+        await supabaseClient.from('doan_cap_diem').upsert({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: 999 }, { onConflict: 'id_doan_cap,id_diem' });
+      }
     }
 
     for (let i = 0; i < checkedDoanIds.length; i++) {
