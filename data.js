@@ -421,8 +421,34 @@ async function dongBoDuLieuTonDong() {
          await supabaseClient.from('diem_ha_tang').update({ lat: task.payload.lat, long: task.payload.lng }).eq('id_diem', task.payload.id_diem);
       } else if (task.actionType === 'DELETE_POINT') {
          await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', task.payload.id_diem);
+      } else if (task.actionType === 'ADD_POINT' || task.actionType === 'EDIT_POINT') {
+         let p = task.payload;
+         let doanIds = p.doan_ids || [];
+         let isAdd = (task.actionType === 'ADD_POINT');
+         let targetId = p.id_diem;
+         
+         // Tách các trường phụ không nằm trong bảng diem_ha_tang chính
+         delete p.doan_ids;
+         if (isAdd) delete p.id_diem; // Xóa ID âm tạm thời để Supabase tự sinh ID chuẩn
+
+         if (isAdd) {
+           // BƯỚC 1: INSERT ĐIỂM MỚI VÀO SUPABASE TRƯỚC ĐỂ LẤY ID THẬT
+           const { data, error } = await supabaseClient.from('diem_ha_tang').insert([p]).select();
+           if (error) throw error;
+           
+           // BƯỚC 2: NẾU THÀNH CÔNG VÀ CÓ LIÊN KẾT ĐOẠN CÁP -> TIẾN HÀNH GÁN ID THẬT VÀO BẢNG DOAN_CAP_DIEM
+           if (data && data[0] && doanIds.length > 0) {
+             let newId = data[0].id_diem;
+             let links = doanIds.map(dId => ({ id_doan_cap: Number(dId), id_diem: newId, thu_tu: 999 }));
+             await supabaseClient.from('doan_cap_diem').upsert(links, { onConflict: 'id_doan_cap,id_diem' });
+           }
+         } else {
+           // CẬP NHẬT ĐIỂM CŨ
+           const { error } = await supabaseClient.from('diem_ha_tang').update(p).eq('id_diem', targetId);
+           if (error) throw error;
+         }
       }
-      // Xóa khỏi hàng đợi sau khi đẩy thành công lên server
+      // Xóa tác vụ khỏi hàng đợi sau khi đẩy thành công
       await idbXoaHangDoiSync(task.id);
     } catch (err) {
       console.error("Lỗi đồng bộ tác vụ ID " + task.id, err);
