@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - staging  # Thay bằng tên nhánh thứ 2 của bạn nếu khác
+      - dev  # Thay bằng tên nhánh thứ 2 của bạn nếu khác
 
 permissions:
   contents: write
