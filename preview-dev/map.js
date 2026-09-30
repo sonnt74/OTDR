@@ -880,6 +880,32 @@ window.saveDiemHatangFullAction = async function() {
         let idDoan = Number(checkedDoanIds[i]);
         await supabaseClient.from('doan_cap_diem').upsert({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: 999 }, { onConflict: 'id_doan_cap,id_diem' });
       }
+      // UPLOAD NHIỀU ẢNH LÊN SUPABASE STORAGE VÀ LƯU VÀO BẢNG diem_ha_tang_anh
+    let fileInput = document.getElementById('diemFileInput');
+    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+      showLoading("Đang tải ảnh lên máy chủ...");
+      for (let i = 0; i < fileInput.files.length; i++) {
+        let file = fileInput.files[i];
+        let fileExt = file.name.split('.').pop();
+        let fileName = `diem_${idDiemTarget}_${Date.now()}_${i}.${fileExt}`;
+        
+        const { error: uploadErr } = await supabaseClient.storage
+          .from('field_photos')
+          .upload(fileName, file);
+
+        if (!uploadErr) {
+          const { data: publicUrlData } = supabaseClient.storage
+            .from('field_photos')
+            .getPublicUrl(fileName);
+          
+          if (publicUrlData && publicUrlData.publicUrl) {
+            await supabaseClient.from('diem_ha_tang_anh').insert([
+              { id_diem: Number(idDiemTarget), url_anh: publicUrlData.publicUrl }
+            ]);
+          }
+        }
+      }
+    }
     }
 
     for (let i = 0; i < checkedDoanIds.length; i++) {
@@ -1070,3 +1096,61 @@ function getFullRouteBackboneForSegment(doanVal) {
 
   return tuyenPts;
 }
+// Hàm xem trước nhiều ảnh trước khi tải lên
+window.previewMultipleImages = function(input) {
+  var container = document.getElementById('diemImagePreviewContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  if (input.files) {
+    for (var i = 0; i < input.files.length; i++) {
+      var file = input.files[i];
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var imgWrapper = document.createElement('div');
+        imgWrapper.style.position = 'relative';
+        imgWrapper.style.display = 'inline-block';
+        imgWrapper.innerHTML = `<img src="${e.target.result}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #cbd5e1;">`;
+        container.appendChild(imgWrapper);
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+};
+
+// Hàm tải danh sách ảnh cũ khi bấm sửa điểm
+window.taiAnhCuCuaDiem = async function(idDiem) {
+  var existingContainer = document.getElementById('diemExistingImagesContainer');
+  if (!existingContainer) return;
+  existingContainer.innerHTML = '';
+  
+  const { data, error } = await supabaseClient
+    .from('diem_ha_tang_anh')
+    .select('*')
+    .eq('id_diem', Number(idDiem));
+    
+  if (!error && data && data.length > 0) {
+    data.forEach(item => {
+      var wrapper = document.createElement('div');
+      wrapper.style.position = 'relative';
+      wrapper.style.display = 'inline-block';
+      wrapper.innerHTML = `
+        <img src="${item.url_anh}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #cbd5e1;">
+        <button type="button" onclick="xoaAnhHienTruong(${item.id}, this)" style="position: absolute; top: -4px; right: -4px; background: red; color: white; border: none; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center;">&times;</button>
+      `;
+      existingContainer.appendChild(wrapper);
+    });
+  }
+};
+
+// Hàm xóa một ảnh hiện trường cụ thể
+window.xoaAnhHienTruong = async function(idAnh, btnElement) {
+  if (confirm("Bạn có chắc muốn xóa ảnh này không?")) {
+    const { error } = await supabaseClient.from('diem_ha_tang_anh').delete().eq('id', idAnh);
+    if (!error) {
+      btnElement.parentElement.remove();
+      showToast("✅ Đã xóa ảnh thành công!", "success");
+    } else {
+      showToast("❌ Lỗi xóa ảnh: " + error.message, "error");
+    }
+  }
+};
