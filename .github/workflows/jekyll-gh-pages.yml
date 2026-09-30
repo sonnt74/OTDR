@@ -1,0 +1,36 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main     # Thay bằng tên Branch chính của bạn (ví dụ: master)
+      - dev  # Thay bằng tên Branch thứ 2 muốn kiểm tra (ví dụ: dev, feature)
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # (Tùy chọn) Nếu dự án của bạn cần build (React, Vue, Vite...), hãy thêm bước cài đặt và build ở đây
+      # - name: Install and Build
+      #   run: |
+      #     npm install
+      #     npm run build
+
+      - name: Determine Target Directory
+        id: branch-dir
+        run: |
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            echo "dir=production" >> $GITHUB_OUTPUT
+          else
+            echo "dir=preview-${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: . # Thư mục chứa mã nguồn cần publish (nếu dùng build thì đổi thành dist hoặc build)
+          destination_dir: ${{ steps.branch-dir.outputs.dir }}
