@@ -422,7 +422,6 @@ function veLaiTuyenAB() {
       map.flyTo([newPos.lat, newPos.lng], 19, { animate: true, duration: 1.0 });
     }
 
-    // 4. TIẾN TRÌNH NGẦM: LƯU LÊN SUPABASE (Không dùng showLoading để tránh block màn hình)
     // 4. TIẾN TRÌNH NGẦM: LƯU LÊN SUPABASE HOẶC LƯU VÀO HÀNG ĐỢI OFFLINE NẾU MẤT MẠNG
     try {
       // Kiểm tra nếu thiết bị mất kết nối mạng
@@ -980,12 +979,17 @@ window.saveDiemHatangFullAction = async function() {
       if (errUpsert) throw errUpsert;
     }
 
-    if (typeof ghiNhatKyThaoTac === 'function') ghiNhatKyThaoTac(action === 'ADD' ? "THEM_DIEM" : "SUA_DIEM", `Kỹ sư ${action === 'ADD' ? 'thêm mới' : 'cập nhật'} điểm [${ten}] trên ${checkedDoanIds.length} đoạn cáp`);
-    showToast(`✅ Đã ${action === 'ADD' ? 'thêm' : 'cập nhật'} thành công!`, "success");
-    document.getElementById('diemHaTangModal').style.display = 'none';
+    if (typeof ghiNhatKyThaoTac === 'function') {
+      ghiNhatKyThaoTac(action === 'ADD' ? "THEM_DIEM" : "SUA_DIEM", `Kỹ sư ${action === 'ADD' ? 'thêm mới' : 'cập nhật'} điểm [${ten}] trên ${checkedDoanIds.length} đoạn cáp`);
+    }
     
-    // Gọi lại taiDiemDaTuyen để cập nhật đồng bộ bộ nhớ đệm đoạn cáp
-   // 1. Cập nhật ngay lập tức vào mảng RAM globalDataPoints để bản đồ có dữ liệu vẽ luôn
+    // 1. Đóng modal ngay lập tức cho mượt mà giao diện
+    var modal = document.getElementById('diemHaTangModal');
+    if (modal) modal.style.display = 'none';
+    
+    showToast(`✅ Đã ${action === 'ADD' ? 'thêm' : 'cập nhật'} thành công!`, "success");
+
+    // 2. Cập nhật ngay lập tức vào mảng RAM globalDataPoints (không cần chờ tải lại server)
     let tempPointObj = {
       id: String(idDiemTarget),
       ten: ten,
@@ -1005,24 +1009,18 @@ window.saveDiemHatangFullAction = async function() {
       globalDataPoints.push(tempPointObj);
     }
 
-    // Cập nhật bộ nhớ đệm chi tiết
     if (window.cacheChiTietDiemDoanCap) {
       window.cacheChiTietDiemDoanCap[Number(idDiemTarget)] = tempPointObj;
     }
 
-    // 2. Gọi vẽ lại bản đồ và bay đến vị trí ngay lập tức (Không chờ đợi mạng)
+    // 3. Vẽ lại đường cáp liên quan và bay mượt mà đến vị trí thao tác
     if (typeof veLaiTuyenAB === 'function') {
       veLaiTuyenAB();
     }
 
-    if (typeof map !== 'undefined') {
+    if (typeof map !== 'undefined' && map.flyTo) {
        map.stop(); 
-       map.flyTo([lat, lng], 19, { animate: true, duration: 1.5 });
-    }
-
-    // 3. Đồng bộ ngầm dữ liệu chuẩn từ CSDL ở phía sau
-    if (typeof taiDiemDaTuyen === 'function') {
-       setTimeout(() => { taiDiemDaTuyen(); }, 500);
+       map.flyTo([lat, lng], 18, { animate: true, duration: 1.2 });
     }
 
   } catch (err) {
