@@ -771,19 +771,14 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
       // ==========================================================================
       // GỌI TẢI DANH SÁCH ẢNH CŨ LÊN KHUNG HIỂN THỊ KHI SỬA ĐIỂM
       // ==========================================================================
+      // ==========================================================================
+      // GỌI TẢI DANH SÁCH ẢNH CŨ LÊN KHUNG HIỂN THỊ KHI SỬA ĐIỂM
+      // ==========================================================================
       if (typeof taiAnhCuCuaDiem === 'function') {
         taiAnhCuCuaDiem(id);
       }
 
-        try {
-          let { data: linkedDoan } = await supabaseClient.from('doan_cap_diem').select('id_doan_cap').eq('id_diem', Number(id));
-          let linkedIds = (linkedDoan || []).map(d => String(d.id_doan_cap));
-          
-          doanContainer.querySelectorAll('.doan-checkbox').forEach(cb => {
-            if (linkedIds.includes(cb.value)) cb.checked = true;
-          });
-        } catch(e) { console.error("Lỗi lấy liên kết đoạn cáp:", e); }
-      }
+      // Tích chọn các đoạn cáp mà điểm này đang thuộc về (Đã chuẩn hóa, không bị lặp)
       try {
         let { data: linkedDoan } = await supabaseClient.from('doan_cap_diem').select('id_doan_cap').eq('id_diem', Number(id));
         let linkedIds = (linkedDoan || []).map(d => String(d.id_doan_cap));
@@ -791,7 +786,9 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
         doanContainer.querySelectorAll('.doan-checkbox').forEach(cb => {
           if (linkedIds.includes(cb.value)) cb.checked = true;
         });
-      } catch(e) { console.error("Lỗi lấy liên kết đoạn cáp:", e); }
+      } catch(e) { 
+        console.error("Lỗi lấy liên kết đoạn cáp:", e); 
+      }
     }
     
     hideLoading();
