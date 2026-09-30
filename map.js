@@ -146,10 +146,9 @@ function getDistanceAlongRoute(targetPt, pathPts) {
 
 /**
  * 1. HÀM TẢI DỮ LIỆU ĐỆM TỪ BẢNG doan_cap_diem (Chạy ngầm khi đổi đoạn cáp)
- * Bạn hãy gọi hàm này ở sự kiện onchange của dropdown chọn Đoạn cáp: taiDuLieuDoanCapDiem(doanVal);
  */
 window.cacheThuTuDoanCap = {};
-window.cacheChiTietDiemDoanCap = {}; // Bộ nhớ đệm lưu chi tiết toàn bộ điểm của đoạn cáp
+window.cacheChiTietDiemDoanCap = {}; 
 
 async function taiDuLieuDoanCapDiem(doanVal) {
   if (!doanVal || doanVal === 'ALL') {
@@ -159,7 +158,6 @@ async function taiDuLieuDoanCapDiem(doanVal) {
   }
 
   try {
-    // 1. Vét toàn bộ liên kết id_diem, thu_tu từ doan_cap_diem (Vượt mốc 1000 bản ghi bằng phân trang)
     let segmentLinks = [];
     let offset = 0;
     let fetchMore = true;
@@ -188,7 +186,6 @@ async function taiDuLieuDoanCapDiem(doanVal) {
         window.cacheThuTuDoanCap[Number(row.id_diem)] = row.thu_tu;
       });
 
-      // 2. Lấy toàn bộ chi tiết tọa độ từ diem_ha_tang theo lô 500 ID (Vượt mốc giới hạn RAM)
       let allIds = segmentLinks.map(l => Number(l.id_diem));
       const batchSize = 500;
       
@@ -217,28 +214,18 @@ async function taiDuLieuDoanCapDiem(doanVal) {
   }
 }
 
-/**
- * HÀM LẤY BACKBONE VÀ SẮP XẾP THEO THỨ TỰ (CÁCH LY VÙNG NHỚ THEO ĐOẠN CÁP)
- * Khắc phục triệt để lỗi nối chéo nét đứt khi chọn nhiều đoạn cáp cùng lúc.
- */
 function getMasterRouteBackbone(tuyenVal, tramVal, doanVal) {
   if (!doanVal || doanVal === 'ALL') {
     return [];
   }
 
-  // 1. ƯU TIÊN CAO NHẤT: Lấy từ ngăn kéo bộ nhớ độc lập của chính đoạn cáp đó.
-  // Dữ liệu trong này đã được data.js nạp đủ 100% (vượt mốc 1000) và sắp xếp chuẩn tuyệt đối.
   if (window.segmentPointsCache && window.segmentPointsCache[String(doanVal)]) {
-    // Trả về bản sao chép (clone) để tránh tham chiếu làm hỏng cache gốc khi tính toán lý trình
     return window.segmentPointsCache[String(doanVal)].map(pt => Object.assign({}, pt));
   }
 
-  // 2. PHƯƠNG ÁN DỰ PHÒNG (Fallback): Nếu cache chưa kịp nạp, lọc từ mảng RAM chung
   let segmentPts = globalDataPoints.filter(pt => String(pt.idDoanCap) === String(doanVal));
-
   if (segmentPts.length === 0) return [];
 
-  // Sắp xếp lại theo thứ tự (thu_tu hoặc stt) nếu rơi vào phương án dự phòng
   let sortedByThuTu = segmentPts.sort((a, b) => {
     let orderA = a.thu_tu !== undefined && a.thu_tu !== null ? a.thu_tu : (a.stt !== undefined && a.stt !== null ? a.stt : 9999);
     let orderB = b.thu_tu !== undefined && b.thu_tu !== null ? b.thu_tu : (b.stt !== undefined && b.stt !== null ? b.stt : 9999);
@@ -302,7 +289,7 @@ function precalculateRouteDataForPoints(pts, backbonePts) {
 function getPointsCuaTuyenHienTai() {
   var checkedDoan = typeof getCheckedDoanIds === 'function' ? getCheckedDoanIds() : [];
   if (checkedDoan.length === 0) return [];
-  var doanVal = checkedDoan[0]; // Mặc định lấy đoạn đầu tiên đang tích để tính lý trình
+  var doanVal = checkedDoan[0]; 
   return getPointsCuaTuyenHienTaiChoDoan(doanVal);
 }
 function getPointsCuaTuyenHienTaiChoDoan(doanVal) {
@@ -315,10 +302,10 @@ function getPointsCuaTuyenHienTaiChoDoan(doanVal) {
 
   return precalculateRouteDataForPoints(nonMxPts, backbone);
 }
+
 /**
  * 4. VẼ TUYẾN CÁP VÀ ĐIỂM HẠ TẦNG LÊN BẢN ĐỒ
  */
-// Hàm tiện ích: Sao chép nội dung vào bộ nhớ tạm
 window.copyToClipboardTNN = function(text) {
   navigator.clipboard.writeText(text).then(function() {
     if (typeof showToast === 'function') showToast("📋 Đã sao chép tọa độ: " + text, "success");
@@ -326,7 +313,6 @@ window.copyToClipboardTNN = function(text) {
     console.error('Lỗi copy: ', err);
   });
 };
-// Thay vì lắng nghe selectDoanCap (đã bị ẩn), Tree-view sẽ tự gọi veLaiTuyenAB
 
 function veLaiTuyenAB() {
   if (!map) return;
@@ -348,12 +334,10 @@ function veLaiTuyenAB() {
   var currentUser = (typeof AppStore !== 'undefined' && AppStore.getState().currentUser) ? AppStore.getState().currentUser : (window.currentUser || {});
   var isDraggable = (currentUser.canEditMap || (currentUser.role || '').toLowerCase().includes('admin') || (currentUser.role || '').toLowerCase().includes('sys'));
 
-  // HÀM TẠO NÚT HÀNH ĐỘNG (GIỮ NGUYÊN 100% CỦA BẠN)
   function taoNutHanhDong(ptObj) {
     let id = ptObj.id || ptObj.id_diem; let ten = ptObj.ten || ptObj.ten_diem || 'Điểm hạ tầng';
     let lat = ptObj.lat; let lng = ptObj.lng;
     
-    // Kiểm tra quyền chỉnh sửa thực tế của tài khoản hiện tại
     let activeUser = (typeof AppStore !== 'undefined' && AppStore.getState().currentUser) ? AppStore.getState().currentUser : (window.currentUser || {});
     let roleLower = (activeUser.role || '').toLowerCase();
     let isAllowedToEdit = !!activeUser.canEditMap || !!activeUser.can_edit_map || roleLower.includes('admin') || roleLower.includes('sys');
@@ -363,7 +347,6 @@ function veLaiTuyenAB() {
 
     var btnGhiChuAn = hasQuyenGhiChuAn ? `<button class="btn-small" style="background:#f59e0b; color:white; flex: 1; margin-right: 0;" onclick="xemGhiChuAnTaiDiem(${id}, '${ten}')">📝 Mật</button>` : '';
     
-    // Chỉ hiển thị nút Sửa/Xóa nếu tài khoản có quyền chỉnh sửa
     var btnAdmin = isAllowedToEdit ? `
        <button class="btn-small btn-success" style="flex: 1; margin-right: 0;" onclick="moFormCrud('EDIT','${id}','${ten}',${lat},${lng})">✏️ Sửa</button>
        <button class="btn-small del" style="flex: 1; margin-right: 0;" onclick="moFormCrud('DELETE','${id}','${ten}',${lat},${lng})">🗑️ Xóa</button>
@@ -374,57 +357,46 @@ function veLaiTuyenAB() {
       <button class="btn-small" style="background:#6c757d; color:white; flex: 1; margin-right: 0;" onclick="copyToClipboardTNN('${lat.toFixed(6)}, ${lng.toFixed(6)}')">📋 Tọa độ</button>
     `;
 
-    // Nếu không có nút quản trị và nút mật, tối ưu bố cục hiển thị gọn gàng hơn
     let topRowContent = (btnGhiChuAn && btnAdmin) ? `${btnGhiChuAn}${btnAdmin}` : (btnGhiChuAn || btnAdmin);
     let topRowHtml = topRowContent ? `<div style="display:flex; gap:4px; width: 100%; margin-bottom:4px;">${topRowContent}</div>` : '';
 
     return `<hr style="margin:6px 0; border:0; border-top:1px dashed #ccc;"><div style="display:flex; flex-direction:column; margin-top:4px;">${topRowHtml}<div style="display:flex; gap:4px; width: 100%;">${btnTienIch}</div></div>`;
   }
 
- // HÀM KÉO THẢ TỌA ĐỘ (OPTIMISTIC UI - LUỒNG LẠC QUAN CỰC MƯỢT)
   async function handleDragEnd(e, ptObj) {
     var newPos = e.target.getLatLng();
     var isConfirmed = await showConfirmDialog(`Bạn có chắc chắn muốn lưu tọa độ mới cho điểm [${ptObj.ten}] không?`);
     
-    // Nếu người dùng chọn Hủy, giật marker về chỗ cũ ngay
     if (!isConfirmed) { 
       e.target.setLatLng([ptObj.lat, ptObj.lng]); 
       return; 
     }
 
-    // 1. LƯU LẠI VỊ TRÍ CŨ ĐỂ DỰ PHÒNG (ROLLBACK NẾU LỖI MẠNG)
     var oldLat = ptObj.lat;
     var oldLng = ptObj.lng;
     let numericPtId = Number(ptObj.id || ptObj.id_diem);
 
-    // 2. LUỒNG LẠC QUAN: CẬP NHẬT RAM NGAY LẬP TỨC 
     var localPt = globalDataPoints.find(p => String(p.id) === String(numericPtId));
     if (localPt) { localPt.lat = newPos.lat; localPt.lng = newPos.lng; }
     
     if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericPtId]) {
       window.cacheChiTietDiemDoanCap[numericPtId].lat = newPos.lat;
       window.cacheChiTietDiemDoanCap[numericPtId].long = newPos.lng;
-      // Cập nhật thuộc tính mảng gốc nếu có
       if (window.cacheChiTietDiemDoanCap[numericPtId].latitude !== undefined) window.cacheChiTietDiemDoanCap[numericPtId].latitude = newPos.lat;
       if (window.cacheChiTietDiemDoanCap[numericPtId].longitude !== undefined) window.cacheChiTietDiemDoanCap[numericPtId].longitude = newPos.lng;
     }
     
-    // Cập nhật State
     if (typeof AppStore !== 'undefined') AppStore.setState({ dataPoints: globalDataPoints });
 
-    // 3. VẼ LẠI MAP VÀ TÍNH LẠI LÝ TRÌNH NGAY TỨC THÌ (Độ trễ 0s)
     veLaiTuyenAB();
     showToast("Đang đồng bộ dữ liệu ngầm...", "info");
 
-    // Lệnh điều khiển bản đồ bay (flyTo) mượt mà
     if (typeof map !== 'undefined') {
       map.stop();
       map.flyTo([newPos.lat, newPos.lng], 19, { animate: true, duration: 1.0 });
     }
 
-    // 4. TIẾN TRÌNH NGẦM: LƯU LÊN SUPABASE HOẶC LƯU VÀO HÀNG ĐỢI OFFLINE NẾU MẤT MẠNG
     try {
-      // Kiểm tra nếu thiết bị mất kết nối mạng
       if (!navigator.onLine) {
         throw new Error("Mất kết nối Internet");
       }
@@ -442,15 +414,12 @@ function veLaiTuyenAB() {
       showToast("✅ Đã lưu tọa độ thành công!", "success");
       
     } catch (err) { 
-      // 5. XỬ LÝ KHI MẤT MẠNG HOẶC LỖI KẾT NỐI
       if (!navigator.onLine || err.message.includes('fetch') || err.message.includes('network') || err.message.includes('Internet')) {
-        // Lưu vào hàng đợi ngoại tuyến trong IndexedDB
         if (typeof idbThemVaoHangDoiSync === 'function') {
           await idbThemVaoHangDoiSync('UPDATE_COORD', { id_diem: numericPtId, lat: newPos.lat, long: newPos.lng });
           showToast("📶 Mất mạng! Đã lưu thao tác kéo thả vào hàng đợi chờ đồng bộ.", "info");
         }
       } else {
-        // 6. ROLLBACK: NẾU LỖI SERVER KHÁC, GIẬT TỌA ĐỘ VỀ CHỖ CŨ
         showToast("❌ Lỗi mạng, khôi phục vị trí cũ: " + err.message, "error"); 
         
         if (localPt) { localPt.lat = oldLat; localPt.lng = oldLng; }
@@ -463,11 +432,9 @@ function veLaiTuyenAB() {
     }
   }
 
-  // VÒNG LẶP VẼ ĐA SẮC CHO TỪNG ĐOẠN CÁP
   danhSachDoanCanVe.forEach((idDoanHienTai, idx) => {
     var currentColor = colorPalette[idx % colorPalette.length];
     
-    // Sử dụng hàm của bạn, truyền ID đoạn để lấy backbone 
     var backbone = getMasterRouteBackbone('ALL', 'ALL', idDoanHienTai);
     if (!backbone || backbone.length === 0) return;
     
@@ -480,30 +447,28 @@ function veLaiTuyenAB() {
     
     pts.forEach((pt, index) => {
       bounds.push([pt.lat, pt.lng]);
-      if (drawnMarkerIds.has(pt.id)) return; // Bẫy chống trùng lặp điểm giao
+      if (drawnMarkerIds.has(pt.id)) return; 
       drawnMarkerIds.add(pt.id);
 
-      // Phân loại hình dáng và màu sắc theo idLoaiDiem (1: Cột, 2: Bể, 3: Mốc, 4: Măng xông)
     let loaiIdNum = Number(pt.idLoaiDiem || 1);
     let cssClassName = 'marker-loai-1'; 
     let iconSizeArr = [10, 10];
     let iconAnchorArr = [5, 5];
 
     if (index === 0) {
-      // Điểm gốc A giữ nguyên biểu tượng chữ A màu vàng cam đặc biệt
       var marker = L.marker([pt.lat, pt.lng], { icon: L.divIcon({ className: '', html: '<div class="point-a-marker">A</div>', iconSize: [26, 26], iconAnchor: [13, 13] }), draggable: isDraggable });
     } else {
-      if (loaiIdNum === 2) { cssClassName = 'marker-loai-2'; iconSizeArr = [12, 12]; iconAnchorArr = [6, 6]; }       // Bể
-      else if (loaiIdNum === 3) { cssClassName = 'marker-loai-3'; iconSizeArr = [11, 11]; iconAnchorArr = [5, 5]; }  // Mốc
-      else if (loaiIdNum === 4 || isMangXong(pt)) { cssClassName = 'marker-loai-4'; iconSizeArr = [12, 12]; iconAnchorArr = [6, 6]; } // Măng xông
-      else { cssClassName = 'marker-loai-1'; iconSizeArr = [10, 10]; iconAnchorArr = [5, 5]; }                      // Cột (mặc định)
+      if (loaiIdNum === 2) { cssClassName = 'marker-loai-2'; iconSizeArr = [12, 12]; iconAnchorArr = [6, 6]; }       
+      else if (loaiIdNum === 3) { cssClassName = 'marker-loai-3'; iconSizeArr = [11, 11]; iconAnchorArr = [5, 5]; }  
+      else if (loaiIdNum === 4 || isMangXong(pt)) { cssClassName = 'marker-loai-4'; iconSizeArr = [12, 12]; iconAnchorArr = [6, 6]; } 
+      else { cssClassName = 'marker-loai-1'; iconSizeArr = [10, 10]; iconAnchorArr = [5, 5]; }                      
 
       var marker = L.marker([pt.lat, pt.lng], { 
         icon: L.divIcon({ className: '', html: `<div class="${cssClassName}"></div>`, iconSize: iconSizeArr, iconAnchor: iconAnchorArr }), 
         draggable: isDraggable 
       });
     }
-      // Lấy tên hướng từ danh mục dựa vào idHuong
+
       let tenHuongText = "Chưa xác định";
       if (pt.idHuong !== null && pt.idHuong !== undefined && pt.idHuong !== '') {
         let matchedHuong = (window.rawHuongList || []).find(h => String(h.id_huong || h.id) === String(pt.idHuong));
@@ -548,37 +513,28 @@ function veLaiTuyenAB() {
 window.veLaiTuyenAB = veLaiTuyenAB;
 
 function isMangXong(pt) {
-  // Lấy dữ liệu loại và tên, chuyển hết về IN HOA để dễ so sánh
   var loaiStr = (pt.loai || '').toUpperCase();
   var tenStr = (pt.ten || pt.ten_diem || '').toUpperCase();
-  
-  // Măng xông nếu: idLoaiDiem = 4, HOẶC cột loại có chữ MX, HOẶC tên điểm có chữ MX
   return Number(pt.idLoaiDiem) === 4 || 
          loaiStr.includes('MX') || 
          loaiStr.includes('MĂNG XÔNG') ||
          tenStr.includes('MX') || 
          tenStr.includes('MĂNG XÔNG');
 }
-// ==========================================================================
-// HÀM QUẢN LÝ CRUD ĐIỂM HẠ TẦNG (THÊM, SỬA, XÓA) - TỐI ƯU TẢI TÊN LOẠI ĐIỂM
-// ==========================================================================
-// ==========================================================================
-// HÀM QUẢN LÝ CRUD ĐIỂM HẠ TẦNG (THÊM, SỬA, XÓA) - ĐÃ DỌN DẸP & CHUẨN HÓA TÊN CỘT
-// ==========================================================================
+
+/**
+ * HÀM QUẢN LÝ CRUD ĐIỂM HẠ TẦNG (THÊM, SỬA, XÓA) - ĐÃ CHUẨN HÓA CÚ PHÁP
+ */
 window.moFormCrud = async function(action, id, ten, lat, lng) {
-  // 1. XỬ LÝ XÓA ĐIỂM
-  // 1. XỬ LÝ XÓA ĐIỂM (OPTIMISTIC UI)
   if (action === 'DELETE') {
     let isConfirmed = await showConfirmDialog(`⚠️ CẢNH BÁO:<br>Bạn có chắc chắn muốn xóa vĩnh viễn điểm <b>${ten}</b> khỏi tuyến không?`, 'danger');
     if (isConfirmed) {
       let numericId = Number(id);
 
-      // A. BACKUP DỮ LIỆU ĐỂ ROLLBACK NẾU LỖI
       let backupPt = globalDataPoints.find(p => String(p.id) === String(id));
       let backupCache = window.cacheChiTietDiemDoanCap ? window.cacheChiTietDiemDoanCap[numericId] : null;
       let backupOrder = window.cacheThuTuDoanCap ? window.cacheThuTuDoanCap[numericId] : null;
 
-      // B. XÓA KHỎI RAM NGAY LẬP TỨC
       globalDataPoints = globalDataPoints.filter(p => String(p.id) !== String(id));
       
       if (window.cacheChiTietDiemDoanCap && window.cacheChiTietDiemDoanCap[numericId]) {
@@ -590,12 +546,9 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
 
       if (typeof AppStore !== 'undefined') AppStore.setState({ dataPoints: globalDataPoints });
       
-      // C. VẼ LẠI MAP (Nối liền sợi cáp ngay lập tức)
       if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
       showToast("Đang đồng bộ xóa ngầm...", "info");
 
-      // D. TIẾN TRÌNH NGẦM LƯU LÊN SUPABASE
-      // D. TIẾN TRÌNH NGẦM LƯU LÊN SUPABASE HOẶC HÀNG ĐỢI OFFLINE
       try {
         if (!navigator.onLine) {
           throw new Error("Mất kết nối Internet");
@@ -610,14 +563,12 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
           setTimeout(() => { taiDiemDaTuyen(); }, 500);
         }
       } catch (err) { 
-        // NẾU MẤT MẠNG: LƯU HÀNG ĐỢI OFFLINE
         if (!navigator.onLine || err.message.includes('fetch') || err.message.includes('network') || err.message.includes('Internet')) {
           if (typeof idbThemVaoHangDoiSync === 'function') {
             await idbThemVaoHangDoiSync('DELETE_POINT', { id_diem: numericId, ten: ten });
             showToast("📶 Mất mạng! Đã lưu thao tác xóa vào hàng đợi chờ đồng bộ.", "info");
           }
         } else {
-          // E. ROLLBACK NẾU LỖI SERVER
           showToast("❌ Lỗi xóa điểm, khôi phục lại bản đồ: " + err.message, "error"); 
           if (backupPt) globalDataPoints.push(backupPt);
           if (backupCache && window.cacheChiTietDiemDoanCap) window.cacheChiTietDiemDoanCap[numericId] = backupCache;
@@ -627,7 +578,6 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
       }
     }
   } 
-  // 2. XỬ LÝ THÊM (ADD) HOẶC SỬA (EDIT) ĐIỂM HẠ TẦNG
   else if (action === 'ADD' || action === 'EDIT') {
     showLoading("Đang tải biểu mẫu...");
     
@@ -642,19 +592,17 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
     let latInput = document.getElementById('diemLatInput');
     let lngInput = document.getElementById('diemLngInput');
     let loaiSelect = document.getElementById('diemLoaiSelect');
-    let huongSelect = document.getElementById('diemHuongSelect'); // Lấy DOM hướng
-    let ngayPsInput = document.getElementById('diemNgayPs');      // Lấy DOM ngày
+    let huorgSelect = document.getElementById('diemHuongSelect');
+    let ngayPsInput = document.getElementById('diemNgayPs');
     let doanContainer = document.getElementById('diemDoanCheckboxList');
     let tuyenSelect = document.getElementById('diemTuyenSelect');
     
-    // Nạp danh sách Hướng vào Combobox
     let dsHuong = window.rawHuongList || [];
-    huongSelect.innerHTML = '<option value="">-- Không xác định --</option>';
+    huorgSelect.innerHTML = '<option value="">-- Không xác định --</option>';
     dsHuong.forEach(h => {
-        huongSelect.innerHTML += `<option value="${h.id_huong || h.id}">${h.ten_huong || h.ten || h.name}</option>`;
+        huorgSelect.innerHTML += `<option value="${h.id_huong || h.id}">${h.ten_huong || h.ten || h.name}</option>`;
     });
 
-    // BƯỚC A: LẤY DANH SÁCH LOẠI ĐIỂM TỪ RAM HOẶC TRUY VẤN DB NẾU TRỐNG
     let dsLoai = window.rawLoaiDiemList || [];
     if (dsLoai.length === 0 && typeof supabaseClient !== 'undefined') {
       try {
@@ -668,7 +616,6 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
       }
     }
 
-    // Dự phòng tĩnh an toàn
     if (dsLoai.length === 0) {
       dsLoai = [
         { id_loaidiem: 1, ten_loaidiem: 'Cột cáp' },
@@ -681,22 +628,16 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
     loaiSelect.innerHTML = '';
     dsLoai.forEach(loai => {
       let loaiId = loai.id_loaidiem !== undefined ? loai.id_loaidiem : (loai.id !== undefined ? loai.id : 1);
-      
-      // Ưu tiên đọc đúng tên cột 'ten_loaidiem' từ CSDL của bạn, kết hợp các tên dự phòng khác
       let loaiName = loai.ten_loaidiem || loai.ten_loai || loai.loai || loai.ten || loai.name || ('Loại ' + loaiId);
-      
       loaiSelect.innerHTML += `<option value="${loaiId}">${loaiName}</option>`;
     });
 
-    // BƯỚC B: HIỂN THỊ THÔNG TIN TUYẾN HIỆN TẠI
     let currentTuyen = AppStore.getState().selectedTuyen;
     let tuyenList = AppStore.getState().tuyenList || window.rawTuyenList || [];
     let curTuyenObj = tuyenList.find(t => String(t.id_tuyen_cap || t.id || t.id_tuyen) === String(currentTuyen));
     tuyenSelect.innerHTML = `<option value="${currentTuyen}">${curTuyenObj ? (curTuyenObj.ten_tuyen || curTuyenObj.ten_tuyencap || curTuyenObj.ten) : 'Tuyến hiện tại'}</option>`;
 
-    // BƯỚC C: LẤY TOÀN BỘ ĐOẠN CÁP HỢP LỆ VÀ NHÓM THEO TUYẾN
     let doanList = (typeof getFilteredDoanList === 'function') ? getFilteredDoanList() : (AppStore.getState().doanCapList || window.rawDoanCapList || []);
-    
     let groupedDoanByTuyen = {};
     doanList.forEach(d => {
       let idTuyen = String(d.id_tuyen || d.tuyen_id || d.id_tuyen_cap || 'khac');
@@ -729,7 +670,6 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
       `;
     });
 
-    // BƯỚC D: PHÂN NHÁNH DỮ LIỆU KHI THÊM MỚI (ADD) HOẶC SỬA (EDIT)
     if (action === 'ADD') {
       latInput.value = lat; 
       lngInput.value = lng;
@@ -737,8 +677,8 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
       lyTrinhInput.value = ''; 
       duTruInput.value = 0; 
       ghiChuInput.value = '';
-      huongSelect.value = '';  // Thêm
-      ngayPsInput.value = '';  // Thêm
+      huorgSelect.value = '';  
+      ngayPsInput.value = '';  
       
       let currentDoan = AppStore.getState().selectedDoanCap;
       let cb = doanContainer.querySelector(`input[value="${currentDoan}"]`);
@@ -754,31 +694,23 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
         duTruInput.value = ptObj.duTru || 0; 
         loaiSelect.value = ptObj.idLoaiDiem || 1;
         ghiChuInput.value = (ptObj.ghiChu && ptObj.ghiChu !== 'undefined' && ptObj.ghiChu !== 'null') ? ptObj.ghiChu : '';
-        let huongSelect = document.getElementById('diemHuongSelect');
-        if (huongSelect) {
-            huongSelect.value = (ptObj.idHuong !== null && ptObj.idHuong !== '') ? ptObj.idHuong : '';
+        
+        if (huorgSelect) {
+            huorgSelect.value = (ptObj.idHuong !== null && ptObj.idHuong !== '') ? ptObj.idHuong : '';
         }
-        let ngayPsInput = document.getElementById('diemNgayPs');
         if (ngayPsInput) {
             let dateVal = '';
-            // Cắt chuỗi để lấy đúng định dạng YYYY-MM-DD
             if (ptObj.ngayPs && ptObj.ngayPs !== 'null' && ptObj.ngayPs !== '') {
                 dateVal = String(ptObj.ngayPs).split('T')[0]; 
             }
             ngayPsInput.value = dateVal;
         }
       }
-      // ==========================================================================
-      // GỌI TẢI DANH SÁCH ẢNH CŨ LÊN KHUNG HIỂN THỊ KHI SỬA ĐIỂM
-      // ==========================================================================
-      // ==========================================================================
-      // GỌI TẢI DANH SÁCH ẢNH CŨ LÊN KHUNG HIỂN THỊ KHI SỬA ĐIỂM
-      // ==========================================================================
+
       if (typeof taiAnhCuCuaDiem === 'function') {
         taiAnhCuCuaDiem(id);
       }
 
-      // Tích chọn các đoạn cáp mà điểm này đang thuộc về (Đã chuẩn hóa, không bị lặp)
       try {
         let { data: linkedDoan } = await supabaseClient.from('doan_cap_diem').select('id_doan_cap').eq('id_diem', Number(id));
         let linkedIds = (linkedDoan || []).map(d => String(d.id_doan_cap));
@@ -796,7 +728,6 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
   }
 };
 
-// Hàm tiện ích: Sao chép nội dung vào bộ nhớ tạm (Dành cho nút Tọa độ)
 window.copyToClipboardTNN = function(text) {
   navigator.clipboard.writeText(text).then(function() {
     showToast("📋 Đã sao chép tọa độ: " + text, "success");
@@ -806,7 +737,7 @@ window.copyToClipboardTNN = function(text) {
 };
 
 /**
- * HÀM XỬ LÝ LƯU ĐIỂM HẠ TẦNG MỚI (BAO GỒM TÍNH TOÁN THỨ TỰ TỰ ĐỘNG)
+ * HÀM XỬ LÝ LƯU ĐIỂM HẠ TẦNG MỚI (TỐI ƯU KHÔNG RELOAD MAP)
  */
 window.saveDiemHatangFullAction = async function() {
   let action = document.getElementById('diemActionType').value;
@@ -820,7 +751,6 @@ window.saveDiemHatangFullAction = async function() {
   let lat = parseFloat(document.getElementById('diemLatInput').value);
   let lng = parseFloat(document.getElementById('diemLngInput').value);
 
-  // FIX: Lấy thêm giá trị Hướng và Ngày phát sinh từ giao diện
   let idHuongSelect = document.getElementById('diemHuongSelect');
   let idHuong = (idHuongSelect && idHuongSelect.value !== '') ? Number(idHuongSelect.value) : null;
   
@@ -840,7 +770,6 @@ window.saveDiemHatangFullAction = async function() {
   try {
     let idDiemTarget = null;
     
-    // Gói dữ liệu hoàn chỉnh để chèn hoặc sửa
     let payload = { 
         ten_diem: ten, 
         id_loaidiem: Number(idLoai), 
@@ -853,9 +782,7 @@ window.saveDiemHatangFullAction = async function() {
         ngay_ps: ngayPs
     };
 
-    // KIỂM TRA KẾT NỐI MẠNG: NẾU MẤT MẠNG -> LƯU VÀO HÀNG ĐỢI OFFLINE (SYNC QUEUE)
     if (!navigator.onLine) {
-      // Tự sinh ID âm tạm thời cho điểm thêm mới để không bị đụng độ ID khi đồng bộ
       idDiemTarget = action === 'ADD' ? -Date.now() : Number(idDiemEdit);
       
       if (typeof idbThemVaoHangDoiSync === 'function') {
@@ -868,7 +795,6 @@ window.saveDiemHatangFullAction = async function() {
       showToast("📶 Đang ngoại tuyến! Đã lưu thao tác điểm vào hàng đợi cục bộ.", "info");
       
     } else {
-      // CÓ MẠNG: THỰC THI CHUẨN TRÊN SUPABASE NHƯ BÌNH THƯỜNG
       if (action === 'ADD') {
         const { data: newDiem, error: errDiem } = await supabaseClient
           .from('diem_ha_tang')
@@ -891,32 +817,32 @@ window.saveDiemHatangFullAction = async function() {
         let idDoan = Number(checkedDoanIds[i]);
         await supabaseClient.from('doan_cap_diem').upsert({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: 999 }, { onConflict: 'id_doan_cap,id_diem' });
       }
-      // UPLOAD NHIỀU ẢNH LÊN SUPABASE STORAGE VÀ LƯU VÀO BẢNG diem_ha_tang_anh
-    let fileInput = document.getElementById('diemFileInput');
-    if (fileInput && fileInput.files && fileInput.files.length > 0) {
-      showLoading("Đang tải ảnh lên máy chủ...");
-      for (let i = 0; i < fileInput.files.length; i++) {
-        let file = fileInput.files[i];
-        let fileExt = file.name.split('.').pop();
-        let fileName = `diem_${idDiemTarget}_${Date.now()}_${i}.${fileExt}`;
-        
-        const { error: uploadErr } = await supabaseClient.storage
-          .from('field_photos')
-          .upload(fileName, file);
 
-        if (!uploadErr) {
-          const { data: publicUrlData } = supabaseClient.storage
-            .from('field_photos')
-            .getPublicUrl(fileName);
+      let fileInput = document.getElementById('diemFileInput');
+      if (fileInput && fileInput.files && fileInput.files.length > 0) {
+        showLoading("Đang tải ảnh lên máy chủ...");
+        for (let i = 0; i < fileInput.files.length; i++) {
+          let file = fileInput.files[i];
+          let fileExt = file.name.split('.').pop();
+          let fileName = `diem_${idDiemTarget}_${Date.now()}_${i}.${fileExt}`;
           
-          if (publicUrlData && publicUrlData.publicUrl) {
-            await supabaseClient.from('diem_ha_tang_anh').insert([
-              { id_diem: Number(idDiemTarget), url_anh: publicUrlData.publicUrl }
-            ]);
+          const { error: uploadErr } = await supabaseClient.storage
+            .from('field_photos')
+            .upload(fileName, file);
+
+          if (!uploadErr) {
+            const { data: publicUrlData } = supabaseClient.storage
+              .from('field_photos')
+              .getPublicUrl(fileName);
+            
+            if (publicUrlData && publicUrlData.publicUrl) {
+              await supabaseClient.from('diem_ha_tang_anh').insert([
+                { id_diem: Number(idDiemTarget), url_anh: publicUrlData.publicUrl }
+              ]);
+            }
           }
         }
       }
-    }
     }
 
     for (let i = 0; i < checkedDoanIds.length; i++) {
@@ -980,13 +906,11 @@ window.saveDiemHatangFullAction = async function() {
       ghiNhatKyThaoTac(action === 'ADD' ? "THEM_DIEM" : "SUA_DIEM", `Kỹ sư ${action === 'ADD' ? 'thêm mới' : 'cập nhật'} điểm [${ten}] trên ${checkedDoanIds.length} đoạn cáp`);
     }
     
-    // 1. Đóng modal ngay lập tức cho mượt mà giao diện
     var modal = document.getElementById('diemHaTangModal');
     if (modal) modal.style.display = 'none';
     
     showToast(`✅ Đã ${action === 'ADD' ? 'thêm' : 'cập nhật'} thành công!`, "success");
 
-    // 2. Cập nhật ngay lập tức vào mảng RAM globalDataPoints (không cần chờ tải lại server)
     let tempPointObj = {
       id: String(idDiemTarget),
       ten: ten,
@@ -1010,7 +934,6 @@ window.saveDiemHatangFullAction = async function() {
       window.cacheChiTietDiemDoanCap[Number(idDiemTarget)] = tempPointObj;
     }
 
-    // 3. Vẽ lại đường cáp liên quan và bay mượt mà đến vị trí thao tác
     if (typeof veLaiTuyenAB === 'function') {
       veLaiTuyenAB();
     }
@@ -1027,9 +950,7 @@ window.saveDiemHatangFullAction = async function() {
     hideLoading();
   }
 };
-// ==========================================================================
-// HÀM XEM & SỬA THÔNG TIN MẬT (Đã fix chuẩn Promise để lưu dữ liệu)
-// ==========================================================================
+
 window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
   if (typeof showLoading === 'function') showLoading("Đang tải thông tin mật...");
 
@@ -1052,11 +973,8 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
 
     if (typeof showTextareaDialog === 'function') {
       let tieuDeHopThoai = `📝 Ghi chú mật - [${tenDiem}]`;
-      
-      // FIX: Gọi hàm bằng await và hứng kết quả trả về
       let noiDungMoi = await showTextareaDialog(tieuDeHopThoai, noiDungHienTai);
       
-      // Nếu người dùng bấm "Lưu ghi chú" (không bấm Hủy)
       if (noiDungMoi !== null) {
         if (typeof showLoading === 'function') showLoading("Đang lưu thông tin mật...");
         try {
@@ -1082,9 +1000,7 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
     if (typeof hideLoading === 'function') hideLoading();
   }
 };
-// ==========================================================================
-// HÀM HỖ TRỢ: LẤY TRỤC XƯƠNG SỐNG LIÊN THÔNG TỪ TRẠM A ĐẾN HẾT TUYẾN
-// ==========================================================================
+
 function getFullRouteBackboneForSegment(doanVal) {
   var doanCapList = (typeof AppStore !== 'undefined' && AppStore.getState().doanCapList) ? AppStore.getState().doanCapList : (window.rawDoanCapList || []);
   var foundDoan = doanCapList.find(d => String(d.id_doan_cap || d.id) === String(doanVal));
@@ -1093,11 +1009,9 @@ function getFullRouteBackboneForSegment(doanVal) {
   var tuyenId = getSafeStrId(foundDoan, ['id_tuyen', 'tuyen_id', 'id_tuyen_cap']);
   if (!tuyenId) return getMasterRouteBackbone('ALL', 'ALL', doanVal);
 
-  // Lọc toàn bộ điểm thuộc tuyến từ bộ nhớ globalDataPoints
   let tuyenPts = globalDataPoints.filter(pt => String(pt.idTuyen) === String(tuyenId));
   if (tuyenPts.length === 0) return getMasterRouteBackbone('ALL', 'ALL', doanVal);
 
-  // Sắp xếp tuần tự từ Trạm A đi ra theo thứ tự stt chuẩn từ CSDL
   tuyenPts.sort((a, b) => {
     let orderA = a.stt !== undefined && a.stt !== null ? Number(a.stt) : 9999;
     let orderB = b.stt !== undefined && b.stt !== null ? Number(b.stt) : 9999;
@@ -1106,7 +1020,7 @@ function getFullRouteBackboneForSegment(doanVal) {
 
   return tuyenPts;
 }
-// Hàm xem trước nhiều ảnh trước khi tải lên
+
 window.previewMultipleImages = function(input) {
   var container = document.getElementById('diemImagePreviewContainer');
   if (!container) return;
@@ -1127,7 +1041,6 @@ window.previewMultipleImages = function(input) {
   }
 };
 
-// Hàm tải danh sách ảnh cũ khi bấm sửa điểm
 window.taiAnhCuCuaDiem = async function(idDiem) {
   var existingContainer = document.getElementById('diemExistingImagesContainer');
   if (!existingContainer) return;
@@ -1152,7 +1065,6 @@ window.taiAnhCuCuaDiem = async function(idDiem) {
   }
 };
 
-// Hàm xóa một ảnh hiện trường cụ thể
 window.xoaAnhHienTruong = async function(idAnh, btnElement) {
   if (confirm("Bạn có chắc muốn xóa ảnh này không?")) {
     const { error } = await supabaseClient.from('diem_ha_tang_anh').delete().eq('id', idAnh);
