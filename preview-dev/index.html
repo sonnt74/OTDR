@@ -381,6 +381,16 @@
         <label style="font-size: 10px; margin-bottom: 1px;">Ghi chú:</label>
         <textarea id="diemGhiChuInput" rows="2" style="width:100%; padding:4px 6px; border:1px solid #cbd5e1; border-radius:4px; font-size:11px; box-sizing:border-box; resize: none;" placeholder="Nhập ghi chú..."></textarea>
       </div>
+
+      <!-- BỔ SUNG: QUẢN LÝ NHIỀU ẢNH HIỆN TRƯỜNG -->
+      <div class="form-group" style="margin-bottom: 6px;">
+        <label style="font-size: 10px; margin-bottom: 1px;">Ảnh hiện trường (Chọn nhiều ảnh):</label>
+        <input type="file" id="diemFileInput" accept="image/*" multiple style="font-size: 10px; width: 100%;" onchange="previewMultipleImages(this)">
+        <!-- Khung xem trước ảnh mới chọn -->
+        <div id="diemImagePreviewContainer" style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;"></div>
+        <!-- Khung hiển thị ảnh cũ đã lưu (khi sửa điểm) -->
+        <div id="diemExistingImagesContainer" style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;"></div>
+      </div>
       
       <!-- NÚT LƯU VÀ NÚT ĐÓNG BÊN DƯỚI -->
       <div style="display: flex; gap: 8px; margin-top: 2px;">
