@@ -769,7 +769,22 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
             ngayPsInput.value = dateVal;
         }
       }
+      // ==========================================================================
+      // GỌI TẢI DANH SÁCH ẢNH CŨ LÊN KHUNG HIỂN THỊ KHI SỬA ĐIỂM
+      // ==========================================================================
+      if (typeof taiAnhCuCuaDiem === 'function') {
+        taiAnhCuCuaDiem(id);
+      }
 
+        try {
+          let { data: linkedDoan } = await supabaseClient.from('doan_cap_diem').select('id_doan_cap').eq('id_diem', Number(id));
+          let linkedIds = (linkedDoan || []).map(d => String(d.id_doan_cap));
+          
+          doanContainer.querySelectorAll('.doan-checkbox').forEach(cb => {
+            if (linkedIds.includes(cb.value)) cb.checked = true;
+          });
+        } catch(e) { console.error("Lỗi lấy liên kết đoạn cáp:", e); }
+      }
       try {
         let { data: linkedDoan } = await supabaseClient.from('doan_cap_diem').select('id_doan_cap').eq('id_diem', Number(id));
         let linkedIds = (linkedDoan || []).map(d => String(d.id_doan_cap));
