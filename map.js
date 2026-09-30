@@ -559,6 +559,12 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
       // C. VẼ LẠI BẢN ĐỒ NGAY LẬP TỨC ĐỂ MARKER BIẾN MẤT TỨC THÌ
       if (typeof markersLayer !== 'undefined') markersLayer.clearLayers();
       if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+      if (typeof map !== 'undefined' && map.flyTo) {
+       setTimeout(() => {
+         map.stop(); 
+         map.flyTo([lat, lng], 18, { animate: true, duration: 1.2 });
+       }, 150);
+    }
       showToast("Đang đồng bộ xóa ngầm...", "info");
 
       // D. TIẾN TRÌNH NGẦM LƯU LÊN SUPABASE HOẶC HÀNG ĐỢI OFFLINE
@@ -958,8 +964,10 @@ window.saveDiemHatangFullAction = async function() {
     }
 
     if (typeof map !== 'undefined' && map.flyTo) {
-       map.stop(); 
-       map.flyTo([lat, lng], 18, { animate: true, duration: 1.2 });
+       setTimeout(() => {
+         map.stop(); 
+         map.flyTo([lat, lng], 18, { animate: true, duration: 1.2 });
+       }, 150);
     }
 
   } catch (err) {
