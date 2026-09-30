@@ -20,8 +20,10 @@ jobs:
         id: branch-dir
         run: |
           if [ "${{ github.ref_name }}" == "main" ]; then
-            echo "dir=production" >> $GITHUB_OUTPUT
+            # Sửa từ "production" thành để trống (dấu chấm .) để nó nằm ngay ngoài thư mục gốc
+            echo "dir=." >> $GITHUB_OUTPUT
           else
+            # Nhánh dev vẫn giữ nguyên nằm trong thư mục con để xem preview song song
             echo "dir=preview-${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
 
