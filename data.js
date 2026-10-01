@@ -41,11 +41,11 @@ async function taiDuLieuSupabase(forceRefresh = false) {
   isSyncingMaster = true; 
   let localMaster = null;
 
-  // BƯỚC 0: KHÓA GIAO DIỆN NGAY LẬP TỨC ĐỂ TRÁNH XUNG ĐỘT THAO TÁC
-  showLoading("⏳ Đang đồng bộ dữ liệu từ máy chủ, vui lòng đợi...");
+  // 1. Khóa giao diện ngay lập tức để người dùng không bấm lung tung
+  showLoading("⏳ Đang đồng bộ toàn bộ dữ liệu từ máy chủ, vui lòng đợi...");
 
   try {
-    // BƯỚC 1: KIỂM TRA LOCAL NẾU KHÔNG ÉP LÀM MỚI
+    // 2. Kiểm tra dữ liệu tại Local nếu không ép làm mới
     if (typeof idbDocMaster === 'function' && !forceRefresh) {
       localMaster = await idbDocMaster();
     }
@@ -87,7 +87,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       return;
     }
 
-    // BƯỚC 2: KIỂM TRA MẠNG
+    // 3. Kiểm tra kết nối mạng
     if (!navigator.onLine) {
       throw new Error("Không có kết nối Internet để tải dữ liệu mới! Hệ thống đang ở chế độ ngoại tuyến.");
     }
@@ -96,7 +96,6 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
     }
 
-    // BƯỚC 3: TẢI TUẦN TỰ TỪ SUPABASE (SỬ DỤNG AWAIT ĐỂ CHỜ HOÀN TẤT)
     const safeQuery = async (queryFn) => {
       try {
         let res = await queryFn();
@@ -106,7 +105,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       }
     };
 
-    // Tải các danh mục cơ bản
+    // 4. Tải đồng thời các danh mục nhỏ gọn
     let [daiRes, tramRes, tuyenRes, loaiRes, userRes, huongRes] = await Promise.all([
       safeQuery(() => supabaseClient.from('dai_vt').select('*')),
       safeQuery(() => supabaseClient.from('tram_vt').select('*')),
@@ -120,7 +119,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       throw new Error("Không thể tải bảng tài khoản: " + (userRes.error.message || 'Lỗi không xác định'));
     }
 
-    // Vét cạn an toàn bảng doan_cap_full để không bị giới hạn 1000 dòng
+    // 5. Vét cạn an toàn bảng doan_cap_full (vượt mốc 1000 dòng nhờ fetchAllRowsSafe có sẵn ở đầu tệp)
     let doanData = [];
     try {
       doanData = await fetchAllRowsSafe('v_doan_cap_full');
@@ -136,11 +135,22 @@ async function taiDuLieuSupabase(forceRefresh = false) {
     rawUserList = userRes.data.length ? userRes.data : rawUserList;
     rawHuongList = huongRes.data.length ? huongRes.data : rawHuongList;
 
-    // BƯỚC 4: BẮT BUỘC ĐỢI GHI XONG VÀO INDEXEDDB TRƯỚC KHI TIẾP TỤC
+    let soLuongSupabase = rawDoanCapList.length;
+
+    // 6. Lưu xuống IndexedDB và đợi ghi xong hoàn tất
     if (typeof idbLuuMaster === 'function') {
       await idbLuuMaster({ 
         rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList, rawUserList, rawHuongList 
       });
+    }
+
+    // 7. Kiểm tra chéo (Cross-check) đảm bảo Local đã nhận đủ dữ liệu
+    let localCheck = typeof idbDocMaster === 'function' ? await idbDocMaster() : null;
+    let soLuongLocal = localCheck && localCheck.rawDoanCapList ? localCheck.rawDoanCapList.length : 0;
+
+    console.log(`📊 KIỂM TRA CHÉO MASTER: Supabase=${soLuongSupabase}, Local=${soLuongLocal}`);
+    if (soLuongSupabase > 0 && soLuongSupabase !== soLuongLocal) {
+      throw new Error(`ĐỒNG BỘ KHÔNG KHỚP! Supabase có ${soLuongSupabase} bản ghi nhưng Local chỉ lưu được ${soLuongLocal} bản ghi.`);
     }
 
     AppStore.setState({
@@ -166,6 +176,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
     console.error("Lỗi đồng bộ dữ liệu:", err.message);
     showToast("❌ Lỗi: " + err.message, "error");
     
+    // Fallback an toàn dùng dữ liệu cũ nếu lỗi
     if (localMaster && localMaster.rawDaiList) {
       rawDaiList = localMaster.rawDaiList || [];
       rawTramList = localMaster.rawTramList || [];
@@ -176,9 +187,8 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser();
       if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
     }
-    
   } finally {
-    // BƯỚC 5: CHỈ MỞ KHÓA GIAO DIỆN KHI MỌI THỨ ĐÃ HOÀN TẤT 100%
+    // 8. Mở khóa giao diện khi mọi thứ hoàn tất
     isSyncingMaster = false; 
     hideLoading();
     if (typeof map !== 'undefined' && map) map.invalidateSize();
