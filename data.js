@@ -17,7 +17,6 @@ async function fetchAllRowsSafe(tableName) {
     let { data, error } = await supabaseClient
       .from(tableName)
       .select('*')
-      .order('id', { ascending: true }) // 🌟 Sắp xếp cố định để phân trang vét cạn không bị sót dòng
       .range(from, from + size - 1);
       
     if (error) throw error;
@@ -54,7 +53,6 @@ async function fetchAllDiemHaTangSafe() {
     let { data, error } = await supabaseClient
       .from('v_diem_ha_tang_full')
       .select('*')
-      .order('id', { ascending: true }) // 🌟 Đảm bảo thứ tự phân trang ổn định tuyệt đối
       .range(from, from + size - 1);
       
     if (error) throw error;
