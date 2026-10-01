@@ -50,15 +50,15 @@ function openGISDatabase() {
 async function idbLuuMaster(masterObj) {
   const db = await openGISDatabase();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('master_store', 'readwrite');
-    const store = tx.objectStore('master_store');
+    const transaction = db.transaction('master_store', 'readwrite');
+    const store = transaction.objectStore('master_store');
     
-    // Xóa sạch dữ liệu cũ trước khi ghi dữ liệu mới hoàn toàn
+    // Xóa sạch danh mục cũ để tránh tồn đọng dữ liệu rác khi làm mới
     store.clear();
     store.put(masterObj, 'categories');
 
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = (e) => reject(e);
+    transaction.oncomplete = () => resolve(true);
+    transaction.onerror = (event) => reject("Lỗi lưu Master vào IndexedDB: " + event.target.error);
   });
 }
 
