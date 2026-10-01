@@ -56,8 +56,15 @@ function khoiPhucPhiênDangNhap() {
           khoiTaoBanDoLeaflet();
         }
 
-        if (typeof taiDuLieuSupabase === 'function') {
-          taiDuLieuSupabase(false);
+        // 🌟 SỬA: Khi refresh trang, ưu tiên đọc từ IndexedDB (Offline-first) thay vì gọi Supabase
+        if (typeof taiDuLieuLocal === 'function') {
+          await taiDuLieuLocal();
+        }
+
+        var selectTuyen = document.getElementById('selectTuyen');
+        var initTuyenVal = selectTuyen ? (String(selectTuyen.value).trim() || 'ALL') : 'ALL';
+        if (typeof taiDiemTheoTuyen === 'function') {
+            await taiDiemTheoTuyen(initTuyenVal, false);
         }
       }
     } catch (e) {
