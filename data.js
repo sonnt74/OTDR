@@ -37,57 +37,36 @@ function getSafeStrId(item, keys) {
  * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (SỬA LỖI .catch CỦA SUPABASE)
  * ==========================================================================
  */
+async function fetchAllDiemHaTangSafe() {
+  let size = 1000, from = 0, allData = [], keep = true;
+  while (keep) {
+    let { data, error } = await supabaseClient
+      .from('v_diem_ha_tang_full')
+      .select('*')
+      .range(from, from + size - 1);
+    if (error) throw error;
+    if (data && data.length > 0) {
+      allData = allData.concat(data);
+      if (data.length < size) keep = false;
+      else from += size;
+    } else {
+      keep = false;
+    }
+  }
+  return allData;
+}
+
+/**
+ * TẢI VÀ ĐỒNG BỘ TOÀN BỘ DỮ LIỆU (MASTER + ĐIỂM HẠ TẦNG TOÀN HỆ THỐNG)
+ */
 async function taiDuLieuSupabase(forceRefresh = false) {
   isSyncingMaster = true; 
   let localMaster = null;
 
-  // 1. Khóa giao diện ngay lập tức để người dùng không bấm lung tung
-  showLoading("⏳ Đang đồng bộ toàn bộ dữ liệu từ máy chủ, vui lòng đợi...");
+  // Khóa giao diện toàn màn hình để ngăn mọi thao tác xung đột
+  showLoading("⏳ Đang đồng bộ toàn bộ Danh mục & Điểm hạ tầng từ máy chủ, vui lòng đợi...");
 
   try {
-    // 2. Kiểm tra dữ liệu tại Local nếu không ép làm mới
-    if (typeof idbDocMaster === 'function' && !forceRefresh) {
-      localMaster = await idbDocMaster();
-    }
-
-    if (localMaster && localMaster.rawDaiList && localMaster.rawDaiList.length > 0 && !forceRefresh) {
-      console.log("⚡ Đang sử dụng dữ liệu danh mục sẵn có tại Local (Offline Mode).");
-      
-      rawDaiList = localMaster.rawDaiList || [];
-      rawTramList = localMaster.rawTramList || [];
-      rawTuyenList = localMaster.rawTuyenList || [];
-      rawDoanCapList = localMaster.rawDoanCapList || [];
-      rawLoaiDiemList = localMaster.rawLoaiDiemList || [];
-      rawUserList = localMaster.rawUserList || [];
-      rawHuongList = localMaster.rawHuongList || [];
-
-      AppStore.setState({
-        daiList: rawDaiList,
-        tramList: rawTramList,
-        tuyenList: rawTuyenList,
-        doanCapList: rawDoanCapList,
-        rawDaiList: rawDaiList,
-        rawTramList: rawTramList,
-        rawTuyenList: rawTuyenList,
-        rawDoanList: rawDoanCapList,
-        rawUserList: rawUserList
-      });
-
-      if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser();
-      if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
-      
-      isSyncingMaster = false;
-      hideLoading();
-      
-      var selectTuyen = document.getElementById('selectTuyen');
-      var initTuyenVal = selectTuyen ? (String(selectTuyen.value).trim() || 'ALL') : 'ALL';
-      if (typeof taiDiemTheoTuyen === 'function') {
-          await taiDiemTheoTuyen(initTuyenVal, false);
-      }
-      return;
-    }
-
-    // 3. Kiểm tra kết nối mạng
     if (!navigator.onLine) {
       throw new Error("Không có kết nối Internet để tải dữ liệu mới! Hệ thống đang ở chế độ ngoại tuyến.");
     }
@@ -105,7 +84,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       }
     };
 
-    // 4. Tải đồng thời các danh mục nhỏ gọn
+    // 1. Tải các danh mục cơ bản
     let [daiRes, tramRes, tuyenRes, loaiRes, userRes, huongRes] = await Promise.all([
       safeQuery(() => supabaseClient.from('dai_vt').select('*')),
       safeQuery(() => supabaseClient.from('tram_vt').select('*')),
@@ -119,7 +98,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       throw new Error("Không thể tải bảng tài khoản: " + (userRes.error.message || 'Lỗi không xác định'));
     }
 
-    // 5. Vét cạn an toàn bảng doan_cap_full (vượt mốc 1000 dòng nhờ fetchAllRowsSafe có sẵn ở đầu tệp)
+    // 2. Vét cạn an toàn bảng đoạn cáp
     let doanData = [];
     try {
       doanData = await fetchAllRowsSafe('v_doan_cap_full');
@@ -135,22 +114,29 @@ async function taiDuLieuSupabase(forceRefresh = false) {
     rawUserList = userRes.data.length ? userRes.data : rawUserList;
     rawHuongList = huongRes.data.length ? huongRes.data : rawHuongList;
 
-    let soLuongSupabase = rawDoanCapList.length;
-
-    // 6. Lưu xuống IndexedDB và đợi ghi xong hoàn tất
+    // Lưu danh mục xuống Master Store
     if (typeof idbLuuMaster === 'function') {
       await idbLuuMaster({ 
         rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList, rawUserList, rawHuongList 
       });
     }
 
-    // 7. Kiểm tra chéo (Cross-check) đảm bảo Local đã nhận đủ dữ liệu
-    let localCheck = typeof idbDocMaster === 'function' ? await idbDocMaster() : null;
-    let soLuongLocal = localCheck && localCheck.rawDoanCapList ? localCheck.rawDoanCapList.length : 0;
+    // 3. VÉT CẠN TOÀN BỘ ĐIỂM HẠ TẦNG TRÊN TOÀN HỆ THỐNG VÀ LƯU VÀO INDEXEDDB
+    console.log("🔄 Đang tải toàn bộ điểm hạ tầng từ Supabase về lưu offline...");
+    let allPointsRaw = await fetchAllDiemHaTangSafe();
+    
+    let formattedAllPoints = allPointsRaw.map(pt => ({
+      id: String(pt.id), ten: pt.ten || '', lat: parseFloat(pt.lat), lng: parseFloat(pt.lng),
+      ghiChu: pt.ghi_chu || '', idTuyen: String(pt.id_tuyen), idDoanCap: String(pt.id_doan_cap),
+      idTram: String(pt.id_tram), idLoaiDiem: pt.id_loaidiem || 1, loai: pt.loai || 'Điểm',
+      lyTrinh: pt.ly_trinh || '', duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
+      idHuong: pt.id_huong !== null && pt.id_huong !== undefined ? Number(pt.id_huong) : '',
+      ngayPs: pt.ngay_ps || '', ghichu_an: pt.ghichu_an || '', stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1
+    }));
 
-    console.log(`📊 KIỂM TRA CHÉO MASTER: Supabase=${soLuongSupabase}, Local=${soLuongLocal}`);
-    if (soLuongSupabase > 0 && soLuongSupabase !== soLuongLocal) {
-      throw new Error(`ĐỒNG BỘ KHÔNG KHỚP! Supabase có ${soLuongSupabase} bản ghi nhưng Local chỉ lưu được ${soLuongLocal} bản ghi.`);
+    if (typeof idbLuuDanhSachDiem === 'function' && formattedAllPoints.length > 0) {
+      await idbLuuDanhSachDiem(formattedAllPoints);
+      console.log(`✅ Đã lưu thành công ${formattedAllPoints.length} điểm hạ tầng vào IndexedDB.`);
     }
 
     AppStore.setState({
@@ -169,26 +155,13 @@ async function taiDuLieuSupabase(forceRefresh = false) {
     if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
     
     if (forceRefresh) {
-      showToast("✅ Đã đồng bộ toàn bộ danh mục mới nhất thành công!", "success");
+      showToast("✅ Đã đồng bộ toàn bộ danh mục và điểm hạ tầng thành công!", "success");
     }
 
   } catch (err) {
     console.error("Lỗi đồng bộ dữ liệu:", err.message);
     showToast("❌ Lỗi: " + err.message, "error");
-    
-    // Fallback an toàn dùng dữ liệu cũ nếu lỗi
-    if (localMaster && localMaster.rawDaiList) {
-      rawDaiList = localMaster.rawDaiList || [];
-      rawTramList = localMaster.rawTramList || [];
-      rawTuyenList = localMaster.rawTuyenList || [];
-      rawDoanCapList = localMaster.rawDoanCapList || [];
-      rawUserList = localMaster.rawUserList || [];
-      AppStore.setState({ daiList: rawDaiList, tramList: rawTramList, tuyenList: rawTuyenList, doanCapList: rawDoanCapList, rawUserList: rawUserList });
-      if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser();
-      if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
-    }
   } finally {
-    // 8. Mở khóa giao diện khi mọi thứ hoàn tất
     isSyncingMaster = false; 
     hideLoading();
     if (typeof map !== 'undefined' && map) map.invalidateSize();
