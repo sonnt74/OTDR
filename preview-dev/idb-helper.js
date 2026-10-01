@@ -3,7 +3,7 @@
 // ==========================================================================
 
 const DB_NAME = 'TNN_GIS_DB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /**
  * 1. KHỞI TẠO VÀ MỞ KẾT NỐI INDEXEDDB
@@ -36,6 +36,12 @@ function openGISDatabase() {
       // Kho 4: Hàng đợi lưu thay đổi khi mất mạng (Auto sync khi Online)
       if (!db.objectStoreNames.contains('sync_queue_store')) {
         db.createObjectStore('sync_queue_store', { keyPath: 'id', autoIncrement: true });
+      }
+
+      // Kho 5: Lưu mối quan hệ Đoạn cáp - Điểm hạ tầng (Mô phỏng bảng doan_cap_diem của Supabase)
+      if (!db.objectStoreNames.contains('doan_cap_diem_store')) {
+        const linkStore = db.createObjectStore('doan_cap_diem_store', { keyPath: ['idDoanCap', 'idDiem'] });
+        linkStore.createIndex('idDoanCap', 'idDoanCap', { unique: false });
       }
     };
 
@@ -227,5 +233,41 @@ async function idbXoaHangDoiSync(id) {
     tx.objectStore('sync_queue_store').delete(id);
     tx.oncomplete = () => resolve(true);
     tx.onerror = (e) => reject(e);
+  });
+}
+/**
+ * 6. CÁC HÀM QUẢN LÝ QUAN HỆ ĐOẠN CÁP - ĐIỂM (DOAN_CAP_DIEM_STORE)
+ */
+async function idbLuuDoanCapDiem(linksArray) {
+  if (!Array.isArray(linksArray) || linksArray.length === 0) return;
+  const db = await openGISDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('doan_cap_diem_store', 'readwrite');
+    const store = tx.objectStore('doan_cap_diem_store');
+    
+    linksArray.forEach(link => {
+      if (link && link.idDoanCap && link.idDiem) {
+        store.put({
+          idDoanCap: String(link.idDoanCap),
+          idDiem: String(link.idDiem),
+          thu_tu: link.thu_tu !== undefined ? Number(link.thu_tu) : 999
+        });
+      }
+    });
+
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = (e) => reject("Lỗi lưu quan hệ đoạn cáp - điểm: " + e.target.error);
+  });
+}
+
+async function idbDocDoanCapDiem(idDoanCap) {
+  const db = await openGISDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('doan_cap_diem_store', 'readonly');
+    const index = tx.objectStore('doan_cap_diem_store').index('idDoanCap');
+    const req = index.getAll(String(idDoanCap));
+    
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = (e) => reject("Lỗi đọc quan hệ đoạn cáp - điểm: " + e.target.error);
   });
 }
