@@ -24,13 +24,14 @@ jobs:
       - name: Tao thu muc dist va tien hanh ma hoa cac tep he thong
         run: |
           mkdir -p dist
-          # Vòng lặp tự động tìm và mã hóa mọi tệp .js ở thư mục gốc, bỏ qua tệp cấu hình nếu có
-          for file in *.js; do
-            if [ -f "$file" ]; then
-              echo "Dang xu ly ma hoa: $file"
-              javascript-obfuscator "$file" --output "dist/$file" --compact true --control-flow-flattening true --rename-globals false
-            fi
-          done
+          javascript-obfuscator idb-helper.js --output dist/idb-helper.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator data.js --output dist/data.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator auth.js --output dist/auth.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator map.js --output dist/map.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator admin.js --output dist/admin.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator config.js --output dist/config.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator stor.js --output dist/stor.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator sw.js --output dist/sw.js --compact true --control-flow-flattening true --rename-globals false
 
       - name: Tu dong cap nhat cac tep da ma hoa vao kho chua
         uses: stefanzweifel/git-auto-commit-action@v4
