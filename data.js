@@ -9,7 +9,7 @@ var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], r
 var isSyncingMaster = false; 
 
 /**
- * 1. HÀM TIỆN ÍCH TRUY VẤN VÀ CHUẨN HÓA KHÓA ID AN TOÀN
+ * 1. HÀM TIỆN ÍCH TRUY VẤN VÀ CHUẨN HÓA KHÓA ID AN TOÀN 
  */
 async function fetchAllRowsSafe(tableName) {
   let size = 1000, from = 0, allData = [], keep = true;
@@ -55,7 +55,6 @@ async function fetchAllDiemHaTangSafe() {
   }
   return allData;
 }
-
 /**
  * TẢI VÀ ĐỒNG BỘ TOÀN BỘ DỮ LIỆU (MASTER + ĐIỂM HẠ TẦNG TOÀN HỆ THỐNG)
  */
