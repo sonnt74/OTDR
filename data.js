@@ -53,8 +53,6 @@ async function fetchAllDiemHaTangSafe() {
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   isSyncingMaster = true; 
-  let localMaster = null;
-
   showLoading("⏳ Đang đồng bộ toàn bộ Danh mục & Điểm hạ tầng từ máy chủ, vui lòng đợi...");
 
   try {
@@ -84,17 +82,13 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       safeQuery(() => supabaseClient.from('huong').select('*'))
     ]);
 
-    if (userRes.error && userRes.data.length === 0) {
-      throw new Error("Không thể tải bảng tài khoản: " + (userRes.error.message || 'Lỗi không xác định'));
-    }
-
     let doanData = [];
     let doanCapDiemLinks = [];
     try {
       doanData = await fetchAllRowsSafe('v_doan_cap_full');
-      doanCapDiemLinks = await fetchAllRowsSafe('doan_cap_diem');
+      doanCapDiemLinks = await fetchAllRowsSafe('doan_cap_diem'); // Vét cạn bảng quan hệ
     } catch (e) {
-      console.warn("Lỗi tải vét cạn dữ liệu quan hệ:", e);
+      console.warn("Lỗi tải vét cạn quan hệ:", e);
     }
 
     rawDaiList = daiRes.data.length ? daiRes.data : rawDaiList;
@@ -111,6 +105,7 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       });
     }
 
+    // Lưu bảng quan hệ xuống IndexedDB
     if (typeof idbLuuDoanCapDiem === 'function' && doanCapDiemLinks.length > 0) {
       let formattedLinks = doanCapDiemLinks.map(l => ({
         idDoanCap: String(l.id_doan_cap),
@@ -118,12 +113,11 @@ async function taiDuLieuSupabase(forceRefresh = false) {
         thu_tu: l.thu_tu !== undefined ? Number(l.thu_tu) : 999
       }));
       await idbLuuDoanCapDiem(formattedLinks);
-      console.log(`✅ Đã lưu thành công ${formattedLinks.length} liên kết quan hệ vào IndexedDB.`);
+      console.log(`✅ Đã lưu ${formattedLinks.length} liên kết quan hệ vào IndexedDB.`);
     }
 
-    console.log("🔄 Đang tải toàn bộ điểm hạ tầng từ Supabase về lưu offline...");
+    // Tải và lưu toàn bộ điểm hạ tầng
     let allPointsRaw = await fetchAllDiemHaTangSafe();
-    
     let formattedAllPoints = allPointsRaw.map(pt => ({
       id: String(pt.id), ten: pt.ten || '', lat: parseFloat(pt.lat), lng: parseFloat(pt.lng),
       ghiChu: pt.ghi_chu || '', idTuyen: String(pt.id_tuyen), idDoanCap: String(pt.id_doan_cap),
@@ -133,28 +127,21 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       ngayPs: pt.ngay_ps || '', ghichu_an: pt.ghichu_an || '', stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1
     }));
 
-    if (typeof idbLuuDanhSachDiem === 'function' && formattedAllPoints.length > 0) {
-      await idbLuuDanhSachDiem(formattedAllPoints);
-      console.log(`✅ Đã lưu thành công ${formattedAllPoints.length} điểm hạ tầng vào IndexedDB.`);
+    if (typeof idbLuuTatCaDiem === 'function' && formattedAllPoints.length > 0) {
+      await idbLuuTatCaDiem(formattedAllPoints);
+      console.log(`✅ Đã lưu ${formattedAllPoints.length} điểm hạ tầng vào IndexedDB.`);
     }
 
     AppStore.setState({
-      daiList: rawDaiList,
-      tramList: rawTramList,
-      tuyenList: rawTuyenList,
-      doanCapList: rawDoanCapList,
-      rawDaiList: rawDaiList,
-      rawTramList: rawTramList,
-      rawTuyenList: rawTuyenList,
-      rawDoanList: rawDoanCapList,
-      rawUserList: rawUserList
+      daiList: rawDaiList, tramList: rawTramList, tuyenList: rawTuyenList, doanCapList: rawDoanCapList,
+      rawDaiList: rawDaiList, rawTramList: rawTramList, rawTuyenList: rawTuyenList, rawDoanList: rawDoanCapList, rawUserList: rawUserList
     });
 
     if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser();
     if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
     
     if (forceRefresh) {
-      showToast("✅ Đã đồng bộ toàn bộ danh mục và điểm hạ tầng thành công!", "success");
+      showToast("✅ Đã đồng bộ toàn bộ dữ liệu thành công!", "success");
     }
 
   } catch (err) {
@@ -181,7 +168,6 @@ function capNhatComboDiemA() {
     combo.innerHTML += `<option value="${mx.ten}">🔀 ${mx.ten}</option>`;
   });
 }
-
 /**
  * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH
  */
@@ -195,32 +181,13 @@ async function taiDiemTheoVungXem(forceRefresh = false) {
   var bounds = map.getBounds();
   var minLat = bounds.getSouth(), maxLat = bounds.getNorth();
   var minLng = bounds.getWest(), maxLng = bounds.getEast();
-  let hasLocalData = false;
 
   try {
     if (!forceRefresh && typeof idbDocDiemTheoVungXem === 'function') {
       let localPts = await idbDocDiemTheoVungXem(minLat, maxLat, minLng, maxLng);
       if (localPts && localPts.length > 0) {
-        hasLocalData = true;
         globalDataPoints = localPts;
       }
-    }
-
-    if ((forceRefresh || !hasLocalData) && navigator.onLine && typeof supabaseClient !== 'undefined') {
-      const { data: pts, error: errPts } = await supabaseClient
-        .from('v_diem_ha_tang_full').select('*')
-        .gte('lat', minLat).lte('lat', maxLat).gte('lng', minLng).lte('lng', maxLng);
-
-      if (errPts) throw errPts;
-      globalDataPoints = (!pts || pts.length === 0) ? [] : pts.map(pt => ({
-        id: String(pt.id), ten: pt.ten || '', lat: parseFloat(pt.lat), lng: parseFloat(pt.lng),
-        ghiChu: pt.ghi_chu || '', idTuyen: String(pt.id_tuyen), idDoanCap: String(pt.id_doan_cap),
-        idTram: String(pt.id_tram), idLoaiDiem: pt.id_loaidiem || 1, loai: pt.loai || 'Điểm',
-        lyTrinh: pt.ly_trinh || '', duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-        idHuong: pt.id_huong !== null && pt.id_huong !== undefined ? Number(pt.id_huong) : '',
-        ngayPs: pt.ngay_ps || '', ghichu_an: pt.ghichu_an || '', stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1
-      }));
-      if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
     }
   } catch (err) {
     console.warn("Lỗi tải điểm vùng xem:", err.message);
@@ -237,40 +204,7 @@ async function taiDiemTheoTuyen(idTuyen, forceRefresh = false) {
   if (!idTuyen || idTuyen === 'ALL' || idTuyen === 'undefined') {
     await taiDiemTheoVungXem(forceRefresh); return;
   }
-  let hasLocalData = false;
-  
-  try {
-    if (!forceRefresh && typeof idbDocDiemTheoTuyen === 'function') {
-      let localPts = await idbDocDiemTheoTuyen(idTuyen);
-      if (localPts && localPts.length > 0) {
-        hasLocalData = true;
-        globalDataPoints = localPts;
-      }
-    }
-
-    if ((forceRefresh || !hasLocalData) && navigator.onLine && typeof supabaseClient !== 'undefined') {
-      if (forceRefresh || !hasLocalData) showLoading("Đang nạp dữ liệu tuyến cáp...");
-      const { data: pts, error: errPts } = await supabaseClient.from('v_diem_ha_tang_full').select('*').eq('id_tuyen', idTuyen);
-      if (errPts) throw errPts;
-      
-      globalDataPoints = (!pts || pts.length === 0) ? [] : pts.map(pt => ({
-        id: String(pt.id), ten: pt.ten || '', lat: parseFloat(pt.lat), lng: parseFloat(pt.lng),
-        ghiChu: pt.ghi_chu || '', idTuyen: String(pt.id_tuyen), idDoanCap: String(pt.id_doan_cap),
-        idTram: String(pt.id_tram), idLoaiDiem: pt.id_loaidiem || 1, loai: pt.loai || 'Điểm',
-        lyTrinh: pt.ly_trinh || '', idHuong: pt.id_huong || null, ngayPs: pt.ngay_ps || '', 
-        duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0, stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1,
-        ghichu_an: pt.ghichu_an || '', thu_tu: pt.thu_tu || pt.stt || 9999
-      }));
-      if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
-    }
-  } catch (err) {
-    console.warn("Lỗi tải điểm tuyến:", err.message);
-  } finally {
-    AppStore.setState({ dataPoints: globalDataPoints });
-    capNhatComboDiemA();
-    hideLoading();
-    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
-  }
+  await taiDiemTheoVungXem(forceRefresh);
 }
 
 /**
@@ -290,7 +224,7 @@ async function taiDiemDaTuyen(forceRefresh = false) {
     window.segmentPointsCache = {}; window.cacheThuTuDoanCap = {}; window.cacheChiTietDiemDoanCap = {};
     let hasLocalData = false;
 
-    // ĐỌC DỮ LIỆU TỪ INDEXEDDB THÔNG QUA KHO QUAN HỆ CHUẨN MÔ HÌNH SUPABASE
+    // ĐỌC DỮ LIỆU TỪ INDEXEDDB THEO MÔ HÌNH QUAN HỆ (JOIN MÔ PHỎNG SUPABASE)
     if (!forceRefresh && typeof idbDocDoanCapDiem === 'function') {
        let allLocalPts = [];
        let segmentPointsCacheMap = {};
@@ -394,7 +328,6 @@ async function taiDiemDaTuyen(forceRefresh = false) {
       }
 
       globalDataPoints = allCombinedPts;
-      if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
     }
   } catch (err) {
     console.warn("Lỗi tải điểm đa tuyến:", err.message);
