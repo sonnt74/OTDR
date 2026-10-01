@@ -307,20 +307,33 @@ async function taiDiemDaTuyen(forceRefresh = false) {
        const db = await openGISDatabase(); 
        const tx = db.transaction('diem_store', 'readonly');
        const req = tx.objectStore('diem_store').getAll();
+       
        await new Promise(resolve => { 
          req.onsuccess = () => { 
-           allLocalPts = (req.result || []).filter(p => selectedDoanIds.includes(String(p.idDoanCap))); 
+           let rawLocalResults = req.result || [];
+           // Lọc linh hoạt đảm bảo gom đủ điểm thuộc các đoạn cáp đang chọn
+           allLocalPts = rawLocalResults.filter(p => {
+             let dId = String(p.idDoanCap || '');
+             return selectedDoanIds.includes(dId);
+           });
            resolve(); 
          }; 
+         req.onerror = () => resolve();
        });
+
+       console.log(`📂 Đọc IndexedDB cho các đoạn [${selectedDoanIds.join(', ')}]: Tìm thấy ${allLocalPts.length} điểm cục bộ.`);
 
        if (allLocalPts.length > 0) {
           hasLocalData = true;
           let groupedByDoan = {};
+          
           allLocalPts.forEach(pt => {
              let dId = String(pt.idDoanCap);
              if(!groupedByDoan[dId]) groupedByDoan[dId] = [];
-             groupedByDoan[dId].push(pt);
+             // Tránh trùng lặp điểm trong cùng một nhóm đoạn
+             if (!groupedByDoan[dId].some(existing => String(existing.id) === String(pt.id))) {
+               groupedByDoan[dId].push(pt);
+             }
              
              window.cacheChiTietDiemDoanCap[Number(pt.id)] = pt;
              window.cacheThuTuDoanCap[Number(pt.id)] = pt.thu_tu !== undefined ? Number(pt.thu_tu) : (pt.stt || 9999);
