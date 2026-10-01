@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
   khoiPhucPhiênDangNhap();
 });
 
-function khoiPhucPhiênDangNhap() {
+async function khoiPhucPhiênDangNhap() {
   var savedUser = localStorage.getItem('tnn_user');
   if (savedUser) {
     try {
