@@ -1218,3 +1218,76 @@ function onTramChange() {
     taiDiemDaTuyen();
   }
 }
+async function taiDiemDaTuyen(forceRefresh = false) {
+  var selectedDoanIds = getCheckedDoanIds();
+  
+  if (selectedDoanIds.length === 0) {
+    globalDataPoints = []; window.segmentPointsCache = {}; window.cacheThuTuDoanCap = {}; window.cacheChiTietDiemDoanCap = {};
+    AppStore.setState({ dataPoints: [] });
+    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
+    return;
+  }
+
+  try {
+    window.segmentPointsCache = {}; window.cacheThuTuDoanCap = {}; window.cacheChiTietDiemDoanCap = {};
+    let hasLocalData = false;
+
+    // ĐỌC DỮ LIỆU TỪ INDEXEDDB KHI KHÔNG ÉP LÀM MỚI
+    if (!forceRefresh && typeof idbDocDiemTheoTuyen === 'function') {
+       let allLocalPts = [];
+       const db = await openGISDatabase(); 
+       const tx = db.transaction('diem_store', 'readonly');
+       const req = tx.objectStore('diem_store').getAll();
+       
+       await new Promise(resolve => { 
+         req.onsuccess = () => { 
+           // Ép kiểu String cả hai vế để so sánh chính xác tuyệt đối
+           allLocalPts = (req.result || []).filter(p => selectedDoanIds.includes(String(p.idDoanCap))); 
+           resolve(); 
+         }; 
+         req.onerror = () => resolve();
+       });
+
+       console.log(`📂 Đọc IndexedDB cho các đoạn [${selectedDoanIds.join(', ')}]: Tìm thấy ${allLocalPts.length} điểm cục bộ.`);
+
+       if (allLocalPts.length > 0) {
+          hasLocalData = true;
+          let groupedByDoan = {};
+          
+          allLocalPts.forEach(pt => {
+             let dId = String(pt.idDoanCap);
+             if(!groupedByDoan[dId]) groupedByDoan[dId] = [];
+             groupedByDoan[dId].push(pt);
+             
+             window.cacheChiTietDiemDoanCap[Number(pt.id)] = pt;
+             window.cacheThuTuDoanCap[Number(pt.id)] = pt.thu_tu !== undefined ? Number(pt.thu_tu) : (pt.stt || 9999);
+          });
+
+          for(let dId in groupedByDoan) {
+             groupedByDoan[dId].sort((a,b) => {
+               let orderA = a.thu_tu !== undefined ? Number(a.thu_tu) : (a.stt || 9999);
+               let orderB = b.thu_tu !== undefined ? Number(b.thu_tu) : (b.stt || 9999);
+               return orderA - orderB;
+             });
+             window.segmentPointsCache[dId] = groupedByDoan[dId];
+          }
+          globalDataPoints = allLocalPts;
+       }
+    }
+
+    // Nếu không có Local hoặc ép làm mới thì tải từ Supabase (giữ nguyên phần gọi Supabase cũ ở dưới)
+    if ((forceRefresh || !hasLocalData) && navigator.onLine && typeof supabaseClient !== 'undefined') {
+       // ... (phần code tải Supabase hiện tại của bạn)
+    }
+
+  } catch (err) {
+    console.warn("Lỗi tải điểm đa tuyến từ Local:", err.message);
+  } finally {
+    AppStore.setState({ dataPoints: globalDataPoints });
+    capNhatComboDiemA();
+    hideLoading();
+    if (typeof veLaiTuyenAB === 'function') {
+      veLaiTuyenAB(); // Vẽ lại bản đồ
+    }
+  }
+}
