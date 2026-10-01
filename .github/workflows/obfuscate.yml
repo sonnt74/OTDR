@@ -29,9 +29,6 @@ jobs:
           javascript-obfuscator auth.js --output dist/auth.js --compact true --control-flow-flattening true --rename-globals false
           javascript-obfuscator map.js --output dist/map.js --compact true --control-flow-flattening true --rename-globals false
           javascript-obfuscator admin.js --output dist/admin.js --compact true --control-flow-flattening true --rename-globals false
-          javascript-obfuscator config.js --output dist/config.js --compact true --control-flow-flattening true --rename-globals false
-          javascript-obfuscator stor.js --output dist/stor.js --compact true --control-flow-flattening true --rename-globals false
-          javascript-obfuscator sw.js --output dist/sw.js --compact true --control-flow-flattening true --rename-globals false
 
       - name: Tu dong cap nhat cac tep da ma hoa vao kho chua
         uses: stefanzweifel/git-auto-commit-action@v4
