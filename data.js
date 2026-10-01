@@ -6,6 +6,31 @@ var autoClearMarkerTimer = null;
 var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], rawLoaiDiemList = [], rawUserList = [], rawHuongList = [];
 var isSyncingMaster = false; 
 
+async function taiDuLieuLocalTruoc() {
+  try {
+    if (typeof idbDocMaster !== 'function') return;
+    let master = await idbDocMaster();
+    if (master) {
+      rawDaiList = master.rawDaiList || [];
+      rawTramList = master.rawTramList || [];
+      rawTuyenList = master.rawTuyenList || [];
+      rawDoanCapList = master.rawDoanCapList || [];
+      rawLoaiDiemList = master.rawLoaiDiemList || [];
+      rawUserList = master.rawUserList || [];
+      rawHuongList = master.rawHuongList || [];
+
+      AppStore.setState({
+        daiList: rawDaiList, tramList: rawTramList, tuyenList: rawTuyenList, doanCapList: rawDoanCapList,
+        rawDaiList: rawDaiList, rawTramList: rawTramList, rawTuyenList: rawTuyenList, rawDoanList: rawDoanCapList, rawUserList: rawUserList
+      });
+
+      if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser();
+      console.log("📂 Đã nạp thành công dữ liệu danh mục từ IndexedDB (Offline Mode).");
+    }
+  } catch (err) {
+    console.warn("Chưa có dữ liệu local hoặc lỗi đọc IDB:", err);
+  }
+}
 /**
  * 1. HÀM TIỆN ÍCH TRUY VẤN VÀ CHUẨN HÓA KHÓA ID AN TOÀN
  */
