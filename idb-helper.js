@@ -51,7 +51,12 @@ async function idbLuuMaster(masterObj) {
   const db = await openGISDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('master_store', 'readwrite');
-    tx.objectStore('master_store').put(masterObj, 'categories');
+    const store = tx.objectStore('master_store');
+    
+    // Xóa sạch dữ liệu cũ trước khi ghi dữ liệu mới hoàn toàn
+    store.clear();
+    store.put(masterObj, 'categories');
+
     tx.oncomplete = () => resolve(true);
     tx.onerror = (e) => reject(e);
   });
@@ -68,7 +73,7 @@ async function idbDocMaster() {
 }
 
 /**
- * 3. CÁC HÀM XỬ LÝ ĐIỂM HẠ TẦNG (DIEM_STORE)
+ * 3. CÁC HÀM XỬ LÝ ĐIỂM HẠ TẦNG (DIEM_STORE) - ĐÃ TỐI ƯU XÓA RÁC CŨ
  */
 async function idbLuuDanhSachDiem(pointsArray) {
   if (!Array.isArray(pointsArray) || pointsArray.length === 0) return;
@@ -77,7 +82,10 @@ async function idbLuuDanhSachDiem(pointsArray) {
     const tx = db.transaction('diem_store', 'readwrite');
     const store = tx.objectStore('diem_store');
     
-    // Đảm bảo ID không bị rỗng hoặc undefined
+    // Xóa sạch toàn bộ điểm cũ trong kho trước khi nạp lô điểm mới từ Supabase
+    store.clear();
+    
+    // Nạp danh sách điểm mới
     pointsArray.forEach(pt => {
       if (pt && pt.id && String(pt.id) !== 'undefined') {
         store.put({
