@@ -176,7 +176,28 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser();
       if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
     }
-  } finally {
+  } 
+  let soLuongDoanSupabase = doanData.length;
+    
+    // Lưu xuống IndexedDB
+    if (typeof idbLuuMaster === 'function') {
+      await idbLuuMaster({ 
+        rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList, rawUserList, rawHuongList 
+      });
+    }
+
+    // Đọc ngược lại từ IndexedDB để kiểm tra chéo số lượng thực tế trong ổ cứng
+    let localMasterCheck = typeof idbDocMaster === 'function' ? await idbDocMaster() : null;
+    let soLuongDoanLocal = localMasterCheck && localMasterCheck.rawDoanCapList ? localMasterCheck.rawDoanCapList.length : 0;
+
+    console.log(`📊 KIỂM TRA CHÉO DỮ LIỆU MASTER:`);
+    console.log(`- Supabase tải về: ${soLuongDoanSupabase} đoạn cáp`);
+    console.log(`- IndexedDB lưu trữ: ${soLuongDoanLocal} đoạn cáp`);
+
+    if (soLuongDoanSupabase !== soLuongDoanLocal) {
+      throw new Error(`ĐỒNG BỘ KHÔNG KHỚP! Supabase có ${soLuongDoanSupabase} bản ghi nhưng Local chỉ lưu được ${soLuongDoanLocal} bản ghi. Quá trình làm mới đã bị hủy để bảo vệ dữ liệu.`);
+    }
+    finally {
     // BƯỚC 5: CHỈ MỞ KHÓA GIAO DIỆN KHI MỌI THỨ ĐÃ HOÀN TẤT 100%
     isSyncingMaster = false; 
     hideLoading();
