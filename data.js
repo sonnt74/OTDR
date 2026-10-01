@@ -4,10 +4,33 @@
 
 var autoClearMarkerTimer = null; 
 var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], rawLoaiDiemList = [], rawUserList = [], rawHuongList = [];
-
-// SỬA LỖI: Thêm cờ kiểm soát luồng khởi tạo để chống load bản đồ nhiều lần
 var isSyncingMaster = false; 
 
+async function taiDuLieuLocal() {
+  try {
+    if (typeof idbDocMaster !== 'function') return;
+    let master = await idbDocMaster();
+    if (master) {
+      rawDaiList = master.rawDaiList || [];
+      rawTramList = master.rawTramList || [];
+      rawTuyenList = master.rawTuyenList || [];
+      rawDoanCapList = master.rawDoanCapList || [];
+      rawLoaiDiemList = master.rawLoaiDiemList || [];
+      rawUserList = master.rawUserList || [];
+      rawHuongList = master.rawHuongList || [];
+
+      AppStore.setState({
+        daiList: rawDaiList, tramList: rawTramList, tuyenList: rawTuyenList, doanCapList: rawDoanCapList,
+        rawDaiList: rawDaiList, rawTramList: rawTramList, rawTuyenList: rawTuyenList, rawDoanList: rawDoanCapList, rawUserList: rawUserList
+      });
+
+      if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser();
+      console.log("📂 Đã nạp thành công dữ liệu danh mục từ IndexedDB (Offline Mode).");
+    }
+  } catch (err) {
+    console.warn("Chưa có dữ liệu local hoặc lỗi đọc IDB:", err);
+  }
+}
 /**
  * 1. HÀM TIỆN ÍCH TRUY VẤN VÀ CHUẨN HÓA KHÓA ID AN TOÀN
  */
@@ -31,62 +54,33 @@ function getSafeStrId(item, keys) {
   return '';
 }
 
+async function fetchAllDiemHaTangSafe() {
+  let size = 1000, from = 0, allData = [], keep = true;
+  while (keep) {
+    let { data, error } = await supabaseClient
+      .from('v_diem_ha_tang_full')
+      .select('*')
+      .range(from, from + size - 1);
+    if (error) throw error;
+    if (data && data.length > 0) {
+      allData = allData.concat(data);
+      if (data.length < size) keep = false;
+      else from += size;
+    } else {
+      keep = false;
+    }
+  }
+  return allData;
+}
+
 /**
-/**
- * ==========================================================================
- * 2. TẢI VÀ ĐỒNG BỘ DANH MỤC MASTER (SỬA LỖI .catch CỦA SUPABASE)
- * ==========================================================================
+ * 2. TẢI VÀ ĐỒNG BỘ TOÀN BỘ DỮ LIỆU (MASTER + QUAN HỆ + ĐIỂM HẠ TẦNG)
  */
 async function taiDuLieuSupabase(forceRefresh = false) {
   isSyncingMaster = true; 
-  let localMaster = null;
+  showLoading("⏳ Đang đồng bộ toàn bộ Danh mục & Điểm hạ tầng từ máy chủ, vui lòng đợi...");
 
   try {
-    // BƯỚC 1: KIỂM TRA DỮ LIỆU TẠI LOCAL (INDEXEDDB)
-    if (typeof idbDocMaster === 'function' && !forceRefresh) {
-      localMaster = await idbDocMaster();
-    }
-
-    // BƯỚC 2: NẾU ĐÃ CÓ TẠI LOCAL VÀ KHÔNG BẤM LÀM MỚI -> THỰC THI OFFLINE NGAY LẬP TỨC
-    if (localMaster && localMaster.rawDaiList && localMaster.rawDaiList.length > 0 && !forceRefresh) {
-      console.log("⚡ Đang sử dụng dữ liệu danh mục sẵn có tại Local (Offline Mode).");
-      
-      rawDaiList = localMaster.rawDaiList || [];
-      rawTramList = localMaster.rawTramList || [];
-      rawTuyenList = localMaster.rawTuyenList || [];
-      rawDoanCapList = localMaster.rawDoanCapList || [];
-      rawLoaiDiemList = localMaster.rawLoaiDiemList || [];
-      rawUserList = localMaster.rawUserList || [];
-      rawHuongList = localMaster.rawHuongList || [];
-
-      AppStore.setState({
-        daiList: rawDaiList,
-        tramList: rawTramList,
-        tuyenList: rawTuyenList,
-        doanCapList: rawDoanCapList,
-        rawDaiList: rawDaiList,
-        rawTramList: rawTramList,
-        rawTuyenList: rawTuyenList,
-        rawDoanList: rawDoanCapList,
-        rawUserList: rawUserList
-      });
-
-      // Dựng Form điều khiển và Bảng quản trị ngay lập tức
-      if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser();
-      if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
-      
-      isSyncingMaster = false;
-      hideLoading();
-      
-      var selectTuyen = document.getElementById('selectTuyen');
-      var initTuyenVal = selectTuyen ? (String(selectTuyen.value).trim() || 'ALL') : 'ALL';
-      if (typeof taiDiemTheoTuyen === 'function') {
-          await taiDiemTheoTuyen(initTuyenVal, false);
-      }
-      return;
-    }
-
-    // BƯỚC 3: CHƯA CÓ LOCAL HOẶC BẤM NÚT LÀM MỚI -> TẢI VỀ TỪ SUPABASE
     if (!navigator.onLine) {
       throw new Error("Không có kết nối Internet để tải dữ liệu mới! Hệ thống đang ở chế độ ngoại tuyến.");
     }
@@ -95,11 +89,6 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
     }
 
-    if (forceRefresh || !localMaster) {
-      showLoading("Đang tải danh mục mới nhất từ máy chủ...");
-    }
-
-    // Hàm phụ trợ để gọi an toàn từng bảng mà không bị văng lỗi cú pháp Supabase
     const safeQuery = async (queryFn) => {
       try {
         let res = await queryFn();
@@ -109,70 +98,80 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       }
     };
 
-    let [daiRes, tramRes, tuyenRes, doanRes, loaiRes, userRes, huongRes] = await Promise.all([
+    let [daiRes, tramRes, tuyenRes, loaiRes, userRes, huongRes] = await Promise.all([
       safeQuery(() => supabaseClient.from('dai_vt').select('*')),
       safeQuery(() => supabaseClient.from('tram_vt').select('*')),
       safeQuery(() => supabaseClient.from('tuyen_cap').select('*')),
-      safeQuery(() => supabaseClient.from('v_doan_cap_full').select('*')), 
       safeQuery(() => supabaseClient.from('loai_diem').select('*')),
       safeQuery(() => supabaseClient.from('tai_khoan').select('*')),
       safeQuery(() => supabaseClient.from('huong').select('*'))
     ]);
 
-    // Kiểm tra lỗi kết nối bảng tài khoản
-    if (userRes.error && userRes.data.length === 0) {
-      throw new Error("Không thể tải bảng tài khoản: " + (userRes.error.message || 'Lỗi không xác định'));
+    let doanData = [];
+    let doanCapDiemLinks = [];
+    try {
+      doanData = await fetchAllRowsSafe('v_doan_cap_full');
+      doanCapDiemLinks = await fetchAllRowsSafe('doan_cap_diem'); // Vét cạn bảng quan hệ
+    } catch (e) {
+      console.warn("Lỗi tải vét cạn quan hệ:", e);
     }
 
     rawDaiList = daiRes.data.length ? daiRes.data : rawDaiList;
     rawTramList = tramRes.data.length ? tramRes.data : rawTramList;
     rawTuyenList = tuyenRes.data.length ? tuyenRes.data : rawTuyenList;
-    rawDoanCapList = doanRes.data.length ? doanRes.data : rawDoanCapList;
+    rawDoanCapList = doanData.length ? doanData : rawDoanCapList;
     rawLoaiDiemList = loaiRes.data.length ? loaiRes.data : rawLoaiDiemList;
     rawUserList = userRes.data.length ? userRes.data : rawUserList;
     rawHuongList = huongRes.data.length ? huongRes.data : rawHuongList;
 
-    // BƯỚC 4: LƯU TRỮ VỀ LOCAL (INDEXEDDB)
     if (typeof idbLuuMaster === 'function') {
       await idbLuuMaster({ 
         rawDaiList, rawTramList, rawTuyenList, rawDoanCapList, rawLoaiDiemList, rawUserList, rawHuongList 
       });
     }
 
+    // Lưu bảng quan hệ xuống IndexedDB
+    if (typeof idbLuuDoanCapDiem === 'function' && doanCapDiemLinks.length > 0) {
+      let formattedLinks = doanCapDiemLinks.map(l => ({
+        idDoanCap: String(l.id_doan_cap),
+        idDiem: String(l.id_diem),
+        thu_tu: l.thu_tu !== undefined ? Number(l.thu_tu) : 999
+      }));
+      await idbLuuDoanCapDiem(formattedLinks);
+      console.log(`✅ Đã lưu ${formattedLinks.length} liên kết quan hệ vào IndexedDB.`);
+    }
+
+    // Tải và lưu toàn bộ điểm hạ tầng
+    let allPointsRaw = await fetchAllDiemHaTangSafe();
+    let formattedAllPoints = allPointsRaw.map(pt => ({
+      id: String(pt.id), ten: pt.ten || '', lat: parseFloat(pt.lat), lng: parseFloat(pt.lng),
+      ghiChu: pt.ghi_chu || '', idTuyen: String(pt.id_tuyen), idDoanCap: String(pt.id_doan_cap),
+      idTram: String(pt.id_tram), idLoaiDiem: pt.id_loaidiem || 1, loai: pt.loai || 'Điểm',
+      lyTrinh: pt.ly_trinh || '', duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
+      idHuong: pt.id_huong !== null && pt.id_huong !== undefined ? Number(pt.id_huong) : '',
+      ngayPs: pt.ngay_ps || '', ghichu_an: pt.ghichu_an || '', stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1
+    }));
+
+    if (typeof idbLuuTatCaDiem === 'function' && formattedAllPoints.length > 0) {
+      await idbLuuTatCaDiem(formattedAllPoints);
+      console.log(`✅ Đã lưu ${formattedAllPoints.length} điểm hạ tầng vào IndexedDB.`);
+    }
+
     AppStore.setState({
-      daiList: rawDaiList,
-      tramList: rawTramList,
-      tuyenList: rawTuyenList,
-      doanCapList: rawDoanCapList,
-      rawDaiList: rawDaiList,
-      rawTramList: rawTramList,
-      rawTuyenList: rawTuyenList,
-      rawDoanList: rawDoanCapList,
-      rawUserList: rawUserList
+      daiList: rawDaiList, tramList: rawTramList, tuyenList: rawTuyenList, doanCapList: rawDoanCapList,
+      rawDaiList: rawDaiList, rawTramList: rawTramList, rawTuyenList: rawTuyenList, rawDoanList: rawDoanCapList, rawUserList: rawUserList
     });
 
     if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser();
     if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
     
     if (forceRefresh) {
-      showToast("✅ Đã đồng bộ danh mục mới nhất thành công!", "success");
+      showToast("✅ Đã đồng bộ toàn bộ dữ liệu thành công!", "success");
     }
 
   } catch (err) {
     console.error("Lỗi đồng bộ dữ liệu:", err.message);
     showToast("❌ Lỗi: " + err.message, "error");
-    
-    // Fallback an toàn nếu có dữ liệu cũ ở local
-    if (localMaster && localMaster.rawDaiList) {
-      rawDaiList = localMaster.rawDaiList || [];
-      rawTramList = localMaster.rawTramList || [];
-      rawTuyenList = localMaster.rawTuyenList || [];
-      rawDoanCapList = localMaster.rawDoanCapList || [];
-      rawUserList = localMaster.rawUserList || [];
-      AppStore.setState({ daiList: rawDaiList, tramList: rawTramList, tuyenList: rawTuyenList, doanCapList: rawDoanCapList, rawUserList: rawUserList });
-      if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser();
-      if (typeof renderAllAdminTables === 'function') renderAllAdminTables();
-    }
   } finally {
     isSyncingMaster = false; 
     hideLoading();
@@ -194,9 +193,8 @@ function capNhatComboDiemA() {
     combo.innerHTML += `<option value="${mx.ten}">🔀 ${mx.ten}</option>`;
   });
 }
-
 /**
- * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH (SỬ DỤNG VIEW)
+ * 3. TẢI ĐIỂM HẠ TẦNG THEO VÙNG XEM MÀN HÌNH
  */
 async function taiDiemTheoVungXem(forceRefresh = false) {
   if (isSyncingMaster) return;
@@ -208,32 +206,13 @@ async function taiDiemTheoVungXem(forceRefresh = false) {
   var bounds = map.getBounds();
   var minLat = bounds.getSouth(), maxLat = bounds.getNorth();
   var minLng = bounds.getWest(), maxLng = bounds.getEast();
-  let hasLocalData = false;
 
   try {
     if (!forceRefresh && typeof idbDocDiemTheoVungXem === 'function') {
       let localPts = await idbDocDiemTheoVungXem(minLat, maxLat, minLng, maxLng);
       if (localPts && localPts.length > 0) {
-        hasLocalData = true;
         globalDataPoints = localPts;
       }
-    }
-
-    if ((forceRefresh || !hasLocalData) && navigator.onLine && typeof supabaseClient !== 'undefined') {
-      const { data: pts, error: errPts } = await supabaseClient
-        .from('v_diem_ha_tang_full').select('*')
-        .gte('lat', minLat).lte('lat', maxLat).gte('lng', minLng).lte('lng', maxLng);
-
-      if (errPts) throw errPts;
-      globalDataPoints = (!pts || pts.length === 0) ? [] : pts.map(pt => ({
-        id: String(pt.id), ten: pt.ten || '', lat: parseFloat(pt.lat), lng: parseFloat(pt.lng),
-        ghiChu: pt.ghi_chu || '', idTuyen: String(pt.id_tuyen), idDoanCap: String(pt.id_doan_cap),
-        idTram: String(pt.id_tram), idLoaiDiem: pt.id_loaidiem || 1, loai: pt.loai || 'Điểm',
-        lyTrinh: pt.ly_trinh || '', duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0,
-        idHuong: pt.id_huong !== null && pt.id_huong !== undefined ? Number(pt.id_huong) : '',
-        ngayPs: pt.ngay_ps || '', ghichu_an: pt.ghichu_an || '', stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1
-      }));
-      if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
     }
   } catch (err) {
     console.warn("Lỗi tải điểm vùng xem:", err.message);
@@ -244,50 +223,17 @@ async function taiDiemTheoVungXem(forceRefresh = false) {
 }
 
 /**
- * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN 
+ * 4. TẢI ĐIỂM HẠ TẦNG THEO TUYẾN
  */
 async function taiDiemTheoTuyen(idTuyen, forceRefresh = false) {
   if (!idTuyen || idTuyen === 'ALL' || idTuyen === 'undefined') {
     await taiDiemTheoVungXem(forceRefresh); return;
   }
-  let hasLocalData = false;
-  
-  try {
-    if (!forceRefresh && typeof idbDocDiemTheoTuyen === 'function') {
-      let localPts = await idbDocDiemTheoTuyen(idTuyen);
-      if (localPts && localPts.length > 0) {
-        hasLocalData = true;
-        globalDataPoints = localPts;
-      }
-    }
-
-    if ((forceRefresh || !hasLocalData) && navigator.onLine && typeof supabaseClient !== 'undefined') {
-      if (forceRefresh || !hasLocalData) showLoading("Đang nạp dữ liệu tuyến cáp...");
-      const { data: pts, error: errPts } = await supabaseClient.from('v_diem_ha_tang_full').select('*').eq('id_tuyen', idTuyen);
-      if (errPts) throw errPts;
-      
-      globalDataPoints = (!pts || pts.length === 0) ? [] : pts.map(pt => ({
-        id: String(pt.id), ten: pt.ten || '', lat: parseFloat(pt.lat), lng: parseFloat(pt.lng),
-        ghiChu: pt.ghi_chu || '', idTuyen: String(pt.id_tuyen), idDoanCap: String(pt.id_doan_cap),
-        idTram: String(pt.id_tram), idLoaiDiem: pt.id_loaidiem || 1, loai: pt.loai || 'Điểm',
-        lyTrinh: pt.ly_trinh || '', idHuong: pt.id_huong || null, ngayPs: pt.ngay_ps || '', 
-        duTru: pt.du_tru ? parseFloat(pt.du_tru) : 0, stt: pt.stt !== undefined && pt.stt !== null ? Number(pt.stt) : 1,
-        ghichu_an: pt.ghichu_an || '', thu_tu: pt.thu_tu || pt.stt || 9999
-      }));
-      if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
-    }
-  } catch (err) {
-    console.warn("Lỗi tải điểm tuyến:", err.message);
-  } finally {
-    AppStore.setState({ dataPoints: globalDataPoints });
-    capNhatComboDiemA();
-    hideLoading();
-    if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
-  }
+  await taiDiemTheoVungXem(forceRefresh);
 }
 
 /**
- * 5. TẢI ĐIỂM ĐA TUYẾN THEO CÂY CHECKLIST (VƯỢT 1000 ĐIỂM)
+ * 5. TẢI ĐIỂM ĐA TUYẾN THEO CÂY CHECKLIST (ĐÃ TÍCH HỢP QUAN HỆ CHUẨN SUPABASE)
  */
 async function taiDiemDaTuyen(forceRefresh = false) {
   var selectedDoanIds = getCheckedDoanIds();
@@ -303,37 +249,56 @@ async function taiDiemDaTuyen(forceRefresh = false) {
     window.segmentPointsCache = {}; window.cacheThuTuDoanCap = {}; window.cacheChiTietDiemDoanCap = {};
     let hasLocalData = false;
 
-    if (!forceRefresh && typeof idbDocDiemTheoTuyen === 'function') {
+    // ĐỌC DỮ LIỆU TỪ INDEXEDDB THEO MÔ HÌNH QUAN HỆ (JOIN MÔ PHỎNG SUPABASE)
+    if (!forceRefresh && typeof idbDocDoanCapDiem === 'function') {
        let allLocalPts = [];
-       const db = await openGISDatabase(); 
-       const tx = db.transaction('diem_store', 'readonly');
-       const req = tx.objectStore('diem_store').getAll();
-       await new Promise(resolve => { 
-         req.onsuccess = () => { 
-           allLocalPts = (req.result || []).filter(p => selectedDoanIds.includes(String(p.idDoanCap))); 
-           resolve(); 
-         }; 
-       });
+       let segmentPointsCacheMap = {};
+       let cacheThuTuMap = {};
+       let cacheChiTietMap = {};
+       const db = await openGISDatabase();
+
+       for (let dId of selectedDoanIds) {
+          let links = await idbDocDoanCapDiem(dId);
+          if (links && links.length > 0) {
+             let diemIds = links.map(l => String(l.idDiem));
+             links.forEach(l => {
+                cacheThuTuMap[Number(l.idDiem)] = l.thu_tu;
+             });
+
+             const tx = db.transaction('diem_store', 'readonly');
+             const store = tx.objectStore('diem_store');
+
+             for (let dIdPt of diemIds) {
+                await new Promise(resolvePt => {
+                   const req = store.get(dIdPt);
+                   req.onsuccess = () => {
+                      if (req.result) {
+                         let pt = { ...req.result, thu_tu: cacheThuTuMap[Number(req.result.id)] || 999 };
+                         if (!allLocalPts.some(p => String(p.id) === String(pt.id))) {
+                            allLocalPts.push(pt);
+                         }
+                         cacheChiTietMap[Number(pt.id)] = pt;
+                         if (!segmentPointsCacheMap[dId]) segmentPointsCacheMap[dId] = [];
+                         if (!segmentPointsCacheMap[dId].some(p => String(p.id) === String(pt.id))) {
+                            segmentPointsCacheMap[dId].push(pt);
+                         }
+                      }
+                      resolvePt();
+                   };
+                   req.onerror = () => resolvePt();
+                });
+             }
+          }
+       }
 
        if (allLocalPts.length > 0) {
           hasLocalData = true;
-          let groupedByDoan = {};
-          allLocalPts.forEach(pt => {
-             let dId = String(pt.idDoanCap);
-             if(!groupedByDoan[dId]) groupedByDoan[dId] = [];
-             groupedByDoan[dId].push(pt);
-             
-             window.cacheChiTietDiemDoanCap[Number(pt.id)] = pt;
-             window.cacheThuTuDoanCap[Number(pt.id)] = pt.thu_tu !== undefined ? Number(pt.thu_tu) : (pt.stt || 9999);
-          });
+          window.cacheThuTuDoanCap = cacheThuTuMap;
+          window.cacheChiTietDiemDoanCap = cacheChiTietMap;
 
-          for(let dId in groupedByDoan) {
-             groupedByDoan[dId].sort((a,b) => {
-               let orderA = a.thu_tu !== undefined ? Number(a.thu_tu) : (a.stt || 9999);
-               let orderB = b.thu_tu !== undefined ? Number(b.thu_tu) : (b.stt || 9999);
-               return orderA - orderB;
-             });
-             window.segmentPointsCache[dId] = groupedByDoan[dId];
+          for (let dId in segmentPointsCacheMap) {
+             segmentPointsCacheMap[dId].sort((a, b) => a.thu_tu - b.thu_tu);
+             window.segmentPointsCache[dId] = segmentPointsCacheMap[dId];
           }
           globalDataPoints = allLocalPts;
        }
@@ -388,7 +353,6 @@ async function taiDiemDaTuyen(forceRefresh = false) {
       }
 
       globalDataPoints = allCombinedPts;
-      if (typeof idbLuuDanhSachDiem === 'function') await idbLuuDanhSachDiem(globalDataPoints);
     }
   } catch (err) {
     console.warn("Lỗi tải điểm đa tuyến:", err.message);
@@ -405,11 +369,12 @@ function onDiemAChange() {
   if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB(); 
 }
 
-// Hàm đẩy các thay đổi Thêm/Sửa/Xóa ngoại tuyến lên máy chủ khi có mạng
 async function dongBoDuLieuTonDong() {
   if (typeof idbLayHangDoiSync !== 'function') return;
   let queue = await idbLayHangDoiSync();
   if (!queue || queue.length === 0) return;
+
+  if (!navigator.onLine) return;
 
   showLoading(`Đang đẩy ${queue.length} thao tác ngoại tuyến lên máy chủ...`);
   for (let i = 0; i < queue.length; i++) {
@@ -419,17 +384,39 @@ async function dongBoDuLieuTonDong() {
          await supabaseClient.from('diem_ha_tang').update({ lat: task.payload.lat, long: task.payload.lng }).eq('id_diem', task.payload.id_diem);
       } else if (task.actionType === 'DELETE_POINT') {
          await supabaseClient.from('diem_ha_tang').delete().eq('id_diem', task.payload.id_diem);
+      } else if (task.actionType === 'ADD_POINT' || task.actionType === 'EDIT_POINT') {
+         let p = task.payload;
+         let doanIds = p.doan_ids || [];
+         let isAdd = (task.actionType === 'ADD_POINT');
+         let targetId = p.id_diem;
+         
+         delete p.doan_ids;
+         if (isAdd) delete p.id_diem;
+
+         if (isAdd) {
+           const { data, error } = await supabaseClient.from('diem_ha_tang').insert([p]).select();
+           if (error) throw error;
+           
+           if (data && data[0] && doanIds.length > 0) {
+             let newId = data[0].id_diem;
+             let links = doanIds.map(dId => ({ id_doan_cap: Number(dId), id_diem: newId, thu_tu: 999 }));
+             await supabaseClient.from('doan_cap_diem').upsert(links, { onConflict: 'id_doan_cap,id_diem' });
+           }
+         } else {
+           const { error } = await supabaseClient.from('diem_ha_tang').update(p).eq('id_diem', targetId);
+           if (error) throw error;
+         }
       }
       await idbXoaHangDoiSync(task.id);
     } catch (err) {
       console.error("Lỗi đồng bộ tác vụ ID " + task.id, err);
     }
   }
+  hideLoading();
+  showToast("✅ Đã đồng bộ toàn bộ dữ liệu ngoại tuyến lên máy chủ thành công!", "success");
+  if (typeof taiDuLieuSupabase === 'function') taiDuLieuSupabase(true);
 }
 
-/**
- * 6. XỬ LÝ PHÂN TÍCH SỰ CỐ OTDR VÀ TÌM LÝ TRÌNH
- */
 function datLichTuXoaMarkerTimKiem() {
   if (autoClearMarkerTimer) {
     clearTimeout(autoClearMarkerTimer);
@@ -873,10 +860,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
       }
     }
 
-    if (!segmentPointObjects || segmentPointObjects.length === 0) {
-      throw new Error("Không tìm thấy thông tin tọa độ các điểm thuộc đoạn cáp này!");
-    }
-
     let validPoints = [];
     segmentPointObjects.forEach(pt => {
       let parsedLat = parseFloat(pt.lat || pt.latitude);
@@ -905,10 +888,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
       }
     }
 
-    if (minThuTu === 9999 || minThuTu === Infinity) {
-      startIdx = 0;
-    }
-
     let sortedChain = [validPoints[startIdx]];
     let remaining = validPoints.filter((_, idx) => idx !== startIdx);
 
@@ -929,8 +908,13 @@ async function xuLyChuanHoaThuTuDoanCap() {
       remaining.splice(nearestIdx, 1);
     }
 
-    const updateBatchSize = 500;
+    const updateBatchSize = 100;
+    let totalBatches = Math.ceil(sortedChain.length / updateBatchSize);
+
     for (let i = 0; i < sortedChain.length; i += updateBatchSize) {
+      let currentBatchNumber = Math.floor(i / updateBatchSize) + 1;
+      showLoading(`Đang lưu dữ liệu: Gói ${currentBatchNumber}/${totalBatches}...`);
+
       let chunkChain = sortedChain.slice(i, i + updateBatchSize);
       let updateBatch = chunkChain.map((pt, idx) => ({
         id_doan_cap: Number(doanVal),
@@ -942,25 +926,30 @@ async function xuLyChuanHoaThuTuDoanCap() {
         .from('doan_cap_diem')
         .upsert(updateBatch, { onConflict: 'id_doan_cap,id_diem' });
 
-      if (errUpdateOrder) throw errUpdateOrder;
+      if (errUpdateOrder) throw new Error(`Lỗi khi lưu gói ${currentBatchNumber}: ` + errUpdateOrder.message);
+
+      await new Promise(resolve => setTimeout(resolve, 150));
     }
 
     hideLoading();
     showToast(`✅ Chuẩn hóa thành công ${sortedChain.length} điểm liên tục từ điểm gốc!`, "success");
 
+    if (window.segmentPointsCache && window.segmentPointsCache[doanVal]) {
+      delete window.segmentPointsCache[doanVal];
+    }
+    if (window.cacheThuTuDoanCap) window.cacheThuTuDoanCap = {};
+
     if (typeof taiDiemDaTuyen === 'function') {
-      await taiDiemDaTuyen();
+      await taiDiemDaTuyen(false);
     }
 
   } catch (err) {
     hideLoading();
-    showToast("❌ Lỗi: " + err.message, "error");
+    showToast("❌ Lỗi chuẩn hóa: " + err.message, "error");
+    console.error(err);
   }
 }
 
-/**
- * 7. PHÂN QUYỀN GIAO DIỆN THEO VAI TRÒ CURRENTUSER
- */
 function xuLyPhanQuyenDoanTuyenUser() {
   var selectDai = document.getElementById('selectDai');
   var groupDai = selectDai ? selectDai.closest('.form-group') : null;
