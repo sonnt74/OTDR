@@ -6,7 +6,7 @@ var autoClearMarkerTimer = null;
 var rawDaiList = [], rawTramList = [], rawTuyenList = [], rawDoanCapList = [], rawLoaiDiemList = [], rawUserList = [], rawHuongList = [];
 var isSyncingMaster = false; 
 
-async function taiDuLieuLocalTruoc() {
+async function taiDuLieuLocal() {
   try {
     if (typeof idbDocMaster !== 'function') return;
     let master = await idbDocMaster();
