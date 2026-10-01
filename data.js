@@ -109,15 +109,25 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       }
     };
 
-    let [daiRes, tramRes, tuyenRes, doanRes, loaiRes, userRes, huongRes] = await Promise.all([
+    // Sử dụng Promise.all cho các bảng danh mục nhỏ gọn
+    let [daiRes, tramRes, tuyenRes, loaiRes, userRes, huongRes] = await Promise.all([
       safeQuery(() => supabaseClient.from('dai_vt').select('*')),
       safeQuery(() => supabaseClient.from('tram_vt').select('*')),
       safeQuery(() => supabaseClient.from('tuyen_cap').select('*')),
-      safeQuery(() => supabaseClient.from('v_doan_cap_full').select('*')), 
       safeQuery(() => supabaseClient.from('loai_diem').select('*')),
       safeQuery(() => supabaseClient.from('tai_khoan').select('*')),
       safeQuery(() => supabaseClient.from('huong').select('*'))
     ]);
+
+    // Riêng bảng v_doan_cap_full có thể rất lớn, dùng hàm vét cạn an toàn để không bị sót
+    let doanData = [];
+    try {
+      doanData = await fetchAllRowsSafe('v_doan_cap_full');
+    } catch (e) {
+      console.warn("Không thể tải v_doan_cap_full bằng fetchAllRowsSafe:", e);
+    }
+
+    let doanRes = { data: doanData, error: null };
 
     // Kiểm tra lỗi kết nối bảng tài khoản
     if (userRes.error && userRes.data.length === 0) {
