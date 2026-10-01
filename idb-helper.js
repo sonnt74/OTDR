@@ -93,11 +93,6 @@ async function idbLuuTatCaDiem(pointsArray) {
   return true;
 }
 
-// Tương thích ngược với hàm cũ
-async function idbLuuDanhSachDiem(pointsArray) {
-  return await idbLuuTatCaDiem(pointsArray);
-}
-
 async function idbDocDiemTheoVungXem(minLat, maxLat, minLng, maxLng) {
   const db = await openGISDatabase();
   return new Promise((resolve, reject) => {
