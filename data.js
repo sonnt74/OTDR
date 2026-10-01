@@ -961,6 +961,13 @@ async function xuLyChuanHoaThuTuDoanCap() {
       remaining.splice(nearestIdx, 1);
     }
 
+    let soLuongLoadVe = validPoints.length;
+    let soLuongXepXong = sortedChain.length;
+
+    console.log(`📊 THỐNG KÊ ĐỒNG BỘ STT:`);
+    console.log(`- Tải về hợp lệ: ${soLuongLoadVe} điểm`);
+    console.log(`- Đã sắp xếp: ${soLuongXepXong} điểm`);
+    
     // =======================================================================
     // TỐI ƯU HÓA: CƠ CHẾ ĐẨY DỮ LIỆU NHỎ GIỌT VÀ AN TOÀN (SAFE BATCH UPSERT)
     // =======================================================================
