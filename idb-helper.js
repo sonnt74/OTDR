@@ -75,51 +75,68 @@ async function idbDocMaster() {
 /**
  * 3. CÁC HÀM XỬ LÝ ĐIỂM HẠ TẦNG (DIEM_STORE) - ĐÃ TỐI ƯU XÓA RÁC CŨ
  */
-async function idbLuuDanhSachDiem(pointsArray) {
-  if (!Array.isArray(pointsArray) || pointsArray.length === 0) return;
+/**
+ * 3. CÁC HÀM XỬ LÝ ĐIỂM HẠ TẦNG (DIEM_STORE) - ĐỒNG BỘ THÔNG MINH, KHÔNG GÂY RÁC
+ */
+async function idbLuuDanhSachDiemTheoDoan(idDoanCap, pointsArray) {
+  if (!idDoanCap) return;
   const db = await openGISDatabase();
+  const targetDoanStr = String(idDoanCap);
   
-  // Kích thước mỗi lô (Batch Size) để tối ưu hiệu năng cho thiết bị di động
-  const batchSize = 500;
+  // Lấy danh sách ID mới từ Supabase của đoạn này để đối chiếu
+  const newIds = new Set((pointsArray || []).map(pt => String(pt.id)));
 
-  // BƯỚC 1: Xóa sạch toàn bộ dữ liệu cũ trong kho trước khi nạp mới hoàn toàn
-  await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const tx = db.transaction('diem_store', 'readwrite');
     const store = tx.objectStore('diem_store');
-    store.clear();
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = (e) => reject(e);
-  });
+    const index = store.index('idDoanCap');
+    const req = index.getAll(targetDoanStr);
 
-  // BƯỚC 2: Ghi dữ liệu theo từng lô có kiểm soát Transaction và độ trễ
-  for (let i = 0; i < pointsArray.length; i += batchSize) {
-    let chunk = pointsArray.slice(i, i + batchSize);
-    
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction('diem_store', 'readwrite');
-      const store = tx.objectStore('diem_store');
+    req.onsuccess = () => {
+      const existingLocalPts = req.result || [];
       
-      chunk.forEach(pt => {
-        if (pt && pt.id && String(pt.id) !== 'undefined') {
-          store.put({
-            ...pt,
-            id: String(pt.id),
-            idTuyen: pt.idTuyen ? String(pt.idTuyen) : 'ALL',
-            idTram: pt.idTram ? String(pt.idTram) : 'ALL',
-            idDoanCap: pt.idDoanCap ? String(pt.idDoanCap) : 'ALL'
-          });
+      // Bước 1: Xóa các điểm cũ thuộc đoạn này nhưng KHÔNG CÒN tồn tại trên Supabase (dọn rác triệt để)
+      existingLocalPts.forEach(localPt => {
+        if (!newIds.has(String(localPt.id))) {
+          store.delete(localPt.id);
         }
       });
 
-      // Đảm bảo Transaction chỉ hoàn thành khi toàn bộ lô này đã được ghi đè xuống ổ cứng
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = (e) => reject(e);
-    });
+      // Bước 2: Thêm mới hoặc cập nhật các điểm hiện tại bằng .put()
+      if (Array.isArray(pointsArray)) {
+        pointsArray.forEach(pt => {
+          if (pt && pt.id && String(pt.id) !== 'undefined') {
+            store.put({
+              ...pt,
+              id: String(pt.id),
+              idTuyen: pt.idTuyen ? String(pt.idTuyen) : 'ALL',
+              idTram: pt.idTram ? String(pt.idTram) : 'ALL',
+              idDoanCap: targetDoanStr
+            });
+          }
+        });
+      }
+    };
 
-    // BƯỚC 3: Batch Delay - Khoảng nghỉ ngắn 20ms giữa các lô để thiết bị di động không bị nghẽn
-    await new Promise(resolve => setTimeout(resolve, 20));
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = (e) => reject("Lỗi đồng bộ thông minh điểm đoạn cáp: " + e.target.error);
+  });
+}
+
+// Giữ lại hàm cũ để tương thích ngược nếu các phần khác gọi đến
+async function idbLuuDanhSachDiem(pointsArray) {
+  if (!Array.isArray(pointsArray) || pointsArray.length === 0) return;
+  // Nếu truyền mảng chung, gom nhóm theo đoạn cáp để gọi hàm thông minh ở trên
+  let grouped = {};
+  pointsArray.forEach(pt => {
+    let dId = pt.idDoanCap ? String(pt.idDoanCap) : 'ALL';
+    if (!grouped[dId]) grouped[dId] = [];
+    grouped[dId].push(pt);
+  });
+
+  for (let dId in grouped) {
+    await idbLuuDanhSachDiemTheoDoan(dId, grouped[dId]);
   }
-
   return true;
 }
 
