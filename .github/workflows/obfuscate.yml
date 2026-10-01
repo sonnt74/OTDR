@@ -37,4 +37,3 @@ jobs:
         with:
           commit_message: "🔒 Tu dong lam roi ma nguon bao ve he thong GIS"
           branch: main
-          branch: dev
