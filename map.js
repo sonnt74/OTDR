@@ -794,7 +794,6 @@ window.saveDiemHatangFullAction = async function() {
 
   try {
     let idDiemTarget = null;
-    
     let payload = { 
         ten_diem: ten, 
         id_loaidiem: Number(idLoai), 
@@ -807,7 +806,128 @@ window.saveDiemHatangFullAction = async function() {
         ngay_ps: ngayPs
     };
 
-    if (!navigator.onLine) {
+    let isOfflineMode = !navigator.onLine;
+
+    // 1. NẾU CÓ MẠNG, THỬ GỌI SUPABASE
+    if (!isOfflineMode) {
+      try {
+        if (action === 'ADD') {
+          const { data: newDiem, error: errDiem } = await supabaseClient
+            .from('diem_ha_tang')
+            .insert([payload])
+            .select();
+          if (errDiem) throw errDiem;
+          idDiemTarget = newDiem[0].id_diem;
+        } else {
+          idDiemTarget = Number(idDiemEdit);
+          const { error: errUpdate } = await supabaseClient
+            .from('diem_ha_tang')
+            .update(payload)
+            .eq('id_diem', idDiemTarget);
+          if (errUpdate) throw errUpdate;
+
+          await supabaseClient.from('doan_cap_diem').delete().eq('id_diem', idDiemTarget);
+        }
+
+        for (let i = 0; i < checkedDoanIds.length; i++) {
+          let idDoan = Number(checkedDoanIds[i]);
+          await supabaseClient.from('doan_cap_diem').upsert({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: 999 }, { onConflict: 'id_doan_cap,id_diem' });
+        }
+
+        // Tải ảnh nếu có mạng
+        let fileInput = document.getElementById('diemFileInput');
+        if (fileInput && fileInput.files && fileInput.files.length > 0) {
+          showLoading("Đang tải ảnh lên máy chủ...");
+          for (let i = 0; i < fileInput.files.length; i++) {
+            let file = fileInput.files[i];
+            let fileExt = file.name.split('.').pop();
+            let fileName = `diem_${idDiemTarget}_${Date.now()}_${i}.${fileExt}`;
+            
+            const { error: uploadErr } = await supabaseClient.storage
+              .from('field_photos')
+              .upload(fileName, file);
+
+            if (!uploadErr) {
+              const { data: publicUrlData } = supabaseClient.storage
+                .from('field_photos')
+                .getPublicUrl(fileName);
+              
+              if (publicUrlData && publicUrlData.publicUrl) {
+                await supabaseClient.from('diem_ha_tang_anh').insert([
+                  { id_diem: Number(idDiemTarget), url_anh: publicUrlData.publicUrl }
+                ]);
+              }
+            }
+          }
+        }
+
+        // Tự động sắp xếp vị trí đoạn cáp trên server
+        for (let i = 0; i < checkedDoanIds.length; i++) {
+          let idDoan = Number(checkedDoanIds[i]);
+
+          const { data: currentPts, error: errPts } = await supabaseClient
+            .from('doan_cap_diem')
+            .select('id_diem, thu_tu, diem_ha_tang(lat, long)')
+            .eq('id_doan_cap', idDoan)
+            .neq('id_diem', idDiemTarget) 
+            .order('thu_tu', { ascending: true });
+
+          if (errPts) throw errPts;
+
+          let arrayDeUpsert = [];
+          let insertIndex = currentPts ? currentPts.length : 0; 
+          
+          if (currentPts && currentPts.length > 0) {
+            let minDistance = Infinity;
+            for (let j = 0; j < currentPts.length - 1; j++) {
+              let p1 = currentPts[j].diem_ha_tang;
+              let p2 = currentPts[j+1].diem_ha_tang;
+              if (!p1 || !p2) continue;
+              
+              let dToP1 = calculateHaversine(lat, lng, p1.lat, p1.long);
+              let dToP2 = calculateHaversine(lat, lng, p2.lat, p2.long);
+              let dP1P2 = calculateHaversine(p1.lat, p1.long, p2.lat, p2.long);
+
+              if (dToP1 + dToP2 <= dP1P2 + 20) {
+                if (dToP1 + dToP2 < minDistance) {
+                  minDistance = dToP1 + dToP2;
+                  insertIndex = j + 1; 
+                }
+              }
+            }
+
+            let counter = 1;
+            for (let j = 0; j < currentPts.length; j++) {
+              if (j === insertIndex) {
+                arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: counter });
+                counter++;
+              }
+              arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: currentPts[j].id_diem, thu_tu: counter });
+              counter++;
+            }
+            if (insertIndex === currentPts.length) {
+              arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: counter });
+            }
+          } else {
+            arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: 1 });
+          }
+
+          const { error: errUpsert } = await supabaseClient
+            .from('doan_cap_diem')
+            .upsert(arrayDeUpsert, { onConflict: 'id_doan_cap,id_diem' });
+            
+          if (errUpsert) throw errUpsert;
+        }
+
+      } catch (netErr) {
+        // 2. NẾU RỚT MẠNG / FAILED TO FETCH GIỮA CHỪNG, CHUYỂN SANG OFFLINE QUEUE
+        console.warn("Lỗi kết nối mạng, chuyển sang hàng đợi cục bộ:", netErr);
+        isOfflineMode = true;
+      }
+    }
+
+    // 3. XỬ LÝ KHI Ở CHẾ ĐỘ NGOẠI TUYẾN HOẶC MẤT MẠNG ĐỘT NGỘT
+    if (isOfflineMode) {
       idDiemTarget = action === 'ADD' ? -Date.now() : Number(idDiemEdit);
       
       if (typeof idbThemVaoHangDoiSync === 'function') {
@@ -817,114 +937,7 @@ window.saveDiemHatangFullAction = async function() {
           doan_ids: checkedDoanIds 
         });
       }
-      showToast("📶 Đang ngoại tuyến! Đã lưu thao tác điểm vào hàng đợi cục bộ.", "info");
-      
-    } else {
-      if (action === 'ADD') {
-        const { data: newDiem, error: errDiem } = await supabaseClient
-          .from('diem_ha_tang')
-          .insert([payload])
-          .select();
-        if (errDiem) throw errDiem;
-        idDiemTarget = newDiem[0].id_diem;
-      } else {
-        idDiemTarget = Number(idDiemEdit);
-        const { error: errUpdate } = await supabaseClient
-          .from('diem_ha_tang')
-          .update(payload)
-          .eq('id_diem', idDiemTarget);
-        if (errUpdate) throw errUpdate;
-
-        await supabaseClient.from('doan_cap_diem').delete().eq('id_diem', idDiemTarget);
-      }
-
-      for (let i = 0; i < checkedDoanIds.length; i++) {
-        let idDoan = Number(checkedDoanIds[i]);
-        await supabaseClient.from('doan_cap_diem').upsert({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: 999 }, { onConflict: 'id_doan_cap,id_diem' });
-      }
-
-      let fileInput = document.getElementById('diemFileInput');
-      if (fileInput && fileInput.files && fileInput.files.length > 0) {
-        showLoading("Đang tải ảnh lên máy chủ...");
-        for (let i = 0; i < fileInput.files.length; i++) {
-          let file = fileInput.files[i];
-          let fileExt = file.name.split('.').pop();
-          let fileName = `diem_${idDiemTarget}_${Date.now()}_${i}.${fileExt}`;
-          
-          const { error: uploadErr } = await supabaseClient.storage
-            .from('field_photos')
-            .upload(fileName, file);
-
-          if (!uploadErr) {
-            const { data: publicUrlData } = supabaseClient.storage
-              .from('field_photos')
-              .getPublicUrl(fileName);
-            
-            if (publicUrlData && publicUrlData.publicUrl) {
-              await supabaseClient.from('diem_ha_tang_anh').insert([
-                { id_diem: Number(idDiemTarget), url_anh: publicUrlData.publicUrl }
-              ]);
-            }
-          }
-        }
-      }
-    }
-
-    for (let i = 0; i < checkedDoanIds.length; i++) {
-      let idDoan = Number(checkedDoanIds[i]);
-
-      const { data: currentPts, error: errPts } = await supabaseClient
-        .from('doan_cap_diem')
-        .select('id_diem, thu_tu, diem_ha_tang(lat, long)')
-        .eq('id_doan_cap', idDoan)
-        .neq('id_diem', idDiemTarget) 
-        .order('thu_tu', { ascending: true });
-
-      if (errPts) throw errPts;
-
-      let arrayDeUpsert = [];
-      let insertIndex = currentPts ? currentPts.length : 0; 
-      
-      if (currentPts && currentPts.length > 0) {
-        let minDistance = Infinity;
-        for (let j = 0; j < currentPts.length - 1; j++) {
-          let p1 = currentPts[j].diem_ha_tang;
-          let p2 = currentPts[j+1].diem_ha_tang;
-          if (!p1 || !p2) continue;
-          
-          let dToP1 = calculateHaversine(lat, lng, p1.lat, p1.long);
-          let dToP2 = calculateHaversine(lat, lng, p2.lat, p2.long);
-          let dP1P2 = calculateHaversine(p1.lat, p1.long, p2.lat, p2.long);
-
-          if (dToP1 + dToP2 <= dP1P2 + 20) {
-            if (dToP1 + dToP2 < minDistance) {
-              minDistance = dToP1 + dToP2;
-              insertIndex = j + 1; 
-            }
-          }
-        }
-
-        let counter = 1;
-        for (let j = 0; j < currentPts.length; j++) {
-          if (j === insertIndex) {
-            arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: counter });
-            counter++;
-          }
-          arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: currentPts[j].id_diem, thu_tu: counter });
-          counter++;
-        }
-        if (insertIndex === currentPts.length) {
-          arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: counter });
-        }
-      } else {
-        arrayDeUpsert.push({ id_doan_cap: idDoan, id_diem: idDiemTarget, thu_tu: 1 });
-      }
-
-      const { error: errUpsert } = await supabaseClient
-        .from('doan_cap_diem')
-        .upsert(arrayDeUpsert, { onConflict: 'id_doan_cap,id_diem' });
-        
-      if (errUpsert) throw errUpsert;
+      showToast("📶 Đang ngoại tuyến! Đã lưu thao tác điểm vào hàng đợi chờ đồng bộ.", "info");
     }
 
     if (typeof ghiNhatKyThaoTac === 'function') {
@@ -945,7 +958,8 @@ window.saveDiemHatangFullAction = async function() {
       idLoaiDiem: Number(idLoai),
       loai: 'Điểm',
       lyTrinh: lyTrinh,
-      duTru: duTru
+      duTru: duTru,
+      idDoanCap: String(checkedDoanIds[0] || '')
     };
 
     let existingIdx = globalDataPoints.findIndex(p => String(p.id) === String(idDiemTarget));
