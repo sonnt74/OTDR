@@ -78,29 +78,49 @@ async function idbDocMaster() {
 async function idbLuuDanhSachDiem(pointsArray) {
   if (!Array.isArray(pointsArray) || pointsArray.length === 0) return;
   const db = await openGISDatabase();
-  return new Promise((resolve, reject) => {
+  
+  // Kích thước mỗi lô (Batch Size) để tối ưu hiệu năng cho thiết bị di động
+  const batchSize = 500;
+
+  // BƯỚC 1: Xóa sạch toàn bộ dữ liệu cũ trong kho trước khi nạp mới hoàn toàn
+  await new Promise((resolve, reject) => {
     const tx = db.transaction('diem_store', 'readwrite');
     const store = tx.objectStore('diem_store');
-    
-    // Xóa sạch toàn bộ điểm cũ trong kho trước khi nạp lô điểm mới từ Supabase
     store.clear();
-    
-    // Nạp danh sách điểm mới
-    pointsArray.forEach(pt => {
-      if (pt && pt.id && String(pt.id) !== 'undefined') {
-        store.put({
-          ...pt,
-          id: String(pt.id),
-          idTuyen: pt.idTuyen ? String(pt.idTuyen) : 'ALL',
-          idTram: pt.idTram ? String(pt.idTram) : 'ALL',
-          idDoanCap: pt.idDoanCap ? String(pt.idDoanCap) : 'ALL'
-        });
-      }
-    });
-
     tx.oncomplete = () => resolve(true);
     tx.onerror = (e) => reject(e);
   });
+
+  // BƯỚC 2: Ghi dữ liệu theo từng lô có kiểm soát Transaction và độ trễ
+  for (let i = 0; i < pointsArray.length; i += batchSize) {
+    let chunk = pointsArray.slice(i, i + batchSize);
+    
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('diem_store', 'readwrite');
+      const store = tx.objectStore('diem_store');
+      
+      chunk.forEach(pt => {
+        if (pt && pt.id && String(pt.id) !== 'undefined') {
+          store.put({
+            ...pt,
+            id: String(pt.id),
+            idTuyen: pt.idTuyen ? String(pt.idTuyen) : 'ALL',
+            idTram: pt.idTram ? String(pt.idTram) : 'ALL',
+            idDoanCap: pt.idDoanCap ? String(pt.idDoanCap) : 'ALL'
+          });
+        }
+      });
+
+      // Đảm bảo Transaction chỉ hoàn thành khi toàn bộ lô này đã được ghi đè xuống ổ cứng
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = (e) => reject(e);
+    });
+
+    // BƯỚC 3: Batch Delay - Khoảng nghỉ ngắn 20ms giữa các lô để thiết bị di động không bị nghẽn
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+
+  return true;
 }
 
 async function idbDocDiemTheoTuyen(idTuyen) {
