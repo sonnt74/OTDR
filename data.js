@@ -961,8 +961,18 @@ async function xuLyChuanHoaThuTuDoanCap() {
       remaining.splice(nearestIdx, 1);
     }
 
-    const updateBatchSize = 500;
+    // =======================================================================
+    // TỐI ƯU HÓA: CƠ CHẾ ĐẨY DỮ LIỆU NHỎ GIỌT VÀ AN TOÀN (SAFE BATCH UPSERT)
+    // =======================================================================
+    const updateBatchSize = 100; // Giảm xuống 100 để an toàn tuyệt đối với mạng yếu
+    let totalBatches = Math.ceil(sortedChain.length / updateBatchSize);
+
     for (let i = 0; i < sortedChain.length; i += updateBatchSize) {
+      let currentBatchNumber = Math.floor(i / updateBatchSize) + 1;
+      
+      // Cập nhật câu thông báo để người dùng an tâm chờ đợi
+      showLoading(`Đang lưu dữ liệu: Gói ${currentBatchNumber}/${totalBatches}...`);
+
       let chunkChain = sortedChain.slice(i, i + updateBatchSize);
       let updateBatch = chunkChain.map((pt, idx) => ({
         id_doan_cap: Number(doanVal),
@@ -970,23 +980,35 @@ async function xuLyChuanHoaThuTuDoanCap() {
         thu_tu: i + idx + 1
       }));
 
+      // Đẩy lên Supabase
       const { error: errUpdateOrder } = await supabaseClient
         .from('doan_cap_diem')
         .upsert(updateBatch, { onConflict: 'id_doan_cap,id_diem' });
 
-      if (errUpdateOrder) throw errUpdateOrder;
+      if (errUpdateOrder) throw new Error(`Lỗi khi lưu gói ${currentBatchNumber}: ` + errUpdateOrder.message);
+
+      // Cho hệ thống nghỉ ngơi 150 mili-giây trước khi đẩy gói tiếp theo (Tránh quá tải)
+      await new Promise(resolve => setTimeout(resolve, 150));
     }
 
     hideLoading();
     showToast(`✅ Chuẩn hóa thành công ${sortedChain.length} điểm liên tục từ điểm gốc!`, "success");
 
+    // Xóa bộ nhớ đệm cục bộ của đoạn này để ép hệ thống tải lại đường mới
+    if (window.segmentPointsCache && window.segmentPointsCache[doanVal]) {
+      delete window.segmentPointsCache[doanVal];
+    }
+    if (window.cacheThuTuDoanCap) window.cacheThuTuDoanCap = {};
+
+    // Cập nhật lại bản đồ
     if (typeof taiDiemDaTuyen === 'function') {
-      await taiDiemDaTuyen();
+      await taiDiemDaTuyen(false);
     }
 
   } catch (err) {
     hideLoading();
-    showToast("❌ Lỗi: " + err.message, "error");
+    showToast("❌ Lỗi chuẩn hóa: " + err.message, "error");
+    console.error(err);
   }
 }
 
