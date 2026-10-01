@@ -1,0 +1,36 @@
+name: Tu dong lam roi ma nguon
+
+on:
+  push:
+    branches: [ main, dev ] # Tự động chạy khi bạn bấm Commit hoặc đẩy code lên nhánh main hoặc dev
+
+jobs:
+  obfuscate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Cấp quyền cho phép GitHub tự động lưu tệp đã mã hóa vào kho chứa
+    steps:
+      - name: Tai ma nguon tu kho chua
+        uses: actions/checkout@v3
+
+      - name: Cai dat moi trường Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Cai dat cong cu lam roi ma nguon javascript-obfuscator
+        run: npm install -g javascript-obfuscator
+
+      - name: Tao thu muc dist va tien hanh ma hoa cac tep he thong
+        run: |
+          mkdir -p dist
+          javascript-obfuscator idb-helper.js --output dist/idb-helper.js --compact true --control-flow-flattening true
+          javascript-obfuscator data.js --output dist/data.js --compact true --control-flow-flattening true
+          javascript-obfuscator auth.js --output dist/auth.js --compact true --control-flow-flattening true
+          javascript-obfuscator map.js --output dist/map.js --compact true --control-flow-flattening true
+
+      - name: Tu dong cap nhat cac tep da ma hoa vao kho chua
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "🔒 Tu dong lam roi ma nguon bao ve he thong GIS"
+          branch: main
