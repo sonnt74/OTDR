@@ -1123,13 +1123,15 @@ window.xoaAnhHienTruong = async function(idAnh, btnElement) {
 window.toggleSearchBox = function() {
   const box = document.getElementById('vtdSearchBoxContent');
   if (box) {
-    if (box.style.display === 'flex') {
-      box.style.display = 'none';
-    } else {
-      box.style.display = 'flex';
-      // Tự động trỏ con trỏ chuột vào ô nhập liệu khi mở ra
+    // Thêm hoặc gỡ bỏ class 'show' để bật/tắt hiển thị
+    box.classList.toggle('show');
+    
+    // Nếu khung đang mở, tự động đưa con trỏ chuột vào ô nhập liệu
+    if (box.classList.contains('show')) {
       const input = document.getElementById('inputLatLon');
-      if (input) input.focus();
+      if (input) {
+        input.focus();
+      }
     }
   }
 };
