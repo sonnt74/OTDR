@@ -596,3 +596,6 @@ html, body {
 #vtdSearchBoxContent.show {
   display: flex !important;
 }
+
+/* Tu dong an giao diện test tren Production */
+.dev-only { display: none !important; }
