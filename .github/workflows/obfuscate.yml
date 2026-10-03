@@ -1,14 +1,14 @@
-name: Tu dong lam roi ma nguon
+name: Tu dong lam roi va cap nhat index.html Production
 
 on:
   push:
-    branches: [ main, dev ] # Tự động chạy khi bạn push code lên cả main hoặc dev
+    branches: [ main ] # Chỉ chạy tự động khi có code ở nhánh main
 
 jobs:
   obfuscate:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Cấp quyền cho phép GitHub tự động đẩy code lên kho chứa
+      contents: write
     steps:
       - name: Tai ma nguon tu kho chua
         uses: actions/checkout@v3
@@ -21,7 +21,7 @@ jobs:
       - name: Cai dat cong cu lam roi ma nguon javascript-obfuscator
         run: npm install -g javascript-obfuscator
 
-      - name: Tao thu muc dist va ma hoa tat ca cac tep JavaScript cua he thong
+      - name: Tao thu muc dist va ma hoa toan bo tep JS cua he thong
         run: |
           mkdir -p dist
           javascript-obfuscator admin.js --output dist/admin.js --compact true --control-flow-flattening true --rename-globals false
@@ -33,10 +33,22 @@ jobs:
           javascript-obfuscator store.js --output dist/store.js --compact true --control-flow-flattening true --rename-globals false
           javascript-obfuscator sw.js --output dist/sw.js --compact true --control-flow-flattening true --rename-globals false
 
-      - name: Cau hinh Git va day cac tep da ma hoa len nhanh hien tai
+      - name: Tu động cập nhật đường dẫn trong tệp index.html
+        run: |
+          # Tự động thêm tiền tố dist/ vào trước tên các file JS trong index.html trên nhánh main
+          sed -i 's|src="admin.js"|src="dist/admin.js"|g' index.html
+          sed -i 's|src="auth.js"|src="dist/auth.js"|g' index.html
+          sed -i 's|src="config.js"|src="dist/config.js"|g' index.html
+          sed -i 's|src="data.js"|src="dist/data.js"|g' index.html
+          sed -i 's|src="idb-helper.js"|src="dist/idb-helper.js"|g' index.html
+          sed -i 's|src="map.js"|src="dist/map.js"|g' index.html
+          sed -i 's|src="store.js"|src="dist/store.js"|g' index.html
+          sed -i 's|src="sw.js"|src="dist/sw.js"|g' index.html
+
+      - name: Cau hinh Git va day len nhanh main
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add dist/
-          git diff-index --quiet HEAD || git commit -m "🔒 Tu dong lam roi toan bo tep JS"
+          git add dist/ index.html
+          git diff-index --quiet HEAD || git commit -m "🔒 Tu dong lam roi JS va cap nhat duong dan index.html cho Production"
           git push
