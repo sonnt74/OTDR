@@ -1117,3 +1117,60 @@ window.xoaAnhHienTruong = async function(idAnh, btnElement) {
     }
   }
 };
+/**
+ * HÀM TÌM KIẾM VÀ ĐỊNH VỊ TRÊN BẢN ĐỒ THEO TỌA ĐỘ LAT, LNG
+ * Giữ nguyên vẹn 100% các hàm cũ của hệ thống.
+ */
+function thucHienTimKiemToaDo() {
+  // 1. Lấy giá trị người dùng nhập vào và loại bỏ khoảng trắng thừa
+  const inputVal = document.getElementById('inputLatLon').value.trim();
+  
+  if (!inputVal) {
+    alert("Vui lòng nhập tọa độ! (Ví dụ: 21.5938, 105.8234)");
+    return;
+  }
+
+  // 2. Tách chuỗi theo dấu phẩy hoặc khoảng trắng
+  const parts = inputVal.split(/[,\s]+/);
+  if (parts.length < 2) {
+    alert("Sai định dạng! Vui lòng nhập theo mẫu: Lat, Lng (Cách nhau bằng dấu phẩy)");
+    return;
+  }
+
+  // Chuyển đổi sang kiểu số thực (Float)
+  const lat = parseFloat(parts[0]);
+  const lng = parseFloat(parts[1]);
+
+  // 3. Kiểm tra tính hợp lệ cơ bản của dữ liệu số
+  if (isNaN(lat) || isNaN(lng)) {
+    alert("Tọa độ không hợp lệ! Vui lòng chỉ nhập số.");
+    return;
+  }
+
+  // Kiểm tra giới hạn tọa độ địa lý trái đất
+  if (lat < -90 || lat > 90) {
+    alert("Vĩ độ (Lat) không hợp lệ! Phải nằm trong khoảng từ -90 đến 90.");
+    return;
+  }
+
+  if (lng < -180 || lng > 180) {
+    alert("Kinh độ (Lng) không hợp lệ! Phải nằm trong khoảng từ -180 đến 180.");
+    return;
+  }
+
+  // 4. Kiểm tra đối tượng bản đồ Leaflet (map) đã sẵn sàng chưa
+  if (typeof map !== 'undefined' && map !== null) {
+    // Di chuyển bản đồ đến tọa độ với độ phóng to chi tiết (zoom cấp 17)
+    map.setView([lat, lng], 17);
+
+    // Tạo một điểm đánh dấu (Marker) tạm thời tại vị trí tìm kiếm
+    const searchMarker = L.marker([lat, lng]).addTo(map);
+    
+    // Gắn bảng thông tin nhỏ hiển thị tọa độ khi bấm vào cờ
+    searchMarker.bindPopup(`<b>📍 Vị trí tìm kiếm</b><br>Lat: ${lat}<br>Lng: ${lng}`).openPopup();
+
+    console.log(`Đã định vị thành công tại tọa độ: ${lat}, ${lng}`);
+  } else {
+    alert("Hệ thống chưa khởi tạo bản đồ!");
+  }
+}
