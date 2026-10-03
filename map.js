@@ -208,7 +208,6 @@ async function taiDuLieuDoanCapDiem(doanVal) {
       }
     }
   } catch (err) {
-    console.error("Lỗi tải cache đoạn cáp:", err);
     window.cacheThuTuDoanCap = {};
     window.cacheChiTietDiemDoanCap = {};
   }
@@ -310,7 +309,6 @@ window.copyToClipboardTNN = function(text) {
   navigator.clipboard.writeText(text).then(function() {
     if (typeof showToast === 'function') showToast("📋 Đã sao chép tọa độ: " + text, "success");
   }).catch(function(err) {
-    console.error('Lỗi copy: ', err);
   });
 };
 
@@ -637,7 +635,6 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
           window.rawLoaiDiemList = data;
         }
       } catch (e) {
-        console.warn("Không thể tải bảng loại điểm:", e);
       }
     }
 
@@ -744,7 +741,6 @@ window.moFormCrud = async function(action, id, ten, lat, lng) {
           if (linkedIds.includes(cb.value)) cb.checked = true;
         });
       } catch(e) { 
-        console.error("Lỗi lấy liên kết đoạn cáp:", e); 
       }
     }
     
@@ -757,7 +753,6 @@ window.copyToClipboardTNN = function(text) {
   navigator.clipboard.writeText(text).then(function() {
     showToast("📋 Đã sao chép tọa độ: " + text, "success");
   }).catch(function(err) {
-    console.error('Lỗi copy: ', err);
   });
 };
 
@@ -921,7 +916,6 @@ window.saveDiemHatangFullAction = async function() {
 
       } catch (netErr) {
         // 2. NẾU RỚT MẠNG / FAILED TO FETCH GIỮA CHỪNG, CHUYỂN SANG OFFLINE QUEUE
-        console.warn("Lỗi kết nối mạng, chuyển sang hàng đợi cục bộ:", netErr);
         isOfflineMode = true;
       }
     }
@@ -986,7 +980,6 @@ window.saveDiemHatangFullAction = async function() {
 
   } catch (err) {
     showToast("❌ Lỗi xử lý: " + err.message, "error");
-    console.error(err);
   } finally {
     hideLoading();
   }
@@ -1028,7 +1021,6 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
           if (typeof showToast === 'function') showToast("✅ Đã lưu thông tin mật thành công!", "success");
           if (typeof ghiNhatKyThaoTac === 'function') ghiNhatKyThaoTac("SUA_MAT", `Kỹ sư cập nhật Ghi chú mật điểm [${tenDiem}]`);
         } catch (err) {
-          console.error("Lỗi cập nhật Ghi chú mật:", err);
           if (typeof showToast === 'function') showToast("❌ Lỗi khi lưu: " + err.message, "error");
         } finally {
           if (typeof hideLoading === 'function') hideLoading();
@@ -1036,7 +1028,6 @@ window.xemGhiChuAnTaiDiem = async function(idDiem, tenDiem) {
       }
     }
   } catch (err) {
-    console.error("Lỗi lấy thông tin mật:", err);
     if (typeof showToast === 'function') showToast("❌ Không thể tải thông tin mật!", "error");
     if (typeof hideLoading === 'function') hideLoading();
   }
@@ -1137,7 +1128,6 @@ window.toggleSearchBox = function() {
       box.style.display = 'none'; // Ẩn khung nhập liệu
     }
   } else {
-    console.error("Không tìm thấy phần tử vtdSearchBoxContent trong DOM!");
   }
 };
 
@@ -1161,7 +1151,7 @@ window.thucHienTimKiemToaDo = async function() {
   const inputVal = inputElement ? inputElement.value.trim() : "";
   
   if (!inputVal) {
-    alert("Vui lòng nhập tọa độ (Lat, Lng) hoặc tên địa chỉ cần tìm!");
+    showToas("Vui lòng nhập tọa độ (Lat, Lng) hoặc tên địa chỉ cần tìm!");
     return;
   }
 
@@ -1179,7 +1169,6 @@ window.thucHienTimKiemToaDo = async function() {
 
   // 2. Nếu không phải tọa độ, gọi Nominatim API miễn phí để tra cứu theo tên địa chỉ
   try {
-    console.log("Đang tìm kiếm theo địa chỉ:", inputVal);
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(inputVal)}`;
     
     const response = await fetch(url);
@@ -1192,11 +1181,10 @@ window.thucHienTimKiemToaDo = async function() {
 
       hienThiKetQuaBanDo(lat, lng, `📍 Địa chỉ: ${displayName}`);
     } else {
-      alert("Không tìm thấy địa chỉ này! Vui lòng thử nhập tên chi tiết hơn.");
+     showToas("Không tìm thấy địa chỉ này! Vui lòng thử nhập tên chi tiết hơn.");
     }
   } catch (error) {
-    console.error("Lỗi kết nối dịch vụ tìm kiếm địa chỉ:", error);
-    alert("Có lỗi xảy ra khi kết nối tới dịch vụ tra cứu địa chỉ.");
+   showToas("Có lỗi xảy ra khi kết nối tới dịch vụ tra cứu địa chỉ.");
   }
 };
 
@@ -1208,8 +1196,7 @@ function hienThiKetQuaBanDo(lat, lng, titleText) {
     map.setView([lat, lng], 17);
     const searchMarker = L.marker([lat, lng]).addTo(map);
     searchMarker.bindPopup(`<b>${titleText}</b><br>Lat: ${lat}<br>Lng: ${lng}`).openPopup();
-    console.log(`Đã định vị thành công tại: ${lat}, ${lng}`);
   } else {
-    alert("Hệ thống chưa khởi tạo bản đồ!");
+   showToas("Hệ thống chưa khởi tạo bản đồ!");
   }
 }
