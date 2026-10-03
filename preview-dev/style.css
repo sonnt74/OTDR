@@ -553,3 +553,6 @@ html, body {
 #vtdSearchBoxContent button:hover {
   background: #0056b3;
 }
+#vtdSearchBoxContent.show {
+  display: flex !important;
+}
