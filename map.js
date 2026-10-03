@@ -1191,3 +1191,19 @@ document.addEventListener("DOMContentLoaded", function() {
     L.DomEvent.disableKeyPropagation(searchContainer); // Giúp gõ phím, Ctrl+V, copy/paste hoạt động trơn tru
   }
 });
+/**
+ * HÀM ẨN/HIỆN KHUNG TÌM KIẾM KHI BẤM NÚT KÍNH LÚP
+ */
+window.toggleSearchBox = function() {
+  const box = document.getElementById('vtdSearchBoxContent');
+  if (box) {
+    if (box.style.display === 'flex') {
+      box.style.display = 'none';
+    } else {
+      box.style.display = 'flex';
+      // Tự động trỏ con trỏ chuột vào ô nhập liệu khi mở ra
+      const input = document.getElementById('inputLatLon');
+      if (input) input.focus();
+    }
+  }
+};
