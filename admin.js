@@ -13,7 +13,7 @@ function openModal(modalId, tabId) {
   if (modalId === 'adminMasterModal') {
     renderAllAdminTables();
 
-    // BỔ SUNG: Kiểm tra quyền để bật/tắt nút Tab Excel cho Admin Sys
+    // BỔ SUNG: Kiểm tra quyền để bật/tắt nút Tab Excel cho Admin Sys  
     var access = getRoleAccess();
     var excelTabBtn = document.getElementById('tab-btn-excel');
     if (excelTabBtn) {
