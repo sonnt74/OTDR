@@ -1118,59 +1118,98 @@ window.xoaAnhHienTruong = async function(idAnh, btnElement) {
   }
 };
 /**
- * HÀM TÌM KIẾM VÀ ĐỊNH VỊ TRÊN BẢN ĐỒ THEO TỌA ĐỘ LAT, LNG
- * Gán trực tiếp vào window để giao diện HTML onclick gọi được chính xác.
+ * HÀM ẨN/HIỆN KHUNG TÌM KIẾM (ĐẢM BẢO CHẠY 100%)
+ * Đọc trực tiếp trạng thái hiển thị thực tế của phần tử để bật/tắt.
  */
-window.thucHienTimKiemToaDo = function() {
-  // 1. Lấy giá trị người dùng nhập vào và loại bỏ khoảng trắng thừa
-  const inputVal = document.getElementById('inputLatLon').value.trim();
+window.toggleSearchBox = function() {
+  const box = document.getElementById('vtdSearchBoxContent');
+  if (box) {
+    // Kiểm tra trạng thái hiển thị thực tế trên trình duyệt
+    const currentDisplay = window.getComputedStyle(box).display;
+    
+    if (currentDisplay === 'none') {
+      box.style.display = 'flex'; // Hiển thị khung nhập liệu
+      const input = document.getElementById('inputLatLon');
+      if (input) {
+        input.focus(); // Tự động đưa con trỏ chuột vào ô nhập
+      }
+    } else {
+      box.style.display = 'none'; // Ẩn khung nhập liệu
+    }
+  } else {
+    console.error("Không tìm thấy phần tử vtdSearchBoxContent trong DOM!");
+  }
+};
+
+/**
+ * CHỐNG CHẶN SỰ KIỆN ĐỂ CHO PHÉP COPY, PASTE, GÕ PHÍM TRÊN BẢN ĐỒ LEAFLET
+ */
+document.addEventListener("DOMContentLoaded", function() {
+  const wrapper = document.querySelector('.vtd-search-wrapper');
+  if (wrapper) {
+    L.DomEvent.disableClickPropagation(wrapper);
+    L.DomEvent.disableScrollPropagation(wrapper);
+    L.DomEvent.disableKeyPropagation(wrapper); // Giúp Ctrl+V và gõ phím hoạt động trơn tru
+  }
+});
+
+/**
+ * HÀM TÌM KIẾM THÔNG MINH (HỖ TRỢ CẢ TỌA ĐỘ VÀ ĐỊA CHỈ VĂN BẢN)
+ */
+window.thucHienTimKiemToaDo = async function() {
+  const inputElement = document.getElementById('inputLatLon');
+  const inputVal = inputElement ? inputElement.value.trim() : "";
   
   if (!inputVal) {
-    alert("Vui lòng nhập tọa độ! (Ví dụ: 21.5938, 105.8234)");
+    alert("Vui lòng nhập tọa độ (Lat, Lng) hoặc tên địa chỉ cần tìm!");
     return;
   }
 
-  // 2. Tách chuỗi theo dấu phẩy hoặc khoảng trắng
+  // 1. Kiểm tra xem người dùng nhập tọa độ trực tiếp hay không
   const parts = inputVal.split(/[,\s]+/);
-  if (parts.length < 2) {
-    alert("Sai định dạng! Vui lòng nhập theo mẫu: Lat, Lng (Cách nhau bằng dấu phẩy)");
-    return;
+  if (parts.length >= 2) {
+    const lat = parseFloat(parts[0]);
+    const lng = parseFloat(parts[1]);
+
+    if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      hienThiKetQuaBanDo(lat, lng, `📍 Tọa độ: ${lat}, ${lng}`);
+      return;
+    }
   }
 
-  // Chuyển đổi sang kiểu số thực (Float)
-  const lat = parseFloat(parts[0]);
-  const lng = parseFloat(parts[1]);
-
-  // 3. Kiểm tra tính hợp lệ cơ bản của dữ liệu số
-  if (isNaN(lat) || isNaN(lng)) {
-    alert("Tọa độ không hợp lệ! Vui lòng chỉ nhập số.");
-    return;
-  }
-
-  // Kiểm tra giới hạn tọa độ địa lý trái đất
-  if (lat < -90 || lat > 90) {
-    alert("Vĩ độ (Lat) không hợp lệ! Phải nằm trong khoảng từ -90 đến 90.");
-    return;
-  }
-
-  if (lng < -180 || lng > 180) {
-    alert("Kinh độ (Lng) không hợp lệ! Phải nằm trong khoảng từ -180 đến 180.");
-    return;
-  }
-
-  // 4. Kiểm tra đối tượng bản đồ Leaflet (map) đã sẵn sàng chưa
-  if (typeof map !== 'undefined' && map !== null) {
-    // Di chuyển bản đồ đến tọa độ với độ phóng to chi tiết (zoom cấp 17)
-    map.setView([lat, lng], 17);
-
-    // Tạo một điểm đánh dấu (Marker) tạm thời tại vị trí tìm kiếm
-    const searchMarker = L.marker([lat, lng]).addTo(map);
+  // 2. Nếu không phải tọa độ, gọi Nominatim API miễn phí để tra cứu theo tên địa chỉ
+  try {
+    console.log("Đang tìm kiếm theo địa chỉ:", inputVal);
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(inputVal)}`;
     
-    // Gắn bảng thông tin nhỏ hiển thị tọa độ khi bấm vào cờ
-    searchMarker.bindPopup(`<b>📍 Vị trí tìm kiếm</b><br>Lat: ${lat}<br>Lng: ${lng}`).openPopup();
+    const response = await fetch(url);
+    const data = await response.json();
 
-    console.log(`Đã định vị thành công tại tọa độ: ${lat}, ${lng}`);
+    if (data && data.length > 0) {
+      const lat = parseFloat(data[0].lat);
+      const lng = parseFloat(data[0].lon);
+      const displayName = data[0].display_name;
+
+      hienThiKetQuaBanDo(lat, lng, `📍 Địa chỉ: ${displayName}`);
+    } else {
+      alert("Không tìm thấy địa chỉ này! Vui lòng thử nhập tên chi tiết hơn.");
+    }
+  } catch (error) {
+    console.error("Lỗi kết nối dịch vụ tìm kiếm địa chỉ:", error);
+    alert("Có lỗi xảy ra khi kết nối tới dịch vụ tra cứu địa chỉ.");
+  }
+};
+
+/**
+ * Hàm phụ trợ dịch chuyển bản đồ và cắm cờ đánh dấu an toàn
+ */
+function hienThiKetQuaBanDo(lat, lng, titleText) {
+  if (typeof map !== 'undefined' && map !== null) {
+    map.setView([lat, lng], 17);
+    const searchMarker = L.marker([lat, lng]).addTo(map);
+    searchMarker.bindPopup(`<b>${titleText}</b><br>Lat: ${lat}<br>Lng: ${lng}`).openPopup();
+    console.log(`Đã định vị thành công tại: ${lat}, ${lng}`);
   } else {
     alert("Hệ thống chưa khởi tạo bản đồ!");
   }
-};
+}
