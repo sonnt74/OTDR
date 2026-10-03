@@ -12,51 +12,7 @@ html, body {
   flex-direction: row; 
   background: #f0f2f5; 
 }
-/* Định vị khung tìm kiếm ra chính giữa phía trên bản đồ */
-.latlng-search-top-center {
-  position: absolute;
-  top: 15px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1000; /* Nằm nổi lên trên lớp bản đồ Leaflet */
-  background: rgba(255, 255, 255, 0.95);
-  padding: 8px 12px;
-  border-radius: 8px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
 
-/* Tinh chỉnh ô nhập liệu và nút bấm gọn gàng, đẹp mắt */
-.latlng-search-top-center input {
-  width: 250px;
-  padding: 6px 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  outline: none;
-  font-size: 14px;
-}
-
-.latlng-search-top-center input:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
-}
-
-.latlng-search-top-center button {
-  padding: 6px 14px;
-  background: #007bff;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background 0.2s;
-}
-
-.latlng-search-top-center button:hover {
-  background: #0056b3;
-}
 #sidebar-menu { 
   display: none !important; 
 }
