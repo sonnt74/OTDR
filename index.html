@@ -110,69 +110,24 @@
     <div class="spinner"></div>
     <div id="loading-overlay-text">Đang đồng bộ dữ liệu...</div>
   </div>
-
+ 
+  <div class="vtd-search-wrapper">
+    <button id="vtdToggleBtn" onclick="toggleSearchBox()" title="Tìm kiếm tọa độ / địa chỉ">🔍</button>
+    
+    <div id="vtdSearchBoxContent">
+      <input type="text" id="inputLatLon" placeholder="Nhập Lat, Lng hoặc Tên địa chỉ..." />
+      <button onclick="thucHienTimKiemToaDo()">Tìm</button>
+    </div>
+  </div>
+  
   <button id="togglePanelBtn" onclick="toggleGISPanel()" title="Ẩn/Hiện Bảng điều khiển">☰</button>
 
   <div id="workspace">
-    <div id="map"></div>
+    <div id="map" style="position: relative; width: 100%; height: 100vh;"></div>
     <div id="gps-btn" class="map-tool-btn" onclick="triggerUserLocation()" title="Định vị">📍</div>
     <div id="measure-btn" class="map-tool-btn" onclick="toggleMeasureTool()" title="Đo khoảng cách thủ công">📏</div>
-    <!-- ================= HỆ THỐNG TÌM KIẾM TỌA ĐỘ LAT, LNG ================= -->
-      <style>
-        /* Khung chứa tìm kiếm được ghim ở giữa phía trên bản đồ */
-        .vtd-search-container {
-          position: absolute;
-          top: 15px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 1000; /* Đảm bảo luôn nằm nổi trên lớp bản đồ Leaflet */
-          background: rgba(255, 255, 255, 0.95);
-          padding: 8px 12px;
-          border-radius: 8px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-          display: flex;
-          gap: 8px;
-          align-items: center;
-        }
-      
-        /* Ô nhập tọa độ */
-        .vtd-search-container input {
-          width: 260px;
-          padding: 6px 10px;
-          border: 1px solid #ccc;
-          border-radius: 4px;
-          outline: none;
-          font-size: 14px;
-        }
-      
-        .vtd-search-container input:focus {
-          border-color: #007bff;
-          box-shadow: 0 0 5px rgba(0, 123, 255, 0.4);
-        }
-      
-        /* Nút bấm tìm kiếm */
-        .vtd-search-container button {
-          padding: 6px 14px;
-          background: #007bff;
-          color: #fff;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-weight: 500;
-        }
-      
-        .vtd-search-container button:hover {
-          background: #0056b3;
-        }
-      </style>
-      
-      <!-- Giao diện HTML của ô tìm kiếm -->
-      <div class="vtd-search-container">
-        <input type="text" id="inputLatLon" placeholder="Nhập Lat, Lng (VD: 21.5938, 105.8234)" />
-        <button onclick="thucHienTimKiemToaDo()">🔍 Tìm vị trí</button>
-      </div>
+  
     <div id="control-panel">
-      
       <div style="display: flex; align-items: center; justify-content: space-between; background: #f1f5f9; padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--border-color); gap: 6px;">
         <div id="userInfoDisplay" style="font-size: 11px; font-weight: bold; color: var(--text-main); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;"></div>
         <button class="btn-small btn-success" onclick="openChangePasswordModal()" title="Đổi mật khẩu tài khoản" style="padding: 3px 8px; font-size: 11px; flex-shrink: 0; white-space: nowrap;">🔑 Đổi pass</button>
@@ -478,17 +433,17 @@
 <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 
 <!-- 2. Cấu hình và bộ nhớ đệm cơ bản -->
-<script src="dist/config.js"></script>
-<script src="dist/store.js"></script>
-<script src="dist/idb-helper.js"></script>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="idb-helper.js"></script>
 
 <!-- 3. Xử lý dữ liệu và bản đồ -->
-<script src="dist/data.js"></script>
-<script src="dist/map.js"></script>
+<script src="data.js"></script>
+<script src="map.js"></script>
 
 <!-- 4. Xác thực và quản trị -->
-<script src="dist/auth.js"></script>
-<script src="dist/admin.js"></script>
+<script src="auth.js"></script>
+<script src="admin.js"></script>
   
   <script>
     function toggleGISPanel() {
