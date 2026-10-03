@@ -1,14 +1,14 @@
-name: Tu dong lam roi ma nguon main
+name: Tu dong lam roi ma nguon
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ main, dev ] # Tự động chạy khi bạn push code lên cả main hoặc dev
 
 jobs:
   obfuscate:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # Cấp quyền cho phép GitHub tự động đẩy code lên kho chứa
     steps:
       - name: Tai ma nguon tu kho chua
         uses: actions/checkout@v3
@@ -21,22 +21,22 @@ jobs:
       - name: Cai dat cong cu lam roi ma nguon javascript-obfuscator
         run: npm install -g javascript-obfuscator
 
-      - name: Tao thu muc dist va ma hoa cac file chi dinh
+      - name: Tao thu muc dist va ma hoa tat ca cac tep JavaScript cua he thong
         run: |
           mkdir -p dist
-          javascript-obfuscator idb-helper.js --output dist/idb-helper.js --compact true --control-flow-flattening true --rename-globals false
-          javascript-obfuscator data.js --output dist/data.js --compact true --control-flow-flattening true --rename-globals false
-          javascript-obfuscator auth.js --output dist/auth.js --compact true --control-flow-flattening true --rename-globals false
-          javascript-obfuscator map.js --output dist/map.js --compact true --control-flow-flattening true --rename-globals false
           javascript-obfuscator admin.js --output dist/admin.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator auth.js --output dist/auth.js --compact true --control-flow-flattening true --rename-globals false
           javascript-obfuscator config.js --output dist/config.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator data.js --output dist/data.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator idb-helper.js --output dist/idb-helper.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator map.js --output dist/map.js --compact true --control-flow-flattening true --rename-globals false
           javascript-obfuscator store.js --output dist/store.js --compact true --control-flow-flattening true --rename-globals false
           javascript-obfuscator sw.js --output dist/sw.js --compact true --control-flow-flattening true --rename-globals false
 
-      - name: Tu dong cap nhat cac tep da ma hoa vao nhanh main
-        uses: stefanzweifel/git-auto-commit-action@v4
-        with:
-          commit_message: "🔒 Tu dong lam roi file JS cho nhanh main"
-          file_pattern: "dist/*.js"
-          skip_fetch: false
-          branch: main
+      - name: Cau hinh Git va day cac tep da ma hoa len nhanh hien tai
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist/
+          git diff-index --quiet HEAD || git commit -m "🔒 Tu dong lam roi toan bo tep JS"
+          git push
