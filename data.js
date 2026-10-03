@@ -25,10 +25,8 @@ async function taiDuLieuLocal() {
       });
 
       if (typeof xuLyPhanQuyenDoanTuyenUser === 'function') xuLyPhanQuyenDoanTuyenUser();
-      console.log("📂 Đã nạp thành công dữ liệu danh mục từ IndexedDB (Offline Mode).");
     }
   } catch (err) {
-    console.warn("Chưa có dữ liệu local hoặc lỗi đọc IDB:", err);
   }
 }
 /**
@@ -113,7 +111,6 @@ async function taiDuLieuSupabase(forceRefresh = false) {
       doanData = await fetchAllRowsSafe('v_doan_cap_full');
       doanCapDiemLinks = await fetchAllRowsSafe('doan_cap_diem'); // Vét cạn bảng quan hệ
     } catch (e) {
-      console.warn("Lỗi tải vét cạn quan hệ:", e);
     }
 
     rawDaiList = daiRes.data.length ? daiRes.data : rawDaiList;
@@ -138,7 +135,6 @@ async function taiDuLieuSupabase(forceRefresh = false) {
         thu_tu: l.thu_tu !== undefined ? Number(l.thu_tu) : 999
       }));
       await idbLuuDoanCapDiem(formattedLinks);
-      console.log(`✅ Đã lưu ${formattedLinks.length} liên kết quan hệ vào IndexedDB.`);
     }
 
     // Tải và lưu toàn bộ điểm hạ tầng
@@ -154,7 +150,6 @@ async function taiDuLieuSupabase(forceRefresh = false) {
 
     if (typeof idbLuuTatCaDiem === 'function' && formattedAllPoints.length > 0) {
       await idbLuuTatCaDiem(formattedAllPoints);
-      console.log(`✅ Đã lưu ${formattedAllPoints.length} điểm hạ tầng vào IndexedDB.`);
     }
 
     AppStore.setState({
@@ -170,7 +165,6 @@ async function taiDuLieuSupabase(forceRefresh = false) {
     }
 
   } catch (err) {
-    console.error("Lỗi đồng bộ dữ liệu:", err.message);
     showToast("❌ Lỗi: " + err.message, "error");
   } finally {
     isSyncingMaster = false; 
@@ -215,7 +209,6 @@ async function taiDiemTheoVungXem(forceRefresh = false) {
       }
     }
   } catch (err) {
-    console.warn("Lỗi tải điểm vùng xem:", err.message);
   } finally {
     AppStore.setState({ dataPoints: globalDataPoints });
     if (typeof veLaiTuyenAB === 'function') veLaiTuyenAB();
@@ -355,7 +348,6 @@ async function taiDiemDaTuyen(forceRefresh = false) {
       globalDataPoints = allCombinedPts;
     }
   } catch (err) {
-    console.warn("Lỗi tải điểm đa tuyến:", err.message);
     showToast("❌ Không thể tải điểm: " + err.message, "error");
   } finally {
     AppStore.setState({ dataPoints: globalDataPoints });
@@ -409,7 +401,6 @@ async function dongBoDuLieuTonDong() {
       }
       await idbXoaHangDoiSync(task.id);
     } catch (err) {
-      console.error("Lỗi đồng bộ tác vụ ID " + task.id, err);
     }
   }
   hideLoading();
@@ -946,7 +937,6 @@ async function xuLyChuanHoaThuTuDoanCap() {
   } catch (err) {
     hideLoading();
     showToast("❌ Lỗi chuẩn hóa: " + err.message, "error");
-    console.error(err);
   }
 }
 
