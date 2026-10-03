@@ -1151,7 +1151,7 @@ window.thucHienTimKiemToaDo = async function() {
   const inputVal = inputElement ? inputElement.value.trim() : "";
   
   if (!inputVal) {
-    showToas("Vui lòng nhập tọa độ (Lat, Lng) hoặc tên địa chỉ cần tìm!");
+    showToast("Vui lòng nhập tọa độ (Lat, Lng) hoặc tên địa chỉ cần tìm!");
     return;
   }
 
@@ -1181,10 +1181,10 @@ window.thucHienTimKiemToaDo = async function() {
 
       hienThiKetQuaBanDo(lat, lng, `📍 Địa chỉ: ${displayName}`);
     } else {
-     showToas("Không tìm thấy địa chỉ này! Vui lòng thử nhập tên chi tiết hơn.");
+     showToast("Không tìm thấy địa chỉ này! Vui lòng thử nhập tên chi tiết hơn.");
     }
   } catch (error) {
-   showToas("Có lỗi xảy ra khi kết nối tới dịch vụ tra cứu địa chỉ.");
+   showToast("Có lỗi xảy ra khi kết nối tới dịch vụ tra cứu địa chỉ.");
   }
 };
 
@@ -1197,6 +1197,6 @@ function hienThiKetQuaBanDo(lat, lng, titleText) {
     const searchMarker = L.marker([lat, lng]).addTo(map);
     searchMarker.bindPopup(`<b>${titleText}</b><br>Lat: ${lat}<br>Lng: ${lng}`).openPopup();
   } else {
-   showToas("Hệ thống chưa khởi tạo bản đồ!");
+   showToast("Hệ thống chưa khởi tạo bản đồ!");
   }
 }
