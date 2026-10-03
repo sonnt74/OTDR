@@ -841,7 +841,7 @@ function xuatDuLieuExcelAdmin() {
     XLSX.writeFile(wb, `Bao_Cao_Diem_Ha_Tang_${new Date().getTime()}.xlsx`);
     showToast("✅ Xuất báo cáo thành công!", "success");
   } catch (e) {
-    console.error(e); showToast("❌ Lỗi xuất file!", "error");
+
   } finally { hideLoading(); }
 }
 
@@ -887,7 +887,7 @@ async function taiFileMauHoacDuLieuCu() {
     XLSX.utils.book_append_sheet(wb, ws, "Data_Import");
     XLSX.writeFile(wb, `Import_Doan_${idDoan}.xlsx`);
   } catch (err) {
-    console.error(err); showToast("❌ Lỗi tạo file: " + err.message, "error");
+
   } finally { hideLoading(); }
 }
 
@@ -988,7 +988,7 @@ async function kiemDuyetVaImportExcel() {
       if (typeof taiDuLieuSupabase === 'function') setTimeout(() => taiDuLieuSupabase(true), 1500);
 
     } catch (error) {
-      console.error(error);
+
       statusText.innerHTML = `<span style="color: red;">❌ Tiến trình dừng do lỗi: ${error.message}</span>`;
       showToast("❌ Quá trình Import bị gián đoạn!", "error");
     }
