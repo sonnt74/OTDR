@@ -2,8 +2,6 @@
 // TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & QUẢN LÝ PHIÊN
 // ==========================================================================
 
-console.log("auth.js đang được tải...");
-
 document.addEventListener('DOMContentLoaded', function() {
   khoiPhucPhiênDangNhap();
 });
@@ -68,14 +66,12 @@ async function khoiPhucPhiênDangNhap() {
         }
       }
     } catch (e) {
-      console.error("Lỗi khôi phục phiên đăng nhập:", e);
       localStorage.removeItem('tnn_user');
     }
   }
 }
 
 async function handleCustomLogin() {
-  console.log("Đang xử lý đăng nhập...");
   var accountInput = document.getElementById('loginAccount');
   var passInput = document.getElementById('loginPass');
 
@@ -161,7 +157,6 @@ async function handleCustomLogin() {
 
   } catch (err) {
     hideLoading();
-    console.error("Lỗi đăng nhập:", err);
     showToast("❌ Lỗi xác thực đăng nhập: " + err.message, "error");
   }
 }
