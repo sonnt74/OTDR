@@ -1,4 +1,4 @@
-name: Tu dong lam roi va xu ly Production
+name: Tu dong lam roi va an nut Production
 
 on:
   push:
@@ -44,21 +44,16 @@ jobs:
           sed -i 's|src="store.js"|src="dist/store.js"|g' index.html
           sed -i 's|src="sw.js"|src="dist/sw.js"|g' index.html
 
-      - name: Tu dong xoa cac nut lenh danh rieng cho dev
+      - name: Tu dong an cac phan tu dev-only trong style.css tren nhanh main
         run: |
-          python3 -c '
-          with open("index.html", "r", encoding="utf-8") as f:
-              content = f.read()
-          import re
-          new_content = re.sub(r"<!-- DEV_ONLY_START -->.*?<!-- DEV_ONLY_END -->", "", content, flags=re.DOTALL)
-          with open("index.html", "w", encoding="utf-8") as f:
-              f.write(new_content)
-          '
+          echo "" >> style.css
+          echo "/* Tu dong an giao diện test tren Production */" >> style.css
+          echo ".dev-only { display: none !important; }" >> style.css
 
       - name: Cau hinh Git va day len nhanh main
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add -f dist/ index.html style.css
-          git diff-index --quiet HEAD || git commit -m "🔒 Tu dong lam roi JS, cap nhat duong dan va go bo nut dev cho Production"
+          git diff-index --quiet HEAD || git commit -m "🔒 Tu dong lam roi JS, tach CSS va an nut dev tren main"
           git push
