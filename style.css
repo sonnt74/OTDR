@@ -487,8 +487,8 @@ html, body {
 .vtd-search-wrapper {
   position: absolute;
   top: 15px;
-  right: 60px; /* Nằm gọn gàng cạnh nút điều khiển bảng bên */
-  z-index: 1000;
+  right: 70px; /* Đặt cách lề phải một khoảng an toàn để không đè lên nút khác của bản đồ */
+  z-index: 9999; /* Đảm bảo luôn nằm ở lớp trên cùng, tuyệt đối không bị lấp */
   display: flex;
   align-items: center;
   gap: 6px;
@@ -502,7 +502,7 @@ html, body {
   border: 1px solid #ccc;
   border-radius: 4px;
   cursor: pointer;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   font-size: 16px;
   display: flex;
   align-items: center;
@@ -512,6 +512,46 @@ html, body {
 
 #vtdToggleBtn:hover {
   background: #f1f1f1;
+}
+
+/* Khung nhập liệu (Mặc định ẩn, khi bấm nút JS sẽ đổi thành flex để trượt ra) */
+#vtdSearchBoxContent {
+  display: none; 
+  background: rgba(255, 255, 255, 0.98);
+  padding: 6px 10px;
+  border-radius: 6px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  gap: 6px;
+  align-items: center;
+}
+
+#vtdSearchBoxContent input {
+  width: 240px;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+}
+
+#vtdSearchBoxContent input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.4);
+}
+
+#vtdSearchBoxContent button {
+  padding: 6px 12px;
+  background: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+#vtdSearchBoxContent button:hover {
+  background: #0056b3;
 }
 
 /* Khung nhập liệu ẩn/hiện */
