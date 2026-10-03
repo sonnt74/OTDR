@@ -168,7 +168,6 @@ async function ghiNhatKyThaoTac(hanhDong, chiTiet) {
       chi_tiet: chiTiet
     }]);
   } catch (err) {
-    console.error("Không thể ghi nhật ký thao tác:", err.message);
   }
 }
 // ==========================================================================
