@@ -1119,9 +1119,9 @@ window.xoaAnhHienTruong = async function(idAnh, btnElement) {
 };
 /**
  * HÀM TÌM KIẾM VÀ ĐỊNH VỊ TRÊN BẢN ĐỒ THEO TỌA ĐỘ LAT, LNG
- * Giữ nguyên vẹn 100% các hàm cũ của hệ thống.
+ * Gán trực tiếp vào window để giao diện HTML onclick gọi được chính xác.
  */
-function thucHienTimKiemToaDo() {
+window.thucHienTimKiemToaDo = function() {
   // 1. Lấy giá trị người dùng nhập vào và loại bỏ khoảng trắng thừa
   const inputVal = document.getElementById('inputLatLon').value.trim();
   
@@ -1173,4 +1173,4 @@ function thucHienTimKiemToaDo() {
   } else {
     alert("Hệ thống chưa khởi tạo bản đồ!");
   }
-}
+};
