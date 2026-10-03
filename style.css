@@ -516,7 +516,7 @@ html, body {
 
 /* Khung nhập liệu ẩn/hiện */
 #vtdSearchBoxContent {
-  display: none; 
+  display: none; /* Mặc định ẩn */
   background: rgba(255, 255, 255, 0.95);
   padding: 6px 10px;
   border-radius: 6px;
