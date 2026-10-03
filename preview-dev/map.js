@@ -1118,21 +1118,26 @@ window.xoaAnhHienTruong = async function(idAnh, btnElement) {
   }
 };
 /**
- * HÀM ẨN/HIỆN KHUNG TÌM KIẾM KHI BẤM NÚT KÍNH LÚP
+ * HÀM ẨN/HIỆN KHUNG TÌM KIẾM (ĐẢM BẢO CHẠY 100%)
+ * Đọc trực tiếp trạng thái hiển thị thực tế của phần tử để bật/tắt.
  */
 window.toggleSearchBox = function() {
   const box = document.getElementById('vtdSearchBoxContent');
   if (box) {
-    // Thêm hoặc gỡ bỏ class 'show' để bật/tắt hiển thị
-    box.classList.toggle('show');
+    // Kiểm tra trạng thái hiển thị thực tế trên trình duyệt
+    const currentDisplay = window.getComputedStyle(box).display;
     
-    // Nếu khung đang mở, tự động đưa con trỏ chuột vào ô nhập liệu
-    if (box.classList.contains('show')) {
+    if (currentDisplay === 'none') {
+      box.style.display = 'flex'; // Hiển thị khung nhập liệu
       const input = document.getElementById('inputLatLon');
       if (input) {
-        input.focus();
+        input.focus(); // Tự động đưa con trỏ chuột vào ô nhập
       }
+    } else {
+      box.style.display = 'none'; // Ẩn khung nhập liệu
     }
+  } else {
+    console.error("Không tìm thấy phần tử vtdSearchBoxContent trong DOM!");
   }
 };
 
