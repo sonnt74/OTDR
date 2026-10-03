@@ -1118,8 +1118,36 @@ window.xoaAnhHienTruong = async function(idAnh, btnElement) {
   }
 };
 /**
+ * HÀM ẨN/HIỆN KHUNG TÌM KIẾM KHI BẤM NÚT KÍNH LÚP
+ */
+window.toggleSearchBox = function() {
+  const box = document.getElementById('vtdSearchBoxContent');
+  if (box) {
+    if (box.style.display === 'flex') {
+      box.style.display = 'none';
+    } else {
+      box.style.display = 'flex';
+      // Tự động trỏ con trỏ chuột vào ô nhập liệu khi mở ra
+      const input = document.getElementById('inputLatLon');
+      if (input) input.focus();
+    }
+  }
+};
+
+/**
+ * CHỐNG CHẶN SỰ KIỆN ĐỂ CHO PHÉP COPY, PASTE, GÕ PHÍM TRÊN BẢN ĐỒ LEAFLET
+ */
+document.addEventListener("DOMContentLoaded", function() {
+  const wrapper = document.querySelector('.vtd-search-wrapper');
+  if (wrapper) {
+    L.DomEvent.disableClickPropagation(wrapper);
+    L.DomEvent.disableScrollPropagation(wrapper);
+    L.DomEvent.disableKeyPropagation(wrapper); // Giúp Ctrl+V và gõ phím hoạt động trơn tru
+  }
+});
+
+/**
  * HÀM TÌM KIẾM THÔNG MINH (HỖ TRỢ CẢ TỌA ĐỘ VÀ ĐỊA CHỈ VĂN BẢN)
- * Giữ nguyên vẹn 100% các logic kết nối cơ sở dữ liệu và bản đồ cũ.
  */
 window.thucHienTimKiemToaDo = async function() {
   const inputElement = document.getElementById('inputLatLon');
@@ -1130,20 +1158,19 @@ window.thucHienTimKiemToaDo = async function() {
     return;
   }
 
-  // 1. Kiểm tra xem người dùng có nhập theo định dạng Tọa độ (Lat, Lng) hay không
+  // 1. Kiểm tra xem người dùng nhập tọa độ trực tiếp hay không
   const parts = inputVal.split(/[,\s]+/);
   if (parts.length >= 2) {
     const lat = parseFloat(parts[0]);
     const lng = parseFloat(parts[1]);
 
     if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-      // Xử lý định vị theo Tọa độ trực tiếp
       hienThiKetQuaBanDo(lat, lng, `📍 Tọa độ: ${lat}, ${lng}`);
       return;
     }
   }
 
-  // 2. Nếu không phải tọa độ, hệ thống hiểu đây là Tên Địa Chỉ và gọi Nominatim API miễn phí
+  // 2. Nếu không phải tọa độ, gọi Nominatim API miễn phí để tra cứu theo tên địa chỉ
   try {
     console.log("Đang tìm kiếm theo địa chỉ:", inputVal);
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(inputVal)}`;
@@ -1156,7 +1183,6 @@ window.thucHienTimKiemToaDo = async function() {
       const lng = parseFloat(data[0].lon);
       const displayName = data[0].display_name;
 
-      // Xử lý định vị theo Địa chỉ tìm được
       hienThiKetQuaBanDo(lat, lng, `📍 Địa chỉ: ${displayName}`);
     } else {
       alert("Không tìm thấy địa chỉ này! Vui lòng thử nhập tên chi tiết hơn.");
@@ -1180,30 +1206,3 @@ function hienThiKetQuaBanDo(lat, lng, titleText) {
     alert("Hệ thống chưa khởi tạo bản đồ!");
   }
 }
-/**
- * Cho phép khung tìm kiếm nhận sự kiện bàn phím, chuột và dán (paste) bình thường trên Leaflet
- */
-document.addEventListener("DOMContentLoaded", function() {
-  const searchContainer = document.querySelector('.vtd-search-container');
-  if (searchContainer) {
-    L.DomEvent.disableClickPropagation(searchContainer);
-    L.DomEvent.disableScrollPropagation(searchContainer);
-    L.DomEvent.disableKeyPropagation(searchContainer); // Giúp gõ phím, Ctrl+V, copy/paste hoạt động trơn tru
-  }
-});
-/**
- * HÀM ẨN/HIỆN KHUNG TÌM KIẾM KHI BẤM NÚT KÍNH LÚP
- */
-window.toggleSearchBox = function() {
-  const box = document.getElementById('vtdSearchBoxContent');
-  if (box) {
-    if (box.style.display === 'flex') {
-      box.style.display = 'none';
-    } else {
-      box.style.display = 'flex';
-      // Tự động trỏ con trỏ chuột vào ô nhập liệu khi mở ra
-      const input = document.getElementById('inputLatLon');
-      if (input) input.focus();
-    }
-  }
-};
