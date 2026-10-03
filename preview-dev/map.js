@@ -1174,3 +1174,14 @@ window.thucHienTimKiemToaDo = function() {
     alert("Hệ thống chưa khởi tạo bản đồ!");
   }
 };
+/**
+ * Cho phép khung tìm kiếm nhận sự kiện bàn phím, chuột và dán (paste) bình thường trên Leaflet
+ */
+document.addEventListener("DOMContentLoaded", function() {
+  const searchContainer = document.querySelector('.vtd-search-container');
+  if (searchContainer) {
+    L.DomEvent.disableClickPropagation(searchContainer);
+    L.DomEvent.disableScrollPropagation(searchContainer);
+    L.DomEvent.disableKeyPropagation(searchContainer); // Giúp gõ phím, Ctrl+V, copy/paste hoạt động trơn tru
+  }
+});
