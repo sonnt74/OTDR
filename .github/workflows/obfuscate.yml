@@ -38,5 +38,5 @@ jobs:
         with:
           commit_message: "🔒 Tu dong lam roi file JS cho nhanh main"
           file_pattern: "dist/*.js"
-          skip_fetch: true
+          skip_fetch: false
           branch: main
