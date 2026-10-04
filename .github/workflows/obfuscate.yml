@@ -2,7 +2,7 @@ name: Tu dong lam roi va an nut Production
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main , gh-pages]
 
 jobs:
   obfuscate:
