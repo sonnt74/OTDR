@@ -1,36 +1,86 @@
-name: Deploy to GitHub Pages
+name: Build and Deploy to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
-      - dev  # Thay bằng tên nhánh thứ 2 của bạn nếu khác
-
-permissions:
-  contents: write
+    branches: [ main, dev ]
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Tai ma nguon tu kho chua
+        uses: actions/checkout@v3
 
-      - name: Determine Target Directory
-        id: branch-dir
+      - name: Cai dat moi truong Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Cai dat cong cu lam roi ma nguon javascript-obfuscator
+        run: npm install -g javascript-obfuscator
+
+      - name: Xac dinh nhanh trien khai
+        id: branch-check
         run: |
-          if [ "${{ github.ref_name }}" == "main" ]; then
-            # Sửa từ "production" thành để trống (dấu chấm .) để nó nằm ngay ngoài thư mục gốc
-            echo "dir=." >> $GITHUB_OUTPUT
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "target_subfolder=" >> $GITHUB_OUTPUT
           else
-            # Nhánh dev vẫn giữ nguyên nằm trong thư mục con để xem preview song song
-            echo "dir=preview-${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "target_subfolder=dev" >> $GITHUB_OUTPUT
           fi
 
-      - name: Deploy to GitHub Pages
+      - name: Tao ban dung va ma hoa JS vao thu muc dist
+        run: |
+          mkdir -p build/dist
+          
+          # Sao chép tệp giao diện và cấu hình
+          cp index.html build/
+          cp style.css build/
+          cp -r sw.js build/ 2>/dev/null || true
+          
+          # Sao chép các tệp JS gốc sang build để chuẩn bị mã hóa
+          cp admin.js auth.js config.js data.js idb-helper.js map.js store.js sw.js build/
+          
+          # Tiến hành mã hóa đồng thời vào build/dist/
+          javascript-obfuscator build/admin.js --output build/dist/admin.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/auth.js --output build/dist/auth.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/config.js --output build/dist/config.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/data.js --output build/dist/data.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/idb-helper.js --output build/dist/idb-helper.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/map.js --output build/dist/map.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/store.js --output build/dist/store.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/sw.js --output build/dist/sw.js --compact true --control-flow-flattening true --rename-globals false
+          
+          # Xóa các tệp JS thô trong build tạm
+          rm build/admin.js build/auth.js build/config.js build/data.js build/idb-helper.js build/map.js build/store.js
+
+      - name: Cap nhat duong dan trong index.html cua ban dung
+        run: |
+          cd build
+          sed -i 's|src="admin.js"|src="dist/admin.js"|g' index.html
+          sed -i 's|src="auth.js"|src="dist/auth.js"|g' index.html
+          sed -i 's|src="config.js"|src="dist/config.js"|g' index.html
+          sed -i 's|src="data.js"|src="dist/data.js"|g' index.html
+          sed -i 's|src="idb-helper.js"|src="dist/idb-helper.js"|g' index.html
+          sed -i 's|src="map.js"|src="dist/map.js"|g' index.html
+          sed -i 's|src="store.js"|src="dist/store.js"|g' index.html
+          sed -i 's|src="sw.js"|src="dist/sw.js"|g' index.html
+
+      - name: To chuc cau truc thu muc deploy cuoi cung
+        run: |
+          mkdir -p public_deploy
+          if [ "${{ steps.branch-check.outputs.target_subfolder }}" = "dev" ]; then
+            mkdir -p public_deploy/dev
+            cp -r build/* public_deploy/dev/
+          else
+            cp -r build/* public_deploy/
+          fi
+
+      - name: Day len nhanh gh-pages ma khong lam mat du lieu
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
-          destination_dir: ${{ steps.branch-dir.outputs.dir }}
+          publish_dir: ./public_deploy
+          publish_branch: gh-pages
           keep_files: true
