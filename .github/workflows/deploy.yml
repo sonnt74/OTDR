@@ -12,25 +12,53 @@ permissions:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Tai ma nguon tu kho chua
+        uses: actions/checkout@v3
 
-      - name: Determine Target Directory
-        id: branch-dir
+      - name: Cai dat moi truong Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Cai dat cong cu lam roi ma nguon javascript-obfuscator
+        run: npm install -g javascript-obfuscator
+
+      - name: Tao thu muc dist va ma hoa toan bo tep JS cua he thong
         run: |
-          if [ "${{ github.ref_name }}" == "main" ]; then
-            # Sửa từ "production" thành để trống (dấu chấm .) để nó nằm ngay ngoài thư mục gốc
-            echo "dir=." >> $GITHUB_OUTPUT
-          else
-            # Nhánh dev vẫn giữ nguyên nằm trong thư mục con để xem preview song song
-            echo "dir=preview-${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          fi
+          mkdir -p dist
+          javascript-obfuscator admin.js --output dist/admin.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator auth.js --output dist/auth.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator config.js --output dist/config.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator data.js --output dist/data.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator idb-helper.js --output dist/idb-helper.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator map.js --output dist/map.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator store.js --output dist/store.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator sw.js --output dist/sw.js --compact true --control-flow-flattening true --rename-globals false
 
-      - name: Deploy to GitHub Pages
+      - name: Tu dong cap nhat duong dan trong index.html
+        run: |
+          sed -i 's|src="admin.js"|src="dist/admin.js"|g' index.html
+          sed -i 's|src="auth.js"|src="dist/auth.js"|g' index.html
+          sed -i 's|src="config.js"|src="dist/config.js"|g' index.html
+          sed -i 's|src="data.js"|src="dist/data.js"|g' index.html
+          sed -i 's|src="idb-helper.js"|src="dist/idb-helper.js"|g' index.html
+          sed -i 's|src="map.js"|src="dist/map.js"|g' index.html
+          sed -i 's|src="store.js"|src="dist/store.js"|g' index.html
+          sed -i 's|src="sw.js"|src="dist/sw.js"|g' index.html
+
+      - name: Tu dong an cac phan tu dev-only trong style.css tren Production
+        run: |
+          echo "" >> style.css
+          echo "/* Tu dong an giao diện test tren Production */" >> style.css
+          echo ".dev-only { display: none !important; }" >> style.css
+
+      - name: Day len nhanh gh-pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: .
-          destination_dir: ${{ steps.branch-dir.outputs.dir }}
-          keep_files: true
+          publish_branch: gh-pages
+          force_orphan: true
