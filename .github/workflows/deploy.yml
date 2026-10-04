@@ -21,20 +21,35 @@ jobs:
       - name: Cai dat cong cu lam roi ma nguon javascript-obfuscator
         run: npm install -g javascript-obfuscator
 
-      - name: Tao thu muc dist va ma hoa toan bo tep JS cua he thong
+      - name: Tao thu muc build rieng biet de khong anh huong ma nguon goc
         run: |
-          mkdir -p dist
-          javascript-obfuscator admin.js --output dist/admin.js --compact true --control-flow-flattening true --rename-globals false
-          javascript-obfuscator auth.js --output dist/auth.js --compact true --control-flow-flattening true --rename-globals false
-          javascript-obfuscator config.js --output dist/config.js --compact true --control-flow-flattening true --rename-globals false
-          javascript-obfuscator data.js --output dist/data.js --compact true --control-flow-flattening true --rename-globals false
-          javascript-obfuscator idb-helper.js --output dist/idb-helper.js --compact true --control-flow-flattening true --rename-globals false
-          javascript-obfuscator map.js --output dist/map.js --compact true --control-flow-flattening true --rename-globals false
-          javascript-obfuscator store.js --output dist/store.js --compact true --control-flow-flattening true --rename-globals false
-          javascript-obfuscator sw.js --output dist/sw.js --compact true --control-flow-flattening true --rename-globals false
+          mkdir -p build/dist
+          
+          # Copy các file giao diện và cấu hình sang thư mục build tạm
+          cp index.html build/
+          cp style.css build/
+          cp -r dist/ build/ 2>/dev/null || true
+          cp -r sw.js build/ 2>/dev/null || true
+          
+          # Copy các tệp JS gốc sang thư mục build để chuẩn bị mã hóa
+          cp admin.js auth.js config.js data.js idb-helper.js map.js store.js sw.js build/
+          
+          # Tiến hành làm rối và xuất file vào build/dist/
+          javascript-obfuscator build/admin.js --output build/dist/admin.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/auth.js --output build/dist/auth.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/config.js --output build/dist/config.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/data.js --output build/dist/data.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/idb-helper.js --output build/dist/idb-helper.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/map.js --output build/dist/map.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/store.js --output build/dist/store.js --compact true --control-flow-flattening true --rename-globals false
+          javascript-obfuscator build/sw.js --output build/dist/sw.js --compact true --control-flow-flattening true --rename-globals false
+          
+          # Xóa các file JS chưa mã hóa ra khỏi thư mục build tạm
+          rm build/admin.js build/auth.js build/config.js build/data.js build/idb-helper.js build/map.js build/store.js
 
-      - name: Tu dong cap nhat duong dan trong index.html
+      - name: Cap nhat duong dan script trong index.html cua thu muc build
         run: |
+          cd build
           sed -i 's|src="admin.js"|src="dist/admin.js"|g' index.html
           sed -i 's|src="auth.js"|src="dist/auth.js"|g' index.html
           sed -i 's|src="config.js"|src="dist/config.js"|g' index.html
@@ -43,17 +58,15 @@ jobs:
           sed -i 's|src="map.js"|src="dist/map.js"|g' index.html
           sed -i 's|src="store.js"|src="dist/store.js"|g' index.html
           sed -i 's|src="sw.js"|src="dist/sw.js"|g' index.html
-
-      - name: Tu dong an cac phan tu dev-only trong style.css tren Production
-        run: |
+          
+          # Tự động ẩn các phần tử dev-only trên bản chạy chính thức
           echo "" >> style.css
-          echo "/* Tu dong an giao diện test tren Production */" >> style.css
           echo ".dev-only { display: none !important; }" >> style.css
 
-      - name: Day len nhanh gh-pages
+      - name: Day san pham hoan chinh len nhanh gh-pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
+          publish_dir: ./build
           publish_branch: gh-pages
           force_orphan: true
