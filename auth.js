@@ -1,5 +1,5 @@
 // ==========================================================================
-// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & QUẢN LÝ PHIÊN
+// TỆP AUTH.JS - XÁC THỰC ĐĂNG NHẬP, PHÂN QUYỀN & QUẢN LÝ PHIÊN (CHUẨN OK8)
 // ==========================================================================
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -54,7 +54,6 @@ async function khoiPhucPhiênDangNhap() {
           khoiTaoBanDoLeaflet();
         }
 
-        // 🌟 SỬA: Khi refresh trang, ưu tiên đọc từ IndexedDB (Offline-first) thay vì gọi Supabase
         if (typeof taiDuLieuLocal === 'function') {
           await taiDuLieuLocal();
         }
@@ -85,21 +84,36 @@ async function handleCustomLogin() {
 
   try {
     showLoading("Đang xác thực...");
+    var data = null;
+
     if (typeof supabaseClient === 'undefined') {
       throw new Error("Chưa kết nối được với cơ sở dữ liệu Supabase!");
     }
 
-    var { data, error } = await supabaseClient
-      .from('tai_khoan')
-      .select('*')
-      .eq('account', accountVal)
-      .maybeSingle();
+    try {
+      // 1. Thử gọi trực tiếp từ Supabase
+      var res = await supabaseClient
+        .from('tai_khoan')
+        .select('*')
+        .eq('account', accountVal)
+        .maybeSingle();
 
-    if (error) throw error;
+      if (res.error) throw res.error;
+      data = res.data;
+    } catch (netErr) {
+      // 2. Nếu gặp lỗi kết nối (Failed to fetch) hoặc mất mạng -> Tự động fallback đọc từ cache local
+      if (!navigator.onLine || netErr.message.includes('fetch') || netErr.message.includes('network') || netErr.message.includes('Failed')) {
+        console.warn("Mất kết nối mạng, chuyển sang xác thực offline từ bộ nhớ đệm...");
+        var cachedUsers = (typeof getSafeDataList === 'function') ? getSafeDataList(['rawUserList', 'userList', 'users', 'taiKhoanList']) : (window.rawUserList || []);
+        data = cachedUsers.find(u => String(u.account).trim() === accountVal);
+      } else {
+        throw netErr;
+      }
+    }
 
     if (!data) {
       hideLoading();
-      showToast("❌ Tài khoản không tồn tại trong hệ thống!", "error");
+      showToast("❌ Tài khoản không tồn tại trong hệ thống (hoặc mất kết nối mạng)!", "error");
       return;
     }
 
@@ -161,12 +175,14 @@ async function handleCustomLogin() {
   }
 }
 
+// Chỉnh nút Thoát form đăng nhập thành đóng trang web / tab
 function handleLoginExit() {
-  var accountInput = document.getElementById('loginAccount');
-  var passInput = document.getElementById('loginPass');
-  if (accountInput) accountInput.value = '';
-  if (passInput) passInput.value = '';
-  showToast("Đã làm sạch thông tin đăng nhập.", "info");
+  try {
+    window.close();
+  } catch (e) {
+    // Trường hợp trình duyệt chặn lệnh đóng tab trực tiếp, điều hướng về trang trắng
+    window.location.href = 'about:blank';
+  }
 }
 
 function togglePasswordVisibility() {
